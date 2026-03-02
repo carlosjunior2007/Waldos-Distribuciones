@@ -1,1 +1,141 @@
 @import "tailwindcss";
+
+/* Tema base (claro) */
+@theme {
+  /* =========================
+     BRAND
+  ========================= */
+
+  /* Primary (azul del logo) */
+  --color-primary-50: #eceff4;
+  --color-primary-100: #d9e0e9;
+  --color-primary-200: #b7c4d6;
+  --color-primary-300: #96a9c2;
+  --color-primary-400: #7089ac;
+  --color-primary-500: #103b75; /* BASE */
+  --color-primary-600: #0e3467;
+  --color-primary-700: #0c2d59;
+  --color-primary-800: #0a2549;
+  --color-primary-900: #081c38;
+
+  /* Accent (rojo del logo) */
+  --color-accent-50: #fdecee;
+  --color-accent-100: #fad9dd;
+  --color-accent-200: #f6b8bf;
+  --color-accent-300: #f296a1;
+  --color-accent-400: #ee707f;
+  --color-accent-500: #e2112a; /* BASE */
+  --color-accent-600: #c70f25;
+  --color-accent-700: #ac0d20;
+  --color-accent-800: #8c0b1a;
+  --color-accent-900: #6c0814;
+
+  /* =========================
+     NEUTRALS (UI)
+  ========================= */
+
+  /* Fondo general y superficies */
+  --color-background: #f8fafc; /* body */
+  --color-surface: #ffffff; /* cards */
+  --color-surface-soft: #f1f5f9; /* secciones suaves */
+
+  /* Texto */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+
+  /* Bordes */
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+
+  /* Sombras (para “se siente pro” sin exagerar) */
+  --shadow-soft: 0 8px 30px rgba(15, 23, 42, 0.08);
+  --shadow-strong: 0 12px 40px rgba(15, 23, 42, 0.14);
+
+  /* =========================
+     STATES (Alertas / forms)
+  ========================= */
+
+  /* Success */
+  --color-success-50: #ecfdf5;
+  --color-success-100: #d1fae5;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+
+  /* Warning */
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+
+  /* Error */
+  --color-error-50: #fef2f2;
+  --color-error-100: #fee2e2;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
+
+  /* Info */
+  --color-info-50: #eff6ff;
+  --color-info-100: #dbeafe;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+  --color-info-700: #1d4ed8;
+
+  /* Focus ring (accesibilidad, formularios) */
+  --color-focus: var(--color-primary-500);
+
+  /* =========================
+   TEXT ON DARK
+========================= */
+
+  --color-text-on-dark: #f1f5f9;
+  --color-text-on-dark-secondary: #cbd5e1;
+  --color-text-on-dark-muted: #94a3b8;
+
+  /* =========================
+   TEXT ON LIGHT
+========================= */
+
+  --color-text-on-light: #0f172a;
+  --color-text-on-light-secondary: #334155;
+  --color-text-on-light-muted: #64748b;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 20px;
+  transition: background 0.3s ease;
+}
+
+/* Base page */
+html,
+body {
+  height: 100%;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+/* Nice default text rendering */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings use display font */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Container helper (optional) */
+.container-pad {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 16px;
+}

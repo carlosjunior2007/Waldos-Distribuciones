@@ -41,7 +41,7 @@ export default function Catalogo() {
       const { data, error } = await supabase
         .from("productos")
         .select(
-          "id,nombre,descripcion,precio,imagen,disponibilidad,cantidad,categoria,codigo,created_at"
+          "id,nombre,descripcion,precio,imagen,disponibilidad,cantidad,categoria,codigo,created_at",
         )
         .eq("habilitado", true)
         .order("created_at", { ascending: false });
@@ -253,11 +253,46 @@ export default function Catalogo() {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                      {pageItems.map((producto) => (
-                        <ProductCard key={producto.id} producto={producto} />
-                      ))}
-                    </div>
+                    <>
+                      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                        {pageItems.map((producto) => (
+                          <ProductCard key={producto.id} producto={producto} />
+                        ))}
+                      </div>
+
+                      <div className="mt-6 flex items-center justify-center sm:justify-between gap-3 flex-col sm:flex-row border-t border-border pt-4">
+                        <div className="text-sm text-text-secondary whitespace-nowrap">
+                          Página{" "}
+                          <span className="font-semibold text-text-primary">
+                            {pageSafe}
+                          </span>{" "}
+                          de{" "}
+                          <span className="font-semibold text-text-primary">
+                            {totalPages}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-sm">
+                          <button
+                            disabled={pageSafe <= 1}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
+                          >
+                            {"<"}
+                          </button>
+
+                          <button
+                            disabled={pageSafe >= totalPages}
+                            onClick={() =>
+                              setPage((p) => Math.min(totalPages, p + 1))
+                            }
+                            className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
+                          >
+                            {">"}
+                          </button>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

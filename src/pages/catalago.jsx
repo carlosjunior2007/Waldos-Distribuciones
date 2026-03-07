@@ -43,7 +43,7 @@ export default function Catalogo() {
         .select(
           "id,nombre,descripcion,precio,imagen,disponibilidad,cantidad,categoria,codigo,created_at"
         )
-        .eq("abilitado", true)
+        .eq("habilitado", true)
         .order("created_at", { ascending: false });
 
       if (error) console.error(error);

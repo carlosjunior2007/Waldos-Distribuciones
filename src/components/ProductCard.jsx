@@ -6,7 +6,7 @@ function formatMXN(value) {
   return n.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 }
 
-export default function ProductCard({ producto }) {
+export default function ProductCard({ producto, from }) {
   const nombre = producto?.nombre || "Producto";
   const codigo = (producto?.codigo || "—").toString().trim();
   const precio = formatMXN(producto?.precio);
@@ -18,7 +18,11 @@ export default function ProductCard({ producto }) {
   const tieneImagen = img.length > 0;
 
   return (
-    <Link to={`/catalogo/${producto.id}`} className="block group">
+    <Link
+      to={`/catalogo/${producto.id}`}
+      state={{ from }}
+      className="block group"
+    >
       <article
         className="
           rounded-lg
@@ -30,7 +34,6 @@ export default function ProductCard({ producto }) {
           overflow-hidden
         "
       >
-        {/* Imagen grande */}
         <div className="relative bg-surface-soft">
           <div className="aspect-[4/3] w-full overflow-hidden">
             {tieneImagen ? (
@@ -49,7 +52,6 @@ export default function ProductCard({ producto }) {
             )}
           </div>
 
-          {/* Disponible arriba derecha */}
           <div className="absolute right-3 top-3">
             {disponible ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 text-success-700 border border-success-100 px-3 py-1 text-xs font-semibold">
@@ -65,9 +67,7 @@ export default function ProductCard({ producto }) {
           </div>
         </div>
 
-        {/* Contenido (simple y útil) */}
         <div className="p-4">
-          {/* Nombre */}
           <h3
             className="text-sm font-semibold text-text-primary leading-snug line-clamp-2"
             title={nombre}
@@ -75,13 +75,11 @@ export default function ProductCard({ producto }) {
             {nombre}
           </h3>
 
-          {/* Código producto */}
           <div className="mt-2 text-xs text-text-secondary">
             <span className="text-text-muted">Código: </span>
             <span className="font-semibold text-text-secondary">{codigo}</span>
           </div>
 
-          {/* Cantidad */}
           <div className="mt-1 text-xs text-text-secondary">
             <span className="text-text-muted">Cantidad: </span>
             <span className="font-semibold">
@@ -89,7 +87,6 @@ export default function ProductCard({ producto }) {
             </span>
           </div>
 
-          {/* Precio + botón */}
           <div className="mt-4 flex items-center justify-between gap-3">
             <div>
               <div className="text-[11px] text-text-muted">Precio</div>

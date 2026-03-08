@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import supabase from "../utils/supabase";
 import ProductCard from "../components/ProductCard";
 import { SlidersHorizontal } from "lucide-react";
@@ -20,19 +20,19 @@ const CATEGORIAS_UI = [
 
 export default function Catalogo() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const firstRender = useRef(true);
+  const syncingFromUrl = useRef(false);
 
   const [productos, setProductos] = useState([]);
   const [busqueda, setBusqueda] = useState(searchParams.get("q") || "");
-  const [catUI, setCatUI] = useState("todas");
+  const [catUI, setCatUI] = useState(searchParams.get("cat") || "todas");
   const [loading, setLoading] = useState(true);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(
+    Number(searchParams.get("pageSize")) || 20,
+  );
   const [showFilters, setShowFilters] = useState(false);
-  const [page, setPage] = useState(1);
-
-  useEffect(() => {
-    const q = searchParams.get("q") || "";
-    setBusqueda(q);
-  }, [searchParams]);
+  const [page, setPage] = useState(Number(searchParams.get("page")) || 1);
 
   useEffect(() => {
     const fetchProductos = async () => {
@@ -54,6 +54,20 @@ export default function Catalogo() {
     fetchProductos();
   }, []);
 
+  useEffect(() => {
+    syncingFromUrl.current = true;
+
+    const q = searchParams.get("q") || "";
+    const cat = searchParams.get("cat") || "todas";
+    const pageParam = Number(searchParams.get("page")) || 1;
+    const pageSizeParam = Number(searchParams.get("pageSize")) || 20;
+
+    setBusqueda(q);
+    setCatUI(cat);
+    setPage(pageParam);
+    setPageSize(pageSizeParam);
+  }, [searchParams]);
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
 
@@ -64,16 +78,17 @@ export default function Catalogo() {
       })
       .filter((p) => {
         if (!q) return true;
+
         const nombre = (p.nombre || "").toLowerCase();
         const codigo = (p.codigo || "").toLowerCase();
         const desc = (p.descripcion || "").toLowerCase();
+
         return nombre.includes(q) || codigo.includes(q) || desc.includes(q);
       });
   }, [productos, busqueda, catUI]);
 
   const total = productos?.length || 0;
   const totalFiltrados = filtrados?.length || 0;
-
   const totalPages = Math.max(1, Math.ceil(totalFiltrados / pageSize));
   const pageSafe = Math.min(page, totalPages);
 
@@ -84,14 +99,55 @@ export default function Catalogo() {
   }, [filtrados, pageSafe, pageSize]);
 
   useEffect(() => {
+    const params = {};
+
+    if (busqueda.trim()) params.q = busqueda.trim();
+    if (catUI !== "todas") params.cat = catUI;
+    if (page > 1) params.page = String(page);
+    if (pageSize !== 20) params.pageSize = String(pageSize);
+
+    const next = new URLSearchParams(params).toString();
+    const current = searchParams.toString();
+
+    if (next !== current) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [busqueda, catUI, page, pageSize, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      syncingFromUrl.current = false;
+      return;
+    }
+
+    if (syncingFromUrl.current) {
+      syncingFromUrl.current = false;
+      return;
+    }
+
     setPage(1);
   }, [busqueda, catUI, pageSize]);
 
   const limpiarFiltros = () => {
     setCatUI("todas");
     setBusqueda("");
-    setSearchParams({});
+    setPage(1);
+    setPageSize(20);
+    setSearchParams({}, { replace: true });
   };
+
+  const fromPath = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (busqueda.trim()) params.set("q", busqueda.trim());
+    if (catUI !== "todas") params.set("cat", catUI);
+    if (page > 1) params.set("page", String(page));
+    if (pageSize !== 20) params.set("pageSize", String(pageSize));
+
+    const query = params.toString();
+    return query ? `/catalogo?${query}` : "/catalogo";
+  }, [busqueda, catUI, page, pageSize]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -256,7 +312,11 @@ export default function Catalogo() {
                     <>
                       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {pageItems.map((producto) => (
-                          <ProductCard key={producto.id} producto={producto} />
+                          <ProductCard
+                            key={producto.id}
+                            producto={producto}
+                            from={fromPath}
+                          />
                         ))}
                       </div>
 

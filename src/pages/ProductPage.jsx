@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import supabase from "../utils/supabase.js";
 import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
@@ -12,6 +12,7 @@ function formatMXN(value) {
 export default function ProductPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [producto, setProducto] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,15 @@ export default function ProductPage() {
 
     fetchProducto();
   }, [id]);
+
+  const volverAlCatalogo = () => {
+    if (location.state?.from) {
+      navigate(location.state.from, { replace: true });
+      return;
+    }
+
+    navigate("/catalogo", { replace: true });
+  };
 
   const meta = useMemo(() => {
     if (!producto) return null;
@@ -75,7 +85,7 @@ export default function ProductPage() {
       {/* top actions */}
       <div className="flex items-center justify-between gap-3 mb-5">
         <button
-          onClick={() => navigate("/catalogo")}
+          onClick={(volverAlCatalogo)}
           className="h-10 px-3 rounded-md border border-border bg-surface hover:bg-surface-soft text-sm font-medium text-text-secondary inline-flex items-center gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -170,7 +180,7 @@ export default function ProductPage() {
                 Copiar código
               </button>
               <button
-                onClick={() => navigate("/catalogo")}
+                onClick={volverAlCatalogo}
                 className="h-10 px-4 rounded-md bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold"
               >
                 Seguir comprando

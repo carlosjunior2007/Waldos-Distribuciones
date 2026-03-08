@@ -75,38 +75,20 @@ function parseTimestampDate(value) {
   return d;
 }
 
-function formatBusinessDate(value) {
-  const d = parseBusinessDate(value);
-  if (!d || Number.isNaN(d.getTime())) return "-";
-
-  return d.toLocaleDateString("es-MX", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatTimestampDate(value) {
+function formatTimestampDateTime(value) {
   const d = parseTimestampDate(value);
   if (!d || Number.isNaN(d.getTime())) return "-";
 
-  return d.toLocaleDateString("es-MX", {
+  return d.toLocaleString("es-MX", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
   });
 }
 
-function formatDate(value) {
-  const d = parseTimestampDate(value);
-  if (!d || Number.isNaN(d.getTime())) return "-";
-
-  return d.toLocaleDateString("es-MX", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function toBusinessInputDate(value) {
   const d = parseBusinessDate(value);
@@ -1193,12 +1175,12 @@ export default function QuotationsPage() {
                         <div className="space-y-1 flex items-start gap-4">
                           <div className="inline-flex items-center gap-1 text-sm text-text-secondary">
                             <CalendarDays className="h-4 w-4 text-primary-500" />
-                            <span>Creada: {formatDate(item.created_at)}</span>
+                            <span>Creada: {formatTimestampDateTime(item.created_at)}</span>
                           </div>
                           <div className="inline-flex items-center gap-1 text-sm text-text-secondary">
                             <Clock3 className="h-4 w-4 text-accent-500" />
                             <span>
-                              Vence: {formatDate(item.fecha_vencimiento)}
+                              Vence: {formatTimestampDateTime(item.fecha_vencimiento)}
                             </span>
                           </div>
                         </div>
@@ -1309,7 +1291,7 @@ export default function QuotationsPage() {
                       Fecha
                     </p>
                     <p className="mt-2 text-sm font-medium text-text-primary">
-                      {formatDate(item.created_at)}
+                      {formatTimestampDateTime(item.created_at)}
                     </p>
                   </div>
 
@@ -1318,7 +1300,7 @@ export default function QuotationsPage() {
                       Vence
                     </p>
                     <p className="mt-2 text-sm font-medium text-text-primary">
-                      {formatDate(item.fecha_vencimiento)}
+                      {formatTimestampDateTime(item.fecha_vencimiento)}
                     </p>
                   </div>
 

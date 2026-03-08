@@ -21,28 +21,26 @@ function formatMoney(value) {
   });
 }
 
-function formatDate(value) {
-  if (!value) return "Sin fecha";
-  const date = new Date(value);
+function parseTimestampDate(value) {
+  if (!value) return null;
 
-  return date.toLocaleString("es-MX", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+
+  return d;
 }
 
-function formatBusinessDate(value) {
-  if (!value) return "Sin fecha";
+function formatTimestampDateTime(value) {
+  const d = parseTimestampDate(value);
+  if (!d || Number.isNaN(d.getTime())) return "-";
 
-  const onlyDate = String(value).slice(0, 10);
-  const [year, month, day] = onlyDate.split("-").map(Number);
-
-  if (!year || !month || !day) return "Sin fecha";
-
-  const date = new Date(year, month - 1, day);
-
-  return date.toLocaleDateString("es-MX", {
-    dateStyle: "medium",
+  return d.toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
   });
 }
 
@@ -69,7 +67,7 @@ function normalizeEstado(estado) {
 
   if (
     ["pendiente", "pendientes", "en espera", "por revisar", "abierta"].includes(
-      value
+      value,
     )
   ) {
     return "pendiente";
@@ -77,7 +75,7 @@ function normalizeEstado(estado) {
 
   if (
     ["completada", "completado", "cerrada", "finalizada", "pagada"].includes(
-      value
+      value,
     )
   ) {
     return "completada";
@@ -88,6 +86,10 @@ function normalizeEstado(estado) {
   }
 
   return "otro";
+}
+
+function isCompletedQuotation(estado) {
+  return normalizeEstado(estado) === "completada";
 }
 
 function movementIcon(type) {
@@ -140,7 +142,7 @@ function MovementDetailModal({ item, onClose }) {
         <div className="flex items-start gap-4 pr-12">
           <div
             className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${movementTone(
-              item.type
+              item.type,
             )}`}
           >
             <Icon className="h-5 w-5" />
@@ -158,8 +160,8 @@ function MovementDetailModal({ item, onClose }) {
             </p>
             <p className="mt-2 text-xs text-text-muted">
               {item.type === "gasto"
-                ? formatBusinessDate(item.date)
-                : formatDate(item.date)}
+                ? formatTimestampDateTime(item.date)
+                : formatTimestampDateTime(item.date)}
             </p>
           </div>
         </div>
@@ -189,7 +191,7 @@ function MovementDetailModal({ item, onClose }) {
               <DetailRow label="Tipo" value={item.tipo} />
               <DetailRow
                 label="Fecha"
-                value={formatBusinessDate(item.fecha)}
+                value={formatTimestampDateTime(item.fecha)}
               />
               <DetailRow
                 label="Cotización relacionada"
@@ -329,15 +331,21 @@ export default function DashboardHome() {
   }, []);
 
   const resumen = useMemo(() => {
-    const gananciaTotal = cotizaciones.reduce(
+    const cotizacionesCompletadas = cotizaciones.filter((item) =>
+      isCompletedQuotation(item.estado),
+    );
+
+    const gananciaBrutaReal = cotizacionesCompletadas.reduce(
       (acc, item) => acc + Number(item.ganancia || 0),
-      0
+      0,
     );
 
     const gastoTotal = gastos.reduce(
       (acc, item) => acc + Number(item.monto || 0),
-      0
+      0,
     );
+
+    const gananciaNetaReal = gananciaBrutaReal - gastoTotal;
 
     const estados = cotizaciones.reduce(
       (acc, item) => {
@@ -345,15 +353,16 @@ export default function DashboardHome() {
         acc[estado] = (acc[estado] || 0) + 1;
         return acc;
       },
-      { pendiente: 0, completada: 0, cancelada: 0, otro: 0 }
+      { pendiente: 0, completada: 0, cancelada: 0, otro: 0 },
     );
 
     const productosActivos = productos.filter(
-      (item) => item.disponibilidad === true && item.habilitado === true
+      (item) => item.disponibilidad === true && item.habilitado === true,
     ).length;
 
     return {
-      gananciaTotal,
+      gananciaBrutaReal,
+      gananciaNetaReal,
       gastoTotal,
       totalCotizaciones: cotizaciones.length,
       pendientes: estados.pendiente || 0,
@@ -367,16 +376,16 @@ export default function DashboardHome() {
   const stats = useMemo(
     () => [
       {
-        title: "Ganancias",
-        value: formatMoney(resumen.gananciaTotal),
-        note: "Utilidad total registrada",
+        title: "Ganancia neta",
+        value: formatMoney(resumen.gananciaNetaReal),
+        note: "Solo cotizaciones completadas menos gastos registrados",
         icon: CircleDollarSign,
         tone: "success",
       },
       {
         title: "Gastos",
         value: formatMoney(resumen.gastoTotal),
-        note: "Compras y costos operativos",
+        note: "Compras y costos operativos registrados",
         icon: Wallet,
         tone: "warning",
       },
@@ -395,7 +404,7 @@ export default function DashboardHome() {
         tone: "primary",
       },
     ],
-    [resumen]
+    [resumen],
   );
 
   const recentActivity = useMemo(() => {
@@ -534,7 +543,7 @@ export default function DashboardHome() {
 
                   <div
                     className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${statTone(
-                      item.tone
+                      item.tone,
                     )}`}
                   >
                     <Icon className="h-5 w-5" />
@@ -650,7 +659,7 @@ export default function DashboardHome() {
                       <div className="flex items-start gap-3">
                         <div
                           className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${movementTone(
-                            item.type
+                            item.type,
                           )}`}
                         >
                           <Icon className="h-4 w-4" />
@@ -665,8 +674,8 @@ export default function DashboardHome() {
                           </p>
                           <p className="mt-2 text-xs text-text-muted">
                             {item.type === "gasto"
-                              ? formatBusinessDate(item.date)
-                              : formatDate(item.date)}
+                              ? formatTimestampDateTime(item.date)
+                              : formatTimestampDateTime(item.date)}
                           </p>
                         </div>
                       </div>

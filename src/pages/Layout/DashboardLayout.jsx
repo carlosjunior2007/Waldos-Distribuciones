@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Mail,
   LogOut,
+  Tag ,
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -37,6 +38,12 @@ const NAV_ITEMS = [
     label: "Gastos y ganancias",
     to: "/dashboard/gastos",
     icon: Wallet,
+    end: true,
+  },
+  {
+    label: "Etiquetas y clientes",
+    to: "/dashboard/etiquetas",
+    icon: Tag ,
     end: true,
   },
 ];

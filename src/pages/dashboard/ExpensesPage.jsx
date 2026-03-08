@@ -47,8 +47,42 @@ function formatMXN(value) {
   });
 }
 
+/**
+ * Convierte una fecha de negocio o ISO a Date LOCAL sin corrimiento por timezone.
+ * - "2026-03-09"
+ * - "2026-03-09T00:00:00+00:00"
+ * - Date
+ */
+function parseSafeDate(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (match) {
+      const [, year, month, day] = match;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+
+    return new Date(
+      parsed.getFullYear(),
+      parsed.getMonth(),
+      parsed.getDate()
+    );
+  }
+
+  return null;
+}
+
 function formatDate(value) {
-  const date = parseLocalDate(value);
+  const date = parseSafeDate(value);
   if (!date || Number.isNaN(date.getTime())) return "Sin fecha";
 
   return date.toLocaleDateString("es-MX", {
@@ -59,7 +93,7 @@ function formatDate(value) {
 }
 
 function formatInputDate(value) {
-  const d = parseLocalDate(value);
+  const d = parseSafeDate(value);
   if (!d || Number.isNaN(d.getTime())) return "";
 
   const year = d.getFullYear();
@@ -269,9 +303,7 @@ function ExpenseModal({
         concepto: editingExpense.concepto || "",
         descripcion: editingExpense.descripcion || "",
         monto: editingExpense.monto ?? "",
-        fecha: formatInputDate(
-          editingExpense.fecha || editingExpense.created_at,
-        ),
+        fecha: formatInputDate(editingExpense.fecha),
         tipo: editingExpense.tipo || "extra",
       });
     } else {
@@ -524,39 +556,6 @@ function ExpenseModal({
   );
 }
 
-function parseLocalDate(value) {
-  if (!value) return null;
-
-  if (value instanceof Date) {
-    return new Date(
-      value.getFullYear(),
-      value.getMonth(),
-      value.getDate(),
-    );
-  }
-
-  if (typeof value === "string") {
-    // YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss...
-    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-
-    if (match) {
-      const [, year, month, day] = match;
-      return new Date(Number(year), Number(month) - 1, Number(day));
-    }
-
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-
-    return new Date(
-      parsed.getFullYear(),
-      parsed.getMonth(),
-      parsed.getDate(),
-    );
-  }
-
-  return null;
-}
-
 export default function ExpensesPage() {
   const defaultRange = useMemo(() => getCurrentMonthRange(), []);
 
@@ -591,24 +590,22 @@ export default function ExpensesPage() {
 
       const { data: quotes, error: quoteError } = await supabase
         .from("cotizaciones")
-        .select(
-          `
-        id,
-        folio,
-        cliente_nombre,
-        cliente_telefono,
-        cliente_email,
-        subtotal,
-        descuento,
-        total,
-        gastos,
-        ganancia,
-        fecha_vencimiento,
-        fecha_completado,
-        notas,
-        created_at
-      `,
-        )
+        .select(`
+          id,
+          folio,
+          cliente_nombre,
+          cliente_telefono,
+          cliente_email,
+          subtotal,
+          descuento,
+          total,
+          gastos,
+          ganancia,
+          fecha_vencimiento,
+          fecha_completado,
+          notas,
+          created_at
+        `)
         .not("fecha_completado", "is", null)
         .order("fecha_completado", { ascending: false });
 
@@ -616,41 +613,39 @@ export default function ExpensesPage() {
 
       const { data: expenses, error: expenseError } = await supabase
         .from("gastos")
-        .select(
-          `
-        id,
-        concepto,
-        descripcion,
-        monto,
-        fecha,
-        cotizacion_id,
-        created_at,
-        tipo
-      `,
-        )
-        .order("created_at", { ascending: false });
+        .select(`
+          id,
+          concepto,
+          descripcion,
+          monto,
+          fecha,
+          cotizacion_id,
+          created_at,
+          tipo
+        `)
+        .order("fecha", { ascending: false });
 
       if (expenseError) throw expenseError;
 
-      const { data: details, error: detailError } = await supabase.from(
-        "cotizacion_detalles",
-      ).select(`
-        id,
-        cotizacion_id,
-        producto_id,
-        cantidad
-      `);
+      const { data: details, error: detailError } = await supabase
+        .from("cotizacion_detalles")
+        .select(`
+          id,
+          cotizacion_id,
+          producto_id,
+          cantidad
+        `);
 
       if (detailError) throw detailError;
 
-      const { data: products, error: productError } = await supabase.from(
-        "productos",
-      ).select(`
-        id,
-        nombre,
-        precio_compra,
-        precio_utilidad
-      `);
+      const { data: products, error: productError } = await supabase
+        .from("productos")
+        .select(`
+          id,
+          nombre,
+          precio_compra,
+          precio_utilidad
+        `);
 
       if (productError) throw productError;
 
@@ -722,7 +717,7 @@ export default function ExpensesPage() {
 
       const totalExpenses = relatedExpenses.reduce(
         (acc, item) => acc + parseNumberish(item.monto),
-        0,
+        0
       );
 
       const utilidadBruta = relatedDetails.reduce((acc, detail) => {
@@ -733,6 +728,7 @@ export default function ExpensesPage() {
       }, 0);
 
       const netProfit = utilidadBruta - totalExpenses;
+      const quoteDateValue = quote.fecha_completado || quote.created_at;
 
       return {
         id: quote.id,
@@ -741,8 +737,8 @@ export default function ExpensesPage() {
         cliente: quote.cliente_nombre || "Cliente sin nombre",
         cliente_email: quote.cliente_email || "",
         cliente_telefono: quote.cliente_telefono || "",
-        fechaISO: quote.fecha_completado || quote.created_at,
-        fecha: formatDate(quote.fecha_completado || quote.created_at),
+        fechaISO: quoteDateValue,
+        fecha: formatDate(quoteDateValue),
 
         totalCotizacion: parseNumberish(quote.total),
         utilidadBruta,
@@ -775,16 +771,12 @@ export default function ExpensesPage() {
   }, [quoteRows, expenseRows, detailRows, productRows]);
 
   const filteredRows = useMemo(() => {
-    const from = dateFrom ? parseLocalDate(dateFrom) : null;
-    const to = dateTo ? parseLocalDate(dateTo) : null;
-
-    if (to) {
-      to.setHours(23, 59, 59, 999);
-    }
+    const from = dateFrom ? parseSafeDate(dateFrom) : null;
+    const to = dateTo ? parseSafeDate(dateTo) : null;
     const term = search.trim().toLowerCase();
 
     return preparedRows.filter((item) => {
-      const itemDate = item.fechaISO ? parseLocalDate(item.fechaISO) : null;
+      const itemDate = item.fechaISO ? parseSafeDate(item.fechaISO) : null;
 
       if (from && itemDate && itemDate < from) return false;
       if (to && itemDate && itemDate > to) return false;
@@ -816,12 +808,8 @@ export default function ExpensesPage() {
   }, [preparedRows, dateFrom, dateTo, search, quickFilter]);
 
   const filteredStandaloneExpenses = useMemo(() => {
-    const from = dateFrom ? parseLocalDate(dateFrom) : null;
-    const to = dateTo ? parseLocalDate(dateTo) : null;
-
-    if (to) {
-      to.setHours(23, 59, 59, 999);
-    }
+    const from = dateFrom ? parseSafeDate(dateFrom) : null;
+    const to = dateTo ? parseSafeDate(dateTo) : null;
     const term = search.trim().toLowerCase();
 
     return expenseRows.filter((expense) => {
@@ -829,16 +817,13 @@ export default function ExpensesPage() {
 
       const expenseDateValue = expense.fecha || expense.created_at;
       const expenseDate = expenseDateValue
-        ? parseLocalDate(expenseDateValue)
+        ? parseSafeDate(expenseDateValue)
         : null;
 
       if (from && expenseDate && expenseDate < from) return false;
       if (to && expenseDate && expenseDate > to) return false;
 
       if (quickFilter === "ganancias") return false;
-      if (quickFilter === "gastos" || quickFilter === "todos") {
-        // sigue normal
-      }
 
       if (!term) return true;
 
@@ -875,6 +860,7 @@ export default function ExpensesPage() {
     const standaloneExpenseRows = filteredStandaloneExpenses.map((expense) => {
       const monto = parseNumberish(expense.monto);
       const normalizedType = normalizeExpenseType(expense.tipo);
+      const expenseDateValue = expense.fecha || expense.created_at;
 
       return {
         id: `expense-${expense.id}`,
@@ -885,8 +871,8 @@ export default function ExpensesPage() {
         tipo: normalizedType,
         naturaleza: "gasto",
         cliente: "Sin cotización asociada",
-        fecha: formatDate(expense.fecha || expense.created_at),
-        fechaISO: expense.fecha || expense.created_at,
+        fecha: formatDate(expenseDateValue),
+        fechaISO: expenseDateValue,
         gastos: monto,
         ganancia: -monto,
         totalCotizacion: 0,
@@ -899,8 +885,8 @@ export default function ExpensesPage() {
     });
 
     return [...profitRows, ...standaloneExpenseRows].sort((a, b) => {
-      const aDate = a.fechaISO ? parseLocalDate(a.fechaISO).getTime() : 0;
-      const bDate = b.fechaISO ? parseLocalDate(b.fechaISO).getTime() : 0;
+      const aDate = a.fechaISO ? parseSafeDate(a.fechaISO)?.getTime() || 0 : 0;
+      const bDate = b.fechaISO ? parseSafeDate(b.fechaISO)?.getTime() || 0 : 0;
       return bDate - aDate;
     });
   }, [filteredRows, filteredStandaloneExpenses]);
@@ -908,17 +894,17 @@ export default function ExpensesPage() {
   const summary = useMemo(() => {
     const grossProfitTotal = filteredRows.reduce(
       (acc, item) => acc + parseNumberish(item.utilidadBruta),
-      0,
+      0
     );
 
     const linkedExpensesTotal = filteredRows.reduce(
       (acc, item) => acc + parseNumberish(item.gastos),
-      0,
+      0
     );
 
     const standaloneExpensesTotal = filteredStandaloneExpenses.reduce(
       (acc, item) => acc + parseNumberish(item.monto),
-      0,
+      0
     );
 
     const expensesTotal = linkedExpensesTotal + standaloneExpensesTotal;
@@ -951,8 +937,8 @@ export default function ExpensesPage() {
       });
 
     for (const item of filteredRows) {
-      const d = parseLocalDate(item.fechaISO);
-      if (Number.isNaN(d.getTime())) continue;
+      const d = parseSafeDate(item.fechaISO);
+      if (!d || Number.isNaN(d.getTime())) continue;
 
       const key = buildDayKey(d);
       const label = buildDayLabel(d);
@@ -970,8 +956,8 @@ export default function ExpensesPage() {
     }
 
     for (const expense of filteredStandaloneExpenses) {
-      const d = parseLocalDate(expense.fecha || expense.created_at);
-      if (Number.isNaN(d.getTime())) continue;
+      const d = parseSafeDate(expense.fecha || expense.created_at);
+      if (!d || Number.isNaN(d.getTime())) continue;
 
       const key = buildDayKey(d);
       const label = buildDayLabel(d);
@@ -989,7 +975,7 @@ export default function ExpensesPage() {
     }
 
     const sorted = Array.from(map.values()).sort((a, b) =>
-      a.key.localeCompare(b.key),
+      a.key.localeCompare(b.key)
     );
 
     let acumulado = 0;
@@ -1078,10 +1064,7 @@ export default function ExpensesPage() {
     try {
       setDeletingExpenseId(expenseId);
 
-      const { error } = await supabase
-        .from("gastos")
-        .delete()
-        .eq("id", expenseId);
+      const { error } = await supabase.from("gastos").delete().eq("id", expenseId);
 
       if (error) throw error;
 
@@ -1112,7 +1095,7 @@ export default function ExpensesPage() {
       />
 
       {detailModalOpen && selectedDetail ? (
-        <div className="fixed inset-0 z-49 flex items-center justify-center bg-black/50 px-4 py-6 h-full">
+        <div className="fixed inset-0 z-49 flex h-full items-center justify-center bg-black/50 px-4 py-6">
           <div className="w-full max-w-2xl rounded-[28px] border border-border bg-surface shadow-2xl">
             <div className="flex items-center justify-between border-b border-border p-5 md:p-6">
               <div>
@@ -1260,7 +1243,7 @@ export default function ExpensesPage() {
       ) : null}
 
       {deleteModalOpen && selectedDeleteItem ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 h-full">
+        <div className="fixed inset-0 z-50 flex h-full items-center justify-center bg-black/50 px-4 py-6">
           <div className="w-full max-w-md rounded-[28px] border border-border bg-surface shadow-2xl">
             <div className="border-b border-border p-5">
               <p className="text-sm font-semibold text-error-600">Eliminar</p>
@@ -1278,7 +1261,7 @@ export default function ExpensesPage() {
                 <p className="text-sm font-semibold text-text-primary">
                   {selectedDeleteItem.expenses[0]?.concepto || "Sin concepto"}
                 </p>
-                <p className="mt-1 text-sm text-error-700 font-bold">
+                <p className="mt-1 text-sm font-bold text-error-700">
                   {formatMXN(selectedDeleteItem.expenses[0]?.monto || 0)}
                 </p>
               </div>
@@ -1297,9 +1280,7 @@ export default function ExpensesPage() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    deleteExpense(selectedDeleteItem.expenses[0]?.id)
-                  }
+                  onClick={() => deleteExpense(selectedDeleteItem.expenses[0]?.id)}
                   disabled={
                     deletingExpenseId === selectedDeleteItem.expenses[0]?.id
                   }
@@ -1687,7 +1668,7 @@ export default function ExpensesPage() {
                               title="Agregar gasto"
                               onClick={() =>
                                 openNewExpense(
-                                  item.rowType === "ganancia" ? item.rawId : "",
+                                  item.rowType === "ganancia" ? item.rawId : ""
                                 )
                               }
                               className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary transition hover:border-info-200 hover:bg-info-50 hover:text-info-700"
@@ -1837,7 +1818,7 @@ export default function ExpensesPage() {
                       type="button"
                       onClick={() =>
                         openNewExpense(
-                          item.rowType === "ganancia" ? item.rawId : "",
+                          item.rowType === "ganancia" ? item.rawId : ""
                         )
                       }
                       className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-sm font-semibold text-text-primary transition hover:border-info-200 hover:bg-info-50 hover:text-info-700"

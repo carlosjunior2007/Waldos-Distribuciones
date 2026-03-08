@@ -37,27 +37,91 @@ function money(value) {
   });
 }
 
-function formatDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("es-MX", {
+/**
+ * Para fechas tipo negocio:
+ * - YYYY-MM-DD
+ * - YYYY-MM-DDTHH:mm:ss...
+ * toma SOLO la parte de fecha y la vuelve local sin corrimiento
+ */
+function parseBusinessDate(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (match) {
+      const [, year, month, day] = match;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Para timestamps reales como created_at:
+ * respeta hora y timezone del string
+ */
+function parseTimestampDate(value) {
+  if (!value) return null;
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+
+  return d;
+}
+
+function formatBusinessDate(value) {
+  const d = parseBusinessDate(value);
+  if (!d || Number.isNaN(d.getTime())) return "-";
+
+  return d.toLocaleDateString("es-MX", {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
 }
 
-function toInputDate(value) {
-  if (!value) return "";
-  const d = new Date(value);
+function formatTimestampDate(value) {
+  const d = parseTimestampDate(value);
+  if (!d || Number.isNaN(d.getTime())) return "-";
+
+  return d.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatDate(value) {
+  const d = parseTimestampDate(value);
+  if (!d || Number.isNaN(d.getTime())) return "-";
+
+  return d.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function toBusinessInputDate(value) {
+  const d = parseBusinessDate(value);
+  if (!d || Number.isNaN(d.getTime())) return "";
+
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
+
   return `${y}-${m}-${day}`;
 }
 
 function fromInputDate(value) {
   if (!value) return null;
-  return new Date(`${value}T12:00:00`).toISOString();
+  return value;
 }
 
 function getStatusStyles(status) {
@@ -125,7 +189,7 @@ function buildLastMonthsOptions(total = 12) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
       2,
-      "0",
+      "0"
     )}`;
     const label = d.toLocaleDateString("es-MX", {
       month: "long",
@@ -140,15 +204,12 @@ function buildLastMonthsOptions(total = 12) {
 function cleanNumericInput(value, { allowDecimal = true } = {}) {
   let next = String(value ?? "");
 
-  // permite vacío
   if (next === "") return "";
 
-  // quita caracteres inválidos
   next = allowDecimal
     ? next.replace(/[^0-9.]/g, "")
     : next.replace(/[^0-9]/g, "");
 
-  // evita más de un punto decimal
   if (allowDecimal) {
     const parts = next.split(".");
     if (parts.length > 2) {
@@ -156,8 +217,6 @@ function cleanNumericInput(value, { allowDecimal = true } = {}) {
     }
   }
 
-  // si empieza con ceros como 00012 => 12
-  // pero conserva "0" y "0." mientras escriben
   if (allowDecimal) {
     if (/^0+\d/.test(next)) {
       next = next.replace(/^0+/, "");
@@ -214,7 +273,9 @@ function QuotationFormModal({
           editingQuotation.gastos !== undefined
             ? String(editingQuotation.gastos)
             : "",
-        fecha_vencimiento: toInputDate(editingQuotation.fecha_vencimiento),
+        fecha_vencimiento: toBusinessInputDate(
+          editingQuotation.fecha_vencimiento
+        ),
       });
 
       setItems(
@@ -228,7 +289,7 @@ function QuotationFormModal({
           costo_unitario: Number(item.costo_unitario ?? 0),
           importe: Number(item.importe || 0),
           ganancia_linea: Number(item.ganancia_linea || 0),
-        })),
+        }))
       );
     } else {
       const defaultDate = new Date();
@@ -241,7 +302,7 @@ function QuotationFormModal({
         estado: "pendiente",
         descuento: "",
         gastos: "",
-        fecha_vencimiento: toInputDate(defaultDate.toISOString()),
+        fecha_vencimiento: toBusinessInputDate(defaultDate),
       });
       setItems([]);
     }
@@ -279,11 +340,11 @@ function QuotationFormModal({
 
     const subtotal = rows.reduce(
       (acc, item) => acc + Number(item.importe || 0),
-      0,
+      0
     );
     const ganancia = rows.reduce(
       (acc, item) => acc + Number(item.ganancia_linea || 0),
-      0,
+      0
     );
     const total = subtotal - Number(form.descuento || 0);
 
@@ -292,7 +353,7 @@ function QuotationFormModal({
 
   function addProduct(product) {
     const existingIndex = items.findIndex(
-      (item) => item.producto_id === product.id,
+      (item) => item.producto_id === product.id
     );
 
     if (existingIndex >= 0) {
@@ -414,7 +475,6 @@ function QuotationFormModal({
 
     document.body.style.overflow = "hidden";
 
-    // evita que todo "salte" cuando desaparece la barra del navegador
     if (scrollBarWidth > 0) {
       document.body.style.paddingRight = `${scrollBarWidth}px`;
     }
@@ -701,7 +761,7 @@ function QuotationFormModal({
                                   "cantidad",
                                   cleanNumericInput(e.target.value, {
                                     allowDecimal: false,
-                                  }),
+                                  })
                                 )
                               }
                               className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"
@@ -719,7 +779,7 @@ function QuotationFormModal({
                                   "precio_unitario",
                                   cleanNumericInput(e.target.value, {
                                     allowDecimal: true,
-                                  }),
+                                  })
                                 )
                               }
                               className="h-10 w-28 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"

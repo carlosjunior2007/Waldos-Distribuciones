@@ -137,6 +137,43 @@ function buildLastMonthsOptions(total = 12) {
   return result;
 }
 
+function cleanNumericInput(value, { allowDecimal = true } = {}) {
+  let next = String(value ?? "");
+
+  // permite vacío
+  if (next === "") return "";
+
+  // quita caracteres inválidos
+  next = allowDecimal
+    ? next.replace(/[^0-9.]/g, "")
+    : next.replace(/[^0-9]/g, "");
+
+  // evita más de un punto decimal
+  if (allowDecimal) {
+    const parts = next.split(".");
+    if (parts.length > 2) {
+      next = `${parts[0]}.${parts.slice(1).join("")}`;
+    }
+  }
+
+  // si empieza con ceros como 00012 => 12
+  // pero conserva "0" y "0." mientras escriben
+  if (allowDecimal) {
+    if (/^0+\d/.test(next)) {
+      next = next.replace(/^0+/, "");
+    }
+    if (next.startsWith(".")) {
+      next = `0${next}`;
+    }
+  } else {
+    if (/^0+\d/.test(next)) {
+      next = next.replace(/^0+/, "");
+    }
+  }
+
+  return next;
+}
+
 function QuotationFormModal({
   open,
   onClose,
@@ -152,8 +189,8 @@ function QuotationFormModal({
     cliente_telefono: "",
     cliente_email: "",
     estado: "pendiente",
-    descuento: 0,
-    gastos: 0,
+    descuento: "",
+    gastos: "",
     fecha_vencimiento: "",
   });
   const [items, setItems] = useState([]);
@@ -167,8 +204,16 @@ function QuotationFormModal({
         cliente_telefono: editingQuotation.cliente_telefono || "",
         cliente_email: editingQuotation.cliente_email || "",
         estado: editingQuotation.estado || "pendiente",
-        descuento: Number(editingQuotation.descuento || 0),
-        gastos: Number(editingQuotation.gastos || 0),
+        descuento:
+          editingQuotation.descuento !== null &&
+          editingQuotation.descuento !== undefined
+            ? String(editingQuotation.descuento)
+            : "",
+        gastos:
+          editingQuotation.gastos !== null &&
+          editingQuotation.gastos !== undefined
+            ? String(editingQuotation.gastos)
+            : "",
         fecha_vencimiento: toInputDate(editingQuotation.fecha_vencimiento),
       });
 
@@ -178,9 +223,9 @@ function QuotationFormModal({
           nombre_producto: item.nombre_producto,
           codigo: item.codigo || "",
           unidad: item.unidad || "",
-          cantidad: Number(item.cantidad || 1),
-          precio_unitario: Number(item.precio_unitario || 0),
-          costo_unitario: Number(item.costo_unitario || 0),
+          cantidad: Number(item.cantidad ?? 1),
+          precio_unitario: Number(item.precio_unitario ?? 0),
+          costo_unitario: Number(item.costo_unitario ?? 0),
           importe: Number(item.importe || 0),
           ganancia_linea: Number(item.ganancia_linea || 0),
         })),
@@ -194,8 +239,8 @@ function QuotationFormModal({
         cliente_telefono: "",
         cliente_email: "",
         estado: "pendiente",
-        descuento: 0,
-        gastos: 0,
+        descuento: "",
+        gastos: "",
         fecha_vencimiento: toInputDate(defaultDate.toISOString()),
       });
       setItems([]);
@@ -279,7 +324,7 @@ function QuotationFormModal({
         nombre_producto: product.nombre,
         codigo: product.codigo || "",
         unidad: product.unidad || "",
-        cantidad: 1,
+        cantidad: "1",
         precio_unitario: precio,
         costo_unitario: costo,
         importe: precio,
@@ -481,14 +526,16 @@ function QuotationFormModal({
                   />
 
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="Descuento"
                     value={form.descuento}
                     onChange={(e) =>
                       setForm((prev) => ({
                         ...prev,
-                        descuento: e.target.value,
+                        descuento: cleanNumericInput(e.target.value, {
+                          allowDecimal: true,
+                        }),
                       }))
                     }
                     className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
@@ -645,15 +692,16 @@ function QuotationFormModal({
 
                           <td className="px-3 py-3">
                             <input
-                              type="number"
-                              min="1"
-                              step="1"
+                              type="text"
+                              inputMode="numeric"
                               value={item.cantidad}
                               onChange={(e) =>
                                 updateItem(
                                   index,
                                   "cantidad",
-                                  Number(e.target.value),
+                                  cleanNumericInput(e.target.value, {
+                                    allowDecimal: false,
+                                  }),
                                 )
                               }
                               className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"
@@ -662,14 +710,16 @@ function QuotationFormModal({
 
                           <td className="px-3 py-3">
                             <input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={item.precio_unitario}
                               onChange={(e) =>
                                 updateItem(
                                   index,
                                   "precio_unitario",
-                                  Number(e.target.value),
+                                  cleanNumericInput(e.target.value, {
+                                    allowDecimal: true,
+                                  }),
                                 )
                               }
                               className="h-10 w-28 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"

@@ -48,9 +48,9 @@ function formatMXN(value) {
 }
 
 function formatDate(value) {
-  if (!value) return "Sin fecha";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Sin fecha";
+  const date = parseLocalDate(value);
+  if (!date || Number.isNaN(date.getTime())) return "Sin fecha";
+
   return date.toLocaleDateString("es-MX", {
     day: "2-digit",
     month: "short",
@@ -58,11 +58,14 @@ function formatDate(value) {
   });
 }
 
-function formatInputDate(date) {
-  const d = new Date(date);
+function formatInputDate(value) {
+  const d = parseLocalDate(value);
+  if (!d || Number.isNaN(d.getTime())) return "";
+
   const year = d.getFullYear();
   const month = `${d.getMonth() + 1}`.padStart(2, "0");
   const day = `${d.getDate()}`.padStart(2, "0");
+
   return `${year}-${month}-${day}`;
 }
 
@@ -70,6 +73,7 @@ function getCurrentMonthRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
   return {
     start: formatInputDate(start),
     end: formatInputDate(end),
@@ -80,6 +84,7 @@ function getThisYearRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 1);
   const end = new Date(now.getFullYear(), 11, 31);
+
   return {
     start: formatInputDate(start),
     end: formatInputDate(end),
@@ -88,8 +93,8 @@ function getThisYearRange() {
 
 function getLast30DaysRange() {
   const now = new Date();
-  const start = new Date();
-  start.setDate(now.getDate() - 29);
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+
   return {
     start: formatInputDate(start),
     end: formatInputDate(now),
@@ -241,34 +246,53 @@ function ExpenseModal({
   onSaved,
   options = [],
   selectedQuoteId = "",
+  editingExpense = null,
 }) {
   const [form, setForm] = useState({
-    cotizacion_id: selectedQuoteId || "",
+    cotizacion_id: "",
     concepto: "",
     descripcion: "",
     monto: "",
     fecha: formatInputDate(new Date()),
     tipo: "extra",
   });
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (open) {
-      setForm((prev) => ({
-        ...prev,
-        cotizacion_id: selectedQuoteId || prev.cotizacion_id || "",
-      }));
-      setError("");
+    if (!open) return;
+
+    if (editingExpense) {
+      setForm({
+        cotizacion_id: editingExpense.cotizacion_id || "",
+        concepto: editingExpense.concepto || "",
+        descripcion: editingExpense.descripcion || "",
+        monto: editingExpense.monto ?? "",
+        fecha: formatInputDate(
+          editingExpense.fecha || editingExpense.created_at,
+        ),
+        tipo: editingExpense.tipo || "extra",
+      });
+    } else {
+      setForm({
+        cotizacion_id: selectedQuoteId || "",
+        concepto: "",
+        descripcion: "",
+        monto: "",
+        fecha: formatInputDate(new Date()),
+        tipo: "extra",
+      });
     }
-  }, [open, selectedQuoteId]);
+
+    setError("");
+  }, [open, selectedQuoteId, editingExpense]);
 
   useEffect(() => {
     if (!open) return;
 
     const originalOverflow = document.body.style.overflow;
     const originalPaddingRight = document.body.style.paddingRight;
-
     const scrollBarWidth =
       window.innerWidth - document.documentElement.clientWidth;
 
@@ -312,20 +336,18 @@ function ExpenseModal({
         tipo: form.tipo,
       };
 
-      const { error: insertError } = await supabase
-        .from("gastos")
-        .insert(payload);
+      let result;
 
-      if (insertError) throw insertError;
+      if (editingExpense?.id) {
+        result = await supabase
+          .from("gastos")
+          .update(payload)
+          .eq("id", editingExpense.id);
+      } else {
+        result = await supabase.from("gastos").insert(payload);
+      }
 
-      setForm({
-        cotizacion_id: selectedQuoteId || "",
-        concepto: "",
-        descripcion: "",
-        monto: "",
-        fecha: formatInputDate(new Date()),
-        tipo: "extra",
-      });
+      if (result.error) throw result.error;
 
       onSaved?.();
       onClose?.();
@@ -341,9 +363,11 @@ function ExpenseModal({
       <div className="w-full max-w-2xl rounded-[28px] border border-border bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border p-5 md:p-6">
           <div>
-            <p className="text-sm font-semibold text-accent-600">Nuevo gasto</p>
+            <p className="text-sm font-semibold text-accent-600">
+              {editingExpense ? "Editar gasto" : "Nuevo gasto"}
+            </p>
             <h3 className="mt-1 text-xl font-bold text-text-primary">
-              Registrar gasto
+              {editingExpense ? "Modificar gasto" : "Registrar gasto"}
             </h3>
             <p className="mt-1 text-sm text-text-secondary">
               Puedes ligarlo a una cotización o dejarlo independiente.
@@ -485,7 +509,13 @@ function ExpenseModal({
               className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Plus className="h-4 w-4" />
-              {saving ? "Guardando..." : "Guardar gasto"}
+              {saving
+                ? editingExpense
+                  ? "Guardando cambios..."
+                  : "Guardando..."
+                : editingExpense
+                  ? "Guardar cambios"
+                  : "Guardar gasto"}
             </button>
           </div>
         </form>
@@ -494,14 +524,48 @@ function ExpenseModal({
   );
 }
 
+function parseLocalDate(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return new Date(
+      value.getFullYear(),
+      value.getMonth(),
+      value.getDate(),
+    );
+  }
+
+  if (typeof value === "string") {
+    // YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss...
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (match) {
+      const [, year, month, day] = match;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+
+    return new Date(
+      parsed.getFullYear(),
+      parsed.getMonth(),
+      parsed.getDate(),
+    );
+  }
+
+  return null;
+}
+
 export default function ExpensesPage() {
   const defaultRange = useMemo(() => getCurrentMonthRange(), []);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
 
   const [search, setSearch] = useState("");
-  const [quickFilter, setQuickFilter] = useState("mes_actual");
+  const [quickFilter, setQuickFilter] = useState("todos");
   const [dateFrom, setDateFrom] = useState(defaultRange.start);
   const [dateTo, setDateTo] = useState(defaultRange.end);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -621,6 +685,12 @@ export default function ExpensesPage() {
     setDeleteModalOpen(true);
   }
 
+  function openEditExpense(expense) {
+    setEditingExpense(expense);
+    setSelectedQuoteId(expense?.cotizacion_id || "");
+    setModalOpen(true);
+  }
+
   const preparedRows = useMemo(() => {
     const expenseMap = new Map();
     const detailMap = new Map();
@@ -705,12 +775,16 @@ export default function ExpensesPage() {
   }, [quoteRows, expenseRows, detailRows, productRows]);
 
   const filteredRows = useMemo(() => {
-    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
-    const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
+    const from = dateFrom ? parseLocalDate(dateFrom) : null;
+    const to = dateTo ? parseLocalDate(dateTo) : null;
+
+    if (to) {
+      to.setHours(23, 59, 59, 999);
+    }
     const term = search.trim().toLowerCase();
 
     return preparedRows.filter((item) => {
-      const itemDate = item.fechaISO ? new Date(item.fechaISO) : null;
+      const itemDate = item.fechaISO ? parseLocalDate(item.fechaISO) : null;
 
       if (from && itemDate && itemDate < from) return false;
       if (to && itemDate && itemDate > to) return false;
@@ -742,15 +816,21 @@ export default function ExpensesPage() {
   }, [preparedRows, dateFrom, dateTo, search, quickFilter]);
 
   const filteredStandaloneExpenses = useMemo(() => {
-    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
-    const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
+    const from = dateFrom ? parseLocalDate(dateFrom) : null;
+    const to = dateTo ? parseLocalDate(dateTo) : null;
+
+    if (to) {
+      to.setHours(23, 59, 59, 999);
+    }
     const term = search.trim().toLowerCase();
 
     return expenseRows.filter((expense) => {
       if (expense.cotizacion_id) return false;
 
       const expenseDateValue = expense.fecha || expense.created_at;
-      const expenseDate = expenseDateValue ? new Date(expenseDateValue) : null;
+      const expenseDate = expenseDateValue
+        ? parseLocalDate(expenseDateValue)
+        : null;
 
       if (from && expenseDate && expenseDate < from) return false;
       if (to && expenseDate && expenseDate > to) return false;
@@ -819,8 +899,8 @@ export default function ExpensesPage() {
     });
 
     return [...profitRows, ...standaloneExpenseRows].sort((a, b) => {
-      const aDate = a.fechaISO ? new Date(a.fechaISO).getTime() : 0;
-      const bDate = b.fechaISO ? new Date(b.fechaISO).getTime() : 0;
+      const aDate = a.fechaISO ? parseLocalDate(a.fechaISO).getTime() : 0;
+      const bDate = b.fechaISO ? parseLocalDate(b.fechaISO).getTime() : 0;
       return bDate - aDate;
     });
   }, [filteredRows, filteredStandaloneExpenses]);
@@ -871,7 +951,7 @@ export default function ExpensesPage() {
       });
 
     for (const item of filteredRows) {
-      const d = new Date(item.fechaISO);
+      const d = parseLocalDate(item.fechaISO);
       if (Number.isNaN(d.getTime())) continue;
 
       const key = buildDayKey(d);
@@ -890,7 +970,7 @@ export default function ExpensesPage() {
     }
 
     for (const expense of filteredStandaloneExpenses) {
-      const d = new Date(expense.fecha || expense.created_at);
+      const d = parseLocalDate(expense.fecha || expense.created_at);
       if (Number.isNaN(d.getTime())) continue;
 
       const key = buildDayKey(d);
@@ -987,6 +1067,7 @@ export default function ExpensesPage() {
   }
 
   function openNewExpense(quoteId = "") {
+    setEditingExpense(null);
     setSelectedQuoteId(quoteId);
     setModalOpen(true);
   }
@@ -1019,14 +1100,19 @@ export default function ExpensesPage() {
     <section className="space-y-6">
       <ExpenseModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingExpense(null);
+          setSelectedQuoteId("");
+        }}
         onSaved={() => fetchData(true)}
         options={quoteRows}
         selectedQuoteId={selectedQuoteId}
+        editingExpense={editingExpense}
       />
 
       {detailModalOpen && selectedDetail ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 h-full">
+        <div className="fixed inset-0 z-49 flex items-center justify-center bg-black/50 px-4 py-6 h-full">
           <div className="w-full max-w-2xl rounded-[28px] border border-border bg-surface shadow-2xl">
             <div className="flex items-center justify-between border-b border-border p-5 md:p-6">
               <div>
@@ -1125,18 +1211,44 @@ export default function ExpensesPage() {
                         key={gasto.id}
                         className="rounded-2xl border border-border bg-surface p-3"
                       >
-                        <p className="text-sm font-semibold text-text-primary">
-                          {gasto.concepto}
-                        </p>
-                        <p className="mt-1 text-sm text-text-secondary">
-                          {gasto.descripcion || "Sin descripción"}
-                        </p>
-                        <p className="mt-2 text-sm font-bold text-error-700">
-                          {formatMXN(gasto.monto)}
-                        </p>
-                        <p className="mt-1 text-xs text-text-muted">
-                          {formatDate(gasto.fecha || gasto.created_at)}
-                        </p>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-text-primary">
+                              {gasto.concepto}
+                            </p>
+                            <p className="mt-1 text-sm text-text-secondary">
+                              {gasto.descripcion || "Sin descripción"}
+                            </p>
+                            <p className="mt-2 text-sm font-bold text-error-700">
+                              {formatMXN(gasto.monto)}
+                            </p>
+                            <p className="mt-1 text-xs text-text-muted">
+                              {formatDate(gasto.fecha || gasto.created_at)}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditExpense(gasto)}
+                              className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-text-primary transition hover:border-info-200 hover:bg-info-50 hover:text-info-700"
+                            >
+                              Editar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openDeleteModal({
+                                  expenses: [gasto],
+                                })
+                              }
+                              className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-text-primary transition hover:border-error-200 hover:bg-error-50 hover:text-error-700"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1562,6 +1674,16 @@ export default function ExpensesPage() {
 
                             <button
                               type="button"
+                              title="Editar gasto"
+                              disabled={!item.expenses.length}
+                              onClick={() => openEditExpense(item.expenses[0])}
+                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary transition hover:border-info-200 hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Receipt className="h-4 w-4" />
+                            </button>
+
+                            <button
+                              type="button"
                               title="Agregar gasto"
                               onClick={() =>
                                 openNewExpense(
@@ -1699,6 +1821,16 @@ export default function ExpensesPage() {
                     >
                       <Eye className="h-4 w-4" />
                       Ver
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!item.expenses.length}
+                      onClick={() => openEditExpense(item.expenses[0])}
+                      className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-sm font-semibold text-text-primary transition hover:border-info-200 hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Receipt className="h-4 w-4" />
+                      Editar
                     </button>
 
                     <button

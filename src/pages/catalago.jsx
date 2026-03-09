@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import supabase from "../utils/supabase";
 import ProductCard from "../components/ProductCard";
 import { SlidersHorizontal } from "lucide-react";
@@ -20,19 +20,15 @@ const CATEGORIAS_UI = [
 
 export default function Catalogo() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
-  const firstRender = useRef(true);
-  const syncingFromUrl = useRef(false);
 
   const [productos, setProductos] = useState([]);
-  const [busqueda, setBusqueda] = useState(searchParams.get("q") || "");
-  const [catUI, setCatUI] = useState(searchParams.get("cat") || "todas");
   const [loading, setLoading] = useState(true);
-  const [pageSize, setPageSize] = useState(
-    Number(searchParams.get("pageSize")) || 20,
-  );
   const [showFilters, setShowFilters] = useState(false);
-  const [page, setPage] = useState(Number(searchParams.get("page")) || 1);
+
+  const busqueda = searchParams.get("q") || "";
+  const catUI = searchParams.get("cat") || "todas";
+  const pageSize = Number(searchParams.get("pageSize")) || 20;
+  const page = Number(searchParams.get("page")) || 1;
 
   useEffect(() => {
     const fetchProductos = async () => {
@@ -46,27 +42,43 @@ export default function Catalogo() {
         .eq("habilitado", true)
         .order("created_at", { ascending: false });
 
-      if (error) console.error(error);
-      setProductos(data || []);
+      if (error) {
+        console.error(error);
+        setProductos([]);
+      } else {
+        setProductos(data || []);
+      }
+
       setLoading(false);
     };
 
     fetchProductos();
   }, []);
 
-  useEffect(() => {
-    syncingFromUrl.current = true;
+  function updateParams(updates) {
+    const params = new URLSearchParams(searchParams);
 
-    const q = searchParams.get("q") || "";
-    const cat = searchParams.get("cat") || "todas";
-    const pageParam = Number(searchParams.get("page")) || 1;
-    const pageSizeParam = Number(searchParams.get("pageSize")) || 20;
+    Object.entries(updates).forEach(([key, value]) => {
+      if (
+        value === undefined ||
+        value === null ||
+        value === "" ||
+        value === false
+      ) {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    });
 
-    setBusqueda(q);
-    setCatUI(cat);
-    setPage(pageParam);
-    setPageSize(pageSizeParam);
-  }, [searchParams]);
+    // limpiar valores default
+    if (!params.get("q")) params.delete("q");
+    if ((params.get("cat") || "todas") === "todas") params.delete("cat");
+    if ((params.get("page") || "1") === "1") params.delete("page");
+    if ((params.get("pageSize") || "20") === "20") params.delete("pageSize");
+
+    setSearchParams(params, { replace: true });
+  }
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -98,43 +110,9 @@ export default function Catalogo() {
     return filtrados.slice(start, end);
   }, [filtrados, pageSafe, pageSize]);
 
-  useEffect(() => {
-    const params = {};
-
-    if (busqueda.trim()) params.q = busqueda.trim();
-    if (catUI !== "todas") params.cat = catUI;
-    if (page > 1) params.page = String(page);
-    if (pageSize !== 20) params.pageSize = String(pageSize);
-
-    const next = new URLSearchParams(params).toString();
-    const current = searchParams.toString();
-
-    if (next !== current) {
-      setSearchParams(params, { replace: true });
-    }
-  }, [busqueda, catUI, page, pageSize, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      syncingFromUrl.current = false;
-      return;
-    }
-
-    if (syncingFromUrl.current) {
-      syncingFromUrl.current = false;
-      return;
-    }
-
-    setPage(1);
-  }, [busqueda, catUI, pageSize]);
-
   const limpiarFiltros = () => {
-    setCatUI("todas");
-    setBusqueda("");
-    setPage(1);
-    setPageSize(20);
     setSearchParams({}, { replace: true });
+    setShowFilters(false);
   };
 
   const fromPath = useMemo(() => {
@@ -189,7 +167,7 @@ export default function Catalogo() {
               <div className="flex items-center gap-2 text-sm">
                 <button
                   disabled={pageSafe <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => updateParams({ page: Math.max(1, pageSafe - 1) })}
                   className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
                 >
                   {"<"}
@@ -208,7 +186,9 @@ export default function Catalogo() {
 
                 <button
                   disabled={pageSafe >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() =>
+                    updateParams({ page: Math.min(totalPages, pageSafe + 1) })
+                  }
                   className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
                 >
                   {">"}
@@ -252,7 +232,10 @@ export default function Catalogo() {
                         <button
                           key={c.key}
                           onClick={() => {
-                            setCatUI(c.key);
+                            updateParams({
+                              cat: c.key === "todas" ? "" : c.key,
+                              page: "",
+                            });
                             setShowFilters(false);
                           }}
                           className={[
@@ -335,7 +318,9 @@ export default function Catalogo() {
                         <div className="flex items-center gap-2 text-sm">
                           <button
                             disabled={pageSafe <= 1}
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            onClick={() =>
+                              updateParams({ page: Math.max(1, pageSafe - 1) })
+                            }
                             className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
                           >
                             {"<"}
@@ -344,7 +329,9 @@ export default function Catalogo() {
                           <button
                             disabled={pageSafe >= totalPages}
                             onClick={() =>
-                              setPage((p) => Math.min(totalPages, p + 1))
+                              updateParams({
+                                page: Math.min(totalPages, pageSafe + 1),
+                              })
                             }
                             className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
                           >

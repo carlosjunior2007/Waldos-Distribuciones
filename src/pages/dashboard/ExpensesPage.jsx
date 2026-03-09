@@ -53,7 +53,9 @@ function formatMXN(value) {
  * - "2026-03-09T00:00:00+00:00"
  * - Date
  */
-function parseSafeDate(value) {
+const BUSINESS_TZ = "America/Tijuana";
+
+function parseBusinessDate(value) {
   if (!value) return null;
 
   if (value instanceof Date) {
@@ -61,46 +63,102 @@ function parseSafeDate(value) {
   }
 
   if (typeof value === "string") {
-    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const raw = value.slice(0, 10);
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
     if (match) {
       const [, year, month, day] = match;
       return new Date(Number(year), Number(month) - 1, Number(day));
     }
-
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-
-    return new Date(
-      parsed.getFullYear(),
-      parsed.getMonth(),
-      parsed.getDate()
-    );
   }
 
   return null;
 }
 
-function formatDate(value) {
-  const date = parseSafeDate(value);
-  if (!date || Number.isNaN(date.getTime())) return "Sin fecha";
+function parseTimestampDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function startOfLocalDay(value) {
+  const d = parseBusinessDate(value);
+  if (!d) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+function endOfLocalDay(value) {
+  const d = parseBusinessDate(value);
+  if (!d) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+
+function formatDate(value, { isTimestamp = false } = {}) {
+  const date = isTimestamp
+    ? parseTimestampDate(value)
+    : parseBusinessDate(value);
+
+  if (!date) return "Sin fecha";
 
   return date.toLocaleDateString("es-MX", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    ...(isTimestamp ? { timeZone: BUSINESS_TZ } : {}),
   });
 }
 
 function formatInputDate(value) {
-  const d = parseSafeDate(value);
-  if (!d || Number.isNaN(d.getTime())) return "";
+  if (!value) return "";
 
-  const year = d.getFullYear();
-  const month = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
+  if (typeof value === "string") {
+    const raw = value.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  }
+
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
 
   return `${year}-${month}-${day}`;
+}
+
+function getTijuanaDayKeyFromTimestamp(value) {
+  const d = parseTimestampDate(value);
+  if (!d) return null;
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDayLabelFromBusinessDate(value) {
+  const d = parseBusinessDate(value);
+  if (!d) return "";
+
+  return d.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+  });
 }
 
 function getCurrentMonthRange() {
@@ -590,7 +648,8 @@ export default function ExpensesPage() {
 
       const { data: quotes, error: quoteError } = await supabase
         .from("cotizaciones")
-        .select(`
+        .select(
+          `
           id,
           folio,
           cliente_nombre,
@@ -605,7 +664,8 @@ export default function ExpensesPage() {
           fecha_completado,
           notas,
           created_at
-        `)
+        `,
+        )
         .not("fecha_completado", "is", null)
         .order("fecha_completado", { ascending: false });
 
@@ -613,7 +673,8 @@ export default function ExpensesPage() {
 
       const { data: expenses, error: expenseError } = await supabase
         .from("gastos")
-        .select(`
+        .select(
+          `
           id,
           concepto,
           descripcion,
@@ -622,14 +683,15 @@ export default function ExpensesPage() {
           cotizacion_id,
           created_at,
           tipo
-        `)
+        `,
+        )
         .order("fecha", { ascending: false });
 
       if (expenseError) throw expenseError;
 
-      const { data: details, error: detailError } = await supabase
-        .from("cotizacion_detalles")
-        .select(`
+      const { data: details, error: detailError } = await supabase.from(
+        "cotizacion_detalles",
+      ).select(`
           id,
           cotizacion_id,
           producto_id,
@@ -638,9 +700,9 @@ export default function ExpensesPage() {
 
       if (detailError) throw detailError;
 
-      const { data: products, error: productError } = await supabase
-        .from("productos")
-        .select(`
+      const { data: products, error: productError } = await supabase.from(
+        "productos",
+      ).select(`
           id,
           nombre,
           precio_compra,
@@ -717,7 +779,7 @@ export default function ExpensesPage() {
 
       const totalExpenses = relatedExpenses.reduce(
         (acc, item) => acc + parseNumberish(item.monto),
-        0
+        0,
       );
 
       const utilidadBruta = relatedDetails.reduce((acc, detail) => {
@@ -738,7 +800,7 @@ export default function ExpensesPage() {
         cliente_email: quote.cliente_email || "",
         cliente_telefono: quote.cliente_telefono || "",
         fechaISO: quoteDateValue,
-        fecha: formatDate(quoteDateValue),
+        fecha: formatDate(quoteDateValue, { isTimestamp: true }),
 
         totalCotizacion: parseNumberish(quote.total),
         utilidadBruta,
@@ -771,12 +833,12 @@ export default function ExpensesPage() {
   }, [quoteRows, expenseRows, detailRows, productRows]);
 
   const filteredRows = useMemo(() => {
-    const from = dateFrom ? parseSafeDate(dateFrom) : null;
-    const to = dateTo ? parseSafeDate(dateTo) : null;
+    const from = dateFrom ? startOfLocalDay(dateFrom) : null;
+    const to = dateTo ? endOfLocalDay(dateTo) : null;
     const term = search.trim().toLowerCase();
 
     return preparedRows.filter((item) => {
-      const itemDate = item.fechaISO ? parseSafeDate(item.fechaISO) : null;
+      const itemDate = item.fechaISO ? parseTimestampDate(item.fechaISO) : null;
 
       if (from && itemDate && itemDate < from) return false;
       if (to && itemDate && itemDate > to) return false;
@@ -808,17 +870,16 @@ export default function ExpensesPage() {
   }, [preparedRows, dateFrom, dateTo, search, quickFilter]);
 
   const filteredStandaloneExpenses = useMemo(() => {
-    const from = dateFrom ? parseSafeDate(dateFrom) : null;
-    const to = dateTo ? parseSafeDate(dateTo) : null;
+    const from = dateFrom ? startOfLocalDay(dateFrom) : null;
+    const to = dateTo ? endOfLocalDay(dateTo) : null;
     const term = search.trim().toLowerCase();
 
     return expenseRows.filter((expense) => {
       if (expense.cotizacion_id) return false;
 
-      const expenseDateValue = expense.fecha || expense.created_at;
-      const expenseDate = expenseDateValue
-        ? parseSafeDate(expenseDateValue)
-        : null;
+      const expenseDate = expense.fecha
+        ? startOfLocalDay(expense.fecha)
+        : parseTimestampDate(expense.created_at);
 
       if (from && expenseDate && expenseDate < from) return false;
       if (to && expenseDate && expenseDate > to) return false;
@@ -871,7 +932,9 @@ export default function ExpensesPage() {
         tipo: normalizedType,
         naturaleza: "gasto",
         cliente: "Sin cotización asociada",
-        fecha: formatDate(expenseDateValue),
+        fecha: expense.fecha
+          ? formatDate(expense.fecha)
+          : formatDate(expense.created_at, { isTimestamp: true }),
         fechaISO: expenseDateValue,
         gastos: monto,
         ganancia: -monto,
@@ -884,27 +947,39 @@ export default function ExpensesPage() {
       };
     });
 
+    function resolveRowDateMs(row) {
+      if (!row?.fechaISO) return 0;
+
+      if (row.rowType === "ganancia") {
+        return parseTimestampDate(row.fechaISO)?.getTime() || 0;
+      }
+
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO))) {
+        return startOfLocalDay(row.fechaISO)?.getTime() || 0;
+      }
+
+      return parseTimestampDate(row.fechaISO)?.getTime() || 0;
+    }
+
     return [...profitRows, ...standaloneExpenseRows].sort((a, b) => {
-      const aDate = a.fechaISO ? parseSafeDate(a.fechaISO)?.getTime() || 0 : 0;
-      const bDate = b.fechaISO ? parseSafeDate(b.fechaISO)?.getTime() || 0 : 0;
-      return bDate - aDate;
+      return resolveRowDateMs(b) - resolveRowDateMs(a);
     });
   }, [filteredRows, filteredStandaloneExpenses]);
 
   const summary = useMemo(() => {
     const grossProfitTotal = filteredRows.reduce(
       (acc, item) => acc + parseNumberish(item.utilidadBruta),
-      0
+      0,
     );
 
     const linkedExpensesTotal = filteredRows.reduce(
       (acc, item) => acc + parseNumberish(item.gastos),
-      0
+      0,
     );
 
     const standaloneExpensesTotal = filteredStandaloneExpenses.reduce(
       (acc, item) => acc + parseNumberish(item.monto),
-      0
+      0,
     );
 
     const expensesTotal = linkedExpensesTotal + standaloneExpensesTotal;
@@ -923,30 +998,14 @@ export default function ExpensesPage() {
   const chartData = useMemo(() => {
     const map = new Map();
 
-    const buildDayKey = (date) => {
-      const year = date.getFullYear();
-      const month = `${date.getMonth() + 1}`.padStart(2, "0");
-      const day = `${date.getDate()}`.padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    };
-
-    const buildDayLabel = (date) =>
-      date.toLocaleDateString("es-MX", {
-        day: "2-digit",
-        month: "short",
-      });
-
     for (const item of filteredRows) {
-      const d = parseSafeDate(item.fechaISO);
-      if (!d || Number.isNaN(d.getTime())) continue;
-
-      const key = buildDayKey(d);
-      const label = buildDayLabel(d);
+      const key = getTijuanaDayKeyFromTimestamp(item.fechaISO);
+      if (!key) continue;
 
       if (!map.has(key)) {
         map.set(key, {
           key,
-          label,
+          label: getDayLabelFromBusinessDate(key),
           netoDia: 0,
         });
       }
@@ -956,16 +1015,16 @@ export default function ExpensesPage() {
     }
 
     for (const expense of filteredStandaloneExpenses) {
-      const d = parseSafeDate(expense.fecha || expense.created_at);
-      if (!d || Number.isNaN(d.getTime())) continue;
+      const key = expense.fecha
+        ? expense.fecha.slice(0, 10)
+        : getTijuanaDayKeyFromTimestamp(expense.created_at);
 
-      const key = buildDayKey(d);
-      const label = buildDayLabel(d);
+      if (!key) continue;
 
       if (!map.has(key)) {
         map.set(key, {
           key,
-          label,
+          label: getDayLabelFromBusinessDate(key),
           netoDia: 0,
         });
       }
@@ -975,7 +1034,7 @@ export default function ExpensesPage() {
     }
 
     const sorted = Array.from(map.values()).sort((a, b) =>
-      a.key.localeCompare(b.key)
+      a.key.localeCompare(b.key),
     );
 
     let acumulado = 0;
@@ -1030,7 +1089,9 @@ export default function ExpensesPage() {
       Tipo: "Gasto independiente",
       Folio: "",
       Cliente: "",
-      Fecha: formatDate(item.fecha || item.created_at),
+      Fecha: item.fecha
+        ? formatDate(item.fecha)
+        : formatDate(item.created_at, { isTimestamp: true }),
       "Venta total": 0,
       "Utilidad bruta real": 0,
       "Gastos asociados": parseNumberish(item.monto),
@@ -1064,7 +1125,10 @@ export default function ExpensesPage() {
     try {
       setDeletingExpenseId(expenseId);
 
-      const { error } = await supabase.from("gastos").delete().eq("id", expenseId);
+      const { error } = await supabase
+        .from("gastos")
+        .delete()
+        .eq("id", expenseId);
 
       if (error) throw error;
 
@@ -1206,7 +1270,11 @@ export default function ExpensesPage() {
                               {formatMXN(gasto.monto)}
                             </p>
                             <p className="mt-1 text-xs text-text-muted">
-                              {formatDate(gasto.fecha || gasto.created_at)}
+                              {gasto.fecha
+                                ? formatDate(gasto.fecha)
+                                : formatDate(gasto.created_at, {
+                                    isTimestamp: true,
+                                  })}
                             </p>
                           </div>
 
@@ -1280,7 +1348,9 @@ export default function ExpensesPage() {
 
                 <button
                   type="button"
-                  onClick={() => deleteExpense(selectedDeleteItem.expenses[0]?.id)}
+                  onClick={() =>
+                    deleteExpense(selectedDeleteItem.expenses[0]?.id)
+                  }
                   disabled={
                     deletingExpenseId === selectedDeleteItem.expenses[0]?.id
                   }
@@ -1668,7 +1738,7 @@ export default function ExpensesPage() {
                               title="Agregar gasto"
                               onClick={() =>
                                 openNewExpense(
-                                  item.rowType === "ganancia" ? item.rawId : ""
+                                  item.rowType === "ganancia" ? item.rawId : "",
                                 )
                               }
                               className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary transition hover:border-info-200 hover:bg-info-50 hover:text-info-700"
@@ -1818,7 +1888,7 @@ export default function ExpensesPage() {
                       type="button"
                       onClick={() =>
                         openNewExpense(
-                          item.rowType === "ganancia" ? item.rawId : ""
+                          item.rowType === "ganancia" ? item.rawId : "",
                         )
                       }
                       className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-sm font-semibold text-text-primary transition hover:border-info-200 hover:bg-info-50 hover:text-info-700"

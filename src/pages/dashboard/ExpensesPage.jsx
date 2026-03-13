@@ -398,6 +398,17 @@ function ExpenseModal({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") onClose?.();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   async function handleSubmit(e) {
@@ -449,166 +460,174 @@ function ExpenseModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex h-full items-center justify-center bg-black/50 px-4 py-6">
-      <div className="w-full max-w-2xl rounded-[28px] border border-border bg-surface shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border p-5 md:p-6">
-          <div>
-            <p className="text-sm font-semibold text-accent-600">
-              {editingExpense ? "Editar gasto" : "Nuevo gasto"}
-            </p>
-            <h3 className="mt-1 text-xl font-bold text-text-primary">
-              {editingExpense ? "Modificar gasto" : "Registrar gasto"}
-            </h3>
-            <p className="mt-1 text-sm text-text-secondary">
-              Puedes ligarlo a una cotización o dejarlo independiente.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary transition hover:border-border-strong hover:bg-surface-soft hover:text-text-primary"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 p-5 md:p-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-semibold text-text-primary">
-                Cotización <span className="text-text-muted">(opcional)</span>
-              </label>
-              <select
-                value={form.cotizacion_id}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    cotizacion_id: e.target.value,
-                  }))
-                }
-                className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-              >
-                <option value="">Sin cotización asociada</option>
-                {options.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.folio} · {item.cliente_nombre || "Sin cliente"}
-                  </option>
-                ))}
-              </select>
+    <div className="fixed inset-0 z-50 bg-black/50 h-full w-full" onClick={onClose}>
+      <div className="flex min-h-dvh items-start justify-center overflow-y-auto px-3 py-4 sm:px-4 sm:py-8 md:items-center" onClick={(e) => e.stopPropagation()}>
+        <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-[24px] border border-border bg-surface shadow-2xl max-h-[92dvh]">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-4 sm:px-5 sm:py-5 md:px-6">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-accent-600">
+                {editingExpense ? "Editar gasto" : "Nuevo gasto"}
+              </p>
+              <h3 className="mt-1 text-lg font-bold text-text-primary sm:text-xl">
+                {editingExpense ? "Modificar gasto" : "Registrar gasto"}
+              </h3>
+              <p className="mt-1 text-sm leading-relaxed text-text-secondary">
+                Puedes ligarlo a una cotización o dejarlo independiente.
+              </p>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-text-primary">
-                Concepto
-              </label>
-              <input
-                type="text"
-                value={form.concepto}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, concepto: e.target.value }))
-                }
-                placeholder="Ej. Envío de mercancía"
-                className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-text-primary">
-                Tipo
-              </label>
-              <select
-                value={form.tipo}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, tipo: e.target.value }))
-                }
-                className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-              >
-                <option value="compra">Compra</option>
-                <option value="envio">Envío</option>
-                <option value="operativo">Operativo</option>
-                <option value="extra">Extra</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-text-primary">
-                Monto
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.monto}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, monto: e.target.value }))
-                }
-                placeholder="0.00"
-                className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-text-primary">
-                Fecha
-              </label>
-              <input
-                type="date"
-                value={form.fecha}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, fecha: e.target.value }))
-                }
-                className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-semibold text-text-primary">
-                Descripción
-              </label>
-              <textarea
-                rows={4}
-                value={form.descripcion}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, descripcion: e.target.value }))
-                }
-                placeholder="Opcional"
-                className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-          </div>
-
-          {error ? (
-            <div className="rounded-2xl border border-error-100 bg-error-50 px-4 py-3 text-sm text-error-700">
-              {error}
-            </div>
-          ) : null}
-
-          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-border bg-surface px-4 text-sm font-semibold text-text-primary transition hover:border-border-strong hover:bg-surface-soft"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary transition hover:border-border-strong hover:bg-surface-soft hover:text-text-primary"
             >
-              Cancelar
-            </button>
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <Plus className="h-4 w-4" />
-              {saving
-                ? editingExpense
-                  ? "Guardando cambios..."
-                  : "Guardando..."
-                : editingExpense
-                  ? "Guardar cambios"
-                  : "Guardar gasto"}
+              <X className="h-4 w-4" />
             </button>
           </div>
-        </form>
+
+          <form
+            onSubmit={handleSubmit}
+            className="flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 md:px-6"
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-text-primary">
+                  Cotización <span className="text-text-muted">(opcional)</span>
+                </label>
+                <select
+                  value={form.cotizacion_id}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      cotizacion_id: e.target.value,
+                    }))
+                  }
+                  className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                >
+                  <option value="">Sin cotización asociada</option>
+                  {options.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.folio} · {item.cliente_nombre || "Sin cliente"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-text-primary">
+                  Concepto
+                </label>
+                <input
+                  type="text"
+                  value={form.concepto}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, concepto: e.target.value }))
+                  }
+                  placeholder="Ej. Envío de mercancía"
+                  className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-text-primary">
+                  Tipo
+                </label>
+                <select
+                  value={form.tipo}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, tipo: e.target.value }))
+                  }
+                  className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                >
+                  <option value="compra">Compra</option>
+                  <option value="envio">Envío</option>
+                  <option value="operativo">Operativo</option>
+                  <option value="extra">Extra</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-text-primary">
+                  Monto
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.monto}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, monto: e.target.value }))
+                  }
+                  placeholder="0.00"
+                  className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-text-primary">
+                  Fecha
+                </label>
+                <input
+                  type="date"
+                  value={form.fecha}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, fecha: e.target.value }))
+                  }
+                  className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-text-primary">
+                  Descripción
+                </label>
+                <textarea
+                  rows={4}
+                  value={form.descripcion}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      descripcion: e.target.value,
+                    }))
+                  }
+                  placeholder="Opcional"
+                  className="min-h-[110px] w-full resize-y rounded-2xl border border-border bg-background px-4 py-3 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+            </div>
+
+            {error ? (
+              <div className="mt-4 rounded-2xl border border-error-100 bg-error-50 px-4 py-3 text-sm text-error-700">
+                {error}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-border bg-surface px-4 text-sm font-semibold text-text-primary transition hover:border-border-strong hover:bg-surface-soft sm:w-auto"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+              >
+                <Plus className="h-4 w-4" />
+                {saving
+                  ? editingExpense
+                    ? "Guardando cambios..."
+                    : "Guardando..."
+                  : editingExpense
+                    ? "Guardar cambios"
+                    : "Guardar gasto"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

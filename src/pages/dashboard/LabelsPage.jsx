@@ -86,13 +86,13 @@ function BarcodeSvg({ value }) {
       JsBarcode(svgRef.current, String(value).trim(), {
         format: "CODE128",
         displayValue: true,
-        fontSize: 16,
+        fontSize: 12,
         lineColor: "#111827",
         background: "#ffffff",
-        height: 56,
-        width: 1.7,
+        height: 42,
+        width: 1.4,
         margin: 0,
-        textMargin: 6,
+        textMargin: 4,
         font: "Arial",
       });
     } catch (error) {
@@ -270,10 +270,179 @@ function ClientModal({ open, onClose, onSaved, editingClient = null }) {
   );
 }
 
-function LabelPreview({ form, client, product, companyOptions }) {
+function LabelPreviewContent({
+  form,
+  client,
+  product,
+  companyOptions,
+  elementId,
+}) {
   const widthMm = Number(form.ancho_mm || 100);
   const heightMm = Number(form.alto_mm || 75);
 
+  return (
+    <div
+      id={elementId}
+      style={{
+        width: `${widthMm}mm`,
+        height: `${heightMm}mm`,
+        background: "#ffffff",
+        color: "#0f172a",
+        border: "1px solid #d9e0e7",
+        borderRadius: "14px",
+        padding: "7mm",
+        display: "flex",
+        flexDirection: "column",
+        boxSizing: "border-box",
+        fontFamily: "Arial, sans-serif",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: "5mm",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: "5mm",
+              fontWeight: 700,
+              lineHeight: 1.05,
+              wordBreak: "break-word",
+            }}
+          >
+            {product?.nombre || "Producto"}
+          </div>
+
+          {form.codigo ? (
+            <div
+              style={{ marginTop: "2.5mm", fontSize: "3.5mm", fontWeight: 700 }}
+            >
+              Código: {form.codigo}
+            </div>
+          ) : null}
+
+          {form.texto_extra ? (
+            <div
+              style={{
+                marginTop: "1mm",
+                fontSize: "3.5mm",
+                lineHeight: 1.2,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontWeight: 700,
+              }}
+            >
+              {form.texto_extra}
+            </div>
+          ) : null}
+
+          {client?.nombre ? (
+            <div
+              style={{ marginTop: "1mm", fontSize: "3.5mm", fontWeight: 700 }}
+            >
+              Cliente: {client.nombre}
+            </div>
+          ) : null}
+
+          {client?.numero ? (
+            <div
+              style={{ marginTop: "1mm", fontSize: "3.5mm", fontWeight: 700 }}
+            >
+              Tel: {client.numero}
+            </div>
+          ) : null}
+
+          {client?.correo ? (
+            <div
+              style={{
+                marginTop: "1mm",
+                fontSize: "3.5mm",
+                wordBreak: "break-word",
+                fontWeight: 700,
+              }}
+            >
+              {client.correo}
+            </div>
+          ) : null}
+        </div>
+
+        {client?.logo ? (
+          <div style={{ width: "22mm", textAlign: "right", flexShrink: 0 }}>
+            <img
+              src={client.logo}
+              alt="Logo cliente"
+              style={{
+                maxWidth: "22mm",
+                maxHeight: "16mm",
+                objectFit: "contain",
+                marginLeft: "auto",
+              }}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div style={{ marginTop: "auto", paddingTop: "2mm" }}>
+        {form.codigo_barras ? (
+          <div
+            style={{
+              margin: "3mm auto",
+              width: "80%",
+              minHeight: "26mm",
+              display: "flex",
+              alignItems: "flex-start",
+            }}
+          >
+            <BarcodeSvg value={form.codigo_barras} />
+          </div>
+        ) : null}
+
+        {(companyOptions.showCompanyLogo || companyOptions.showCompanyName) && (
+          <div
+            style={{
+              marginTop: "3mm",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "3mm",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "2mm" }}>
+              {companyOptions.showCompanyLogo && companyOptions.companyLogo ? (
+                <img
+                  src={companyOptions.companyLogo}
+                  alt="Logo empresa"
+                  style={{
+                    width: "10mm",
+                    height: "10mm",
+                    objectFit: "contain",
+                  }}
+                />
+              ) : null}
+
+              {companyOptions.showCompanyName ? (
+                <span
+                  style={{
+                    fontSize: "2.8mm",
+                    fontWeight: 700,
+                  }}
+                >
+                  {companyOptions.companyName}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LabelPreview({ form, client, product, companyOptions }) {
   return (
     <div className="rounded-[24px] border border-border bg-background p-4">
       <p className="mb-3 text-sm font-semibold text-text-primary">
@@ -281,159 +450,14 @@ function LabelPreview({ form, client, product, companyOptions }) {
       </p>
 
       <div className="overflow-auto rounded-2xl border border-dashed border-border bg-white p-6">
-        <div
-          id="label-preview"
-          style={{
-            width: `${widthMm}mm`,
-            height: `${heightMm}mm`,
-            background: "#ffffff",
-            color: "#0f172a",
-            border: "1px solid #d9e0e7",
-            borderRadius: "14px",
-            padding: "7mm",
-            display: "flex",
-            flexDirection: "column",
-            boxSizing: "border-box",
-            fontFamily: "Arial, sans-serif",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "5mm",
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: "5.2mm",
-                  fontWeight: 700,
-                  lineHeight: 1.05,
-                  wordBreak: "break-word",
-                }}
-              >
-                {product?.nombre || "Producto"}
-              </div>
-
-              {form.codigo ? (
-                <div style={{ marginTop: "2.5mm", fontSize: "3.3mm" }}>
-                  Código: {form.codigo}
-                </div>
-              ) : null}
-
-              {form.texto_extra ? (
-                <div
-                  style={{
-                    marginTop: "2.5mm",
-                    fontSize: "3mm",
-                    lineHeight: 1.2,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {form.texto_extra}
-                </div>
-              ) : null}
-
-              {client?.nombre ? (
-                <div style={{ marginTop: "2.5mm", fontSize: "3mm" }}>
-                  Cliente: {client.nombre}
-                </div>
-              ) : null}
-
-              {client?.numero ? (
-                <div style={{ marginTop: "1.5mm", fontSize: "2.8mm" }}>
-                  Tel: {client.numero}
-                </div>
-              ) : null}
-
-              {client?.correo ? (
-                <div
-                  style={{
-                    marginTop: "1.5mm",
-                    fontSize: "2.8mm",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {client.correo}
-                </div>
-              ) : null}
-            </div>
-
-            {client?.logo ? (
-              <div style={{ width: "22mm", textAlign: "right", flexShrink: 0 }}>
-                <img
-                  src={client.logo}
-                  alt="Logo cliente"
-                  style={{
-                    maxWidth: "22mm",
-                    maxHeight: "16mm",
-                    objectFit: "contain",
-                    marginLeft: "auto",
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-
-          <div style={{ marginTop: "auto", paddingTop: "2mm" }}>
-            {form.codigo_barras ? (
-              <div
-                style={{
-                  marginTop: "5mm",
-                  width: "100%",
-                  minHeight: "26mm",
-                  display: "flex",
-                  alignItems: "flex-end",
-                }}
-              >
-                <BarcodeSvg value={form.codigo_barras} />
-              </div>
-            ) : null}
-
-            {(companyOptions.showCompanyLogo ||
-              companyOptions.showCompanyName) && (
-              <div
-                style={{
-                  marginTop: "3mm",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "3mm",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "2mm" }}
-                >
-                  {companyOptions.showCompanyLogo &&
-                  companyOptions.companyLogo ? (
-                    <img
-                      src={companyOptions.companyLogo}
-                      alt="Logo empresa"
-                      style={{
-                        width: "10mm",
-                        height: "10mm",
-                        objectFit: "contain",
-                      }}
-                    />
-                  ) : null}
-
-                  {companyOptions.showCompanyName ? (
-                    <span
-                      style={{
-                        fontSize: "2.8mm",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {companyOptions.companyName}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="flex justify-center">
+          <LabelPreviewContent
+            form={form}
+            client={client}
+            product={product}
+            companyOptions={companyOptions}
+            elementId="label-preview-print"
+          />
         </div>
       </div>
     </div>
@@ -579,7 +603,7 @@ function LabelModal({
   }
 
   async function handleDownload() {
-    const previewElement = document.getElementById("label-preview");
+    const previewElement = document.getElementById("label-preview-print");
 
     try {
       await generateLabelPDF({
@@ -595,10 +619,10 @@ function LabelModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[95] bg-black/50 p-4">
-      <div className="flex h-full items-center justify-center">
-        <div className="grid h-[92vh] w-full max-w-7xl gap-0 overflow-hidden rounded-[28px] border border-border bg-surface shadow-2xl lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="overflow-y-auto border-r border-border p-5">
+    <div className="fixed inset-0 z-[95] bg-black/50">
+      <div className="flex h-dvh items-start justify-center p-3 sm:p-4 lg:items-center lg:p-6">
+        <div className="grid h-full w-full max-w-7xl grid-rows-[minmax(0,1fr)] overflow-hidden rounded-[24px] border border-border bg-surface shadow-2xl lg:h-auto lg:max-h-[92dvh] lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="min-h-0 overflow-y-auto border-b border-border p-4 sm:p-5 lg:border-b-0 lg:border-r">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-accent-600">
@@ -618,7 +642,41 @@ function LabelModal({
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <div className="mt-4 lg:hidden">
+              <div className="rounded-2xl border border-border bg-background p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-text-primary">
+                    Vista previa
+                  </p>
+                  <span className="text-xs text-text-muted">
+                    Escalada para móvil
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-dashed border-border bg-white p-3">
+                  <div className="flex min-w-max justify-center">
+                    <div
+                      style={{
+                        transform: "scale(0.42)",
+                        transformOrigin: "top center",
+                        width: `${Number(form.ancho_mm || 100)}mm`,
+                        height: `${Number(form.alto_mm || 75)}mm`,
+                        marginBottom: `-${Number(form.alto_mm || 75) * 0.58}mm`,
+                      }}
+                    >
+                      <LabelPreviewContent
+                        form={form}
+                        client={clientView}
+                        product={selectedProduct}
+                        companyOptions={companyOptions}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="mt-5 space-y-4 pb-4">
               <div className="rounded-2xl border border-border bg-background p-4">
                 <p className="text-sm font-semibold text-text-primary">
                   Datos visibles del cliente
@@ -818,11 +876,11 @@ function LabelModal({
                 </div>
               </div>
 
-              <div className="flex flex-wrap justify-end gap-3 pt-2">
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:justify-end">
                 <button
                   type="button"
                   onClick={handleDownload}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-border px-4 text-sm font-semibold"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-border px-4 text-sm font-semibold sm:w-auto"
                 >
                   <Download className="h-4 w-4" />
                   PDF
@@ -831,7 +889,7 @@ function LabelModal({
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white sm:w-auto"
                 >
                   {saving ? "Guardando..." : "Guardar etiqueta"}
                 </button>
@@ -839,7 +897,10 @@ function LabelModal({
             </form>
           </div>
 
-          <div ref={previewWrapperRef} className="overflow-y-auto p-5">
+          <div
+            ref={previewWrapperRef}
+            className="hidden min-h-0 overflow-y-auto p-4 sm:p-5 lg:block"
+          >
             <LabelPreview
               form={form}
               client={clientView}
@@ -856,6 +917,7 @@ function LabelModal({
 export default function LabelsPage() {
   const [loadingClients, setLoadingClients] = useState(true);
   const [loadingLabels, setLoadingLabels] = useState(false);
+  const [printPayload, setPrintPayload] = useState(null);
 
   const [clients, setClients] = useState([]);
   const [products, setProducts] = useState([]);
@@ -1026,144 +1088,65 @@ export default function LabelsPage() {
       logo: savedOverride?.logo ?? dbClient?.logo ?? "",
     };
 
-    const container = document.createElement("div");
-    container.style.position = "fixed";
-    container.style.left = "-99999px";
-    container.style.top = "0";
-    document.body.appendChild(container);
-
-    container.innerHTML = `<div id="tmp-label-root"></div>`;
-    const root = container.querySelector("#tmp-label-root");
-
-    const widthMm = Number(label.ancho_mm || 100);
-    const heightMm = Number(label.alto_mm || 75);
-
-    root.innerHTML = `
-    <div
-      id="temp-preview"
-      style="
-        width:${widthMm}mm;
-        height:${heightMm}mm;
-        background:#fff;
-        color:#0f172a;
-        border:1px solid #d9e0e7;
-        border-radius:14px;
-        padding:7mm;
-        display:flex;
-        flex-direction:column;
-        justify-content:space-between;
-        box-sizing:border-box;
-        font-family:Arial,sans-serif;
-      "
-    >
-      <div style="display:flex;justify-content:space-between;gap:5mm;">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:5.2mm;font-weight:700;line-height:1.1;word-break:break-word;">
-            ${product?.nombre || "Producto"}
-          </div>
-          ${
-            label.codigo
-              ? `<div style="margin-top:2.5mm;font-size:3.3mm;">Código: ${label.codigo}</div>`
-              : ""
-          }
-          ${
-            label.texto_extra
-              ? `<div style="margin-top:2.5mm;font-size:3.1mm;white-space:pre-wrap;word-break:break-word;">${label.texto_extra}</div>`
-              : ""
-          }
-          ${
-            client.nombre
-              ? `<div style="margin-top:2.5mm;font-size:3mm;">Cliente: ${client.nombre}</div>`
-              : ""
-          }
-          ${
-            client.numero
-              ? `<div style="margin-top:1.5mm;font-size:2.8mm;">Tel: ${client.numero}</div>`
-              : ""
-          }
-          ${
-            client.correo
-              ? `<div style="margin-top:1.5mm;font-size:2.8mm;word-break:break-word;">${client.correo}</div>`
-              : ""
-          }
-        </div>
-        ${
-          client.logo
-            ? `
-          <div style="width:22mm;text-align:right;">
-            <img
-              src="${client.logo}"
-              style="max-width:22mm;max-height:16mm;object-fit:contain;margin-left:auto;"
-            />
-          </div>
-        `
-            : ""
-        }
-      </div>
-      <div>
-        <svg id="temp-barcode" style="width:100%;height:auto;display:block;overflow:visible;"></svg>
-        ${
-          companyOptions.showCompanyLogo || companyOptions.showCompanyName
-            ? `
-          <div style="margin-top:3mm;display:flex;align-items:center;justify-content:space-between;gap:3mm;">
-            <div style="display:flex;align-items:center;gap:2mm;">
-              ${
-                companyOptions.showCompanyLogo && companyOptions.companyLogo
-                  ? `<img src="${companyOptions.companyLogo}" style="width:10mm;height:10mm;object-fit:contain;" />`
-                  : ""
-              }
-              ${
-                companyOptions.showCompanyName
-                  ? `<span style="font-size:2.8mm;font-weight:700;">${companyOptions.companyName}</span>`
-                  : ""
-              }
-            </div>
-          </div>
-        `
-            : ""
-        }
-      </div>
-    </div>
-  `;
+    const form = {
+      cliente_id: label.cliente_id || "",
+      producto_id: label.producto_id || "",
+      codigo_barras: label.codigo_barras || "",
+      codigo: label.codigo || "",
+      texto_extra: label.texto_extra || "",
+      ancho_mm: Number(label.ancho_mm || 100),
+      alto_mm: Number(label.alto_mm || 75),
+    };
 
     try {
-      if (label.codigo_barras) {
-        const svg = root.querySelector("#temp-barcode");
-        JsBarcode(svg, String(label.codigo_barras).trim(), {
-          format: "CODE128",
-          displayValue: true,
-          fontSize: 16,
-          lineColor: "#111827",
-          background: "#ffffff",
-          height: 56,
-          width: 1.7,
-          margin: 0,
-          textMargin: 6,
-          font: "Arial",
-        });
-      } else {
-        const svg = root.querySelector("#temp-barcode");
-        if (svg) svg.remove();
-      }
+      setPrintPayload({
+        form,
+        client,
+        product,
+        companyOptions,
+      });
 
-      const previewEl = root.querySelector("#temp-preview");
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const previewEl = document.getElementById("quick-label-print");
 
       await generateLabelPDF({
         element: previewEl,
         filename: `${product?.nombre || "etiqueta"}.pdf`,
-        widthMm,
-        heightMm,
+        widthMm: Number(label.ancho_mm || 100),
+        heightMm: Number(label.alto_mm || 75),
       });
     } catch (error) {
       console.error(error);
       alert(error.message || "No se pudo generar el PDF.");
     } finally {
-      document.body.removeChild(container);
+      setPrintPayload(null);
     }
   }
 
   return (
     <>
+      {printPayload ? (
+        <div
+          style={{
+            position: "fixed",
+            left: "-99999px",
+            top: 0,
+            opacity: 0,
+            pointerEvents: "none",
+          }}
+        >
+          <LabelPreviewContent
+            form={printPayload.form}
+            client={printPayload.client}
+            product={printPayload.product}
+            companyOptions={printPayload.companyOptions}
+            elementId="quick-label-print"
+          />
+        </div>
+      ) : null}
+
       <ClientModal
         open={clientModalOpen}
         onClose={() => {

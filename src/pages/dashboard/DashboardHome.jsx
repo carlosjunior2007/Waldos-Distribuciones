@@ -112,7 +112,7 @@ function movementTone(type) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface-soft p-4">
+    <div className="min-w-0 rounded-2xl border border-border bg-surface-soft p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
         {label}
       </p>
@@ -129,111 +129,119 @@ function MovementDetailModal({ item, onClose }) {
   const Icon = movementIcon(item.type);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="relative w-full max-w-2xl rounded-[28px] border border-border bg-surface p-5 shadow-[var(--shadow-strong)] md:p-6">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-surface-soft text-text-secondary transition hover:bg-surface-muted hover:text-text-primary"
-        >
-          <X className="h-5 w-5" />
-        </button>
+    <div className="fixed inset-0 z-50 h-dvh w-screen overflow-hidden bg-black/50">
+      <div className="flex h-full w-full items-end justify-center sm:items-center sm:p-4">
+        <div className="flex h-full w-full flex-col overflow-hidden rounded-none bg-surface shadow-[var(--shadow-strong)] sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-[28px] sm:border sm:border-border">
+          <div className="sticky top-0 z-10 border-b border-border bg-surface">
+            <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5 sm:py-5">
+              <div className="flex min-w-0 items-start gap-3 pr-2 sm:gap-4 sm:pr-4">
+                <div
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border sm:h-12 sm:w-12 ${movementTone(
+                    item.type,
+                  )}`}
+                >
+                  <Icon className="h-5 w-5" />
+                </div>
 
-        <div className="flex items-start gap-4 pr-12">
-          <div
-            className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${movementTone(
-              item.type,
-            )}`}
-          >
-            <Icon className="h-5 w-5" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold capitalize text-text-secondary">
+                    {item.type}
+                  </p>
+                  <h3 className="mt-1 break-words text-lg font-bold text-text-primary sm:text-xl">
+                    {item.title}
+                  </h3>
+                  <p className="mt-2 break-words text-sm text-text-secondary">
+                    {item.description}
+                  </p>
+                  <p className="mt-2 text-xs text-text-muted">
+                    {item.type === "gasto"
+                      ? formatTimestampDateTime(item.date)
+                      : formatTimestampDateTime(item.date)}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface-soft text-text-secondary transition hover:bg-surface-muted hover:text-text-primary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold capitalize text-text-secondary">
-              {item.type}
-            </p>
-            <h3 className="mt-1 text-xl font-bold text-text-primary">
-              {item.title}
-            </h3>
-            <p className="mt-2 text-sm text-text-secondary">
-              {item.description}
-            </p>
-            <p className="mt-2 text-xs text-text-muted">
-              {item.type === "gasto"
-                ? formatTimestampDateTime(item.date)
-                : formatTimestampDateTime(item.date)}
-            </p>
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-5 sm:py-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {item.type === "cotizacion" && (
+                <>
+                  <DetailRow label="Folio" value={item.folio} />
+                  <DetailRow label="Cliente" value={item.cliente_nombre} />
+                  <DetailRow label="Estado" value={item.estado} />
+                  <DetailRow label="Subtotal" value={formatMoney(item.subtotal)} />
+                  <DetailRow
+                    label="Descuento"
+                    value={formatMoney(item.descuento)}
+                  />
+                  <DetailRow label="Gastos" value={formatMoney(item.gastos)} />
+                  <DetailRow label="Ganancia" value={formatMoney(item.ganancia)} />
+                  <DetailRow label="Total" value={formatMoney(item.total)} />
+                </>
+              )}
+
+              {item.type === "gasto" && (
+                <>
+                  <DetailRow label="Concepto" value={item.concepto} />
+                  <DetailRow label="Descripción" value={item.descripcion} />
+                  <DetailRow label="Monto" value={formatMoney(item.monto)} />
+                  <DetailRow label="Tipo" value={item.tipo} />
+                  <DetailRow
+                    label="Fecha"
+                    value={formatTimestampDateTime(item.fecha)}
+                  />
+                  <DetailRow
+                    label="Cotización relacionada"
+                    value={item.cotizacion_id}
+                  />
+                </>
+              )}
+
+              {item.type === "producto" && (
+                <>
+                  <DetailRow label="Nombre" value={item.nombre} />
+                  <DetailRow label="Código" value={item.codigo} />
+                  <DetailRow label="Categoría" value={item.categoria} />
+                  <DetailRow label="Unidad" value={item.unidad} />
+                  <DetailRow
+                    label="Precio venta"
+                    value={formatMoney(item.precio)}
+                  />
+                  <DetailRow
+                    label="Precio compra"
+                    value={formatMoney(item.precio_compra)}
+                  />
+                  <DetailRow
+                    label="Utilidad"
+                    value={formatMoney(item.precio_utilidad)}
+                  />
+                  <DetailRow label="Cantidad" value={String(item.cantidad ?? 0)} />
+                  <DetailRow
+                    label="Cantidad por caja"
+                    value={String(item.cantidad_caja ?? 0)}
+                  />
+                  <DetailRow
+                    label="Disponible"
+                    value={item.disponibilidad ? "Sí" : "No"}
+                  />
+                  <DetailRow
+                    label="Habilitado"
+                    value={item.habilitado ? "Sí" : "No"}
+                  />
+                  <DetailRow label="Descripción" value={item.descripcion} />
+                </>
+              )}
+            </div>
           </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          {item.type === "cotizacion" && (
-            <>
-              <DetailRow label="Folio" value={item.folio} />
-              <DetailRow label="Cliente" value={item.cliente_nombre} />
-              <DetailRow label="Estado" value={item.estado} />
-              <DetailRow label="Subtotal" value={formatMoney(item.subtotal)} />
-              <DetailRow
-                label="Descuento"
-                value={formatMoney(item.descuento)}
-              />
-              <DetailRow label="Gastos" value={formatMoney(item.gastos)} />
-              <DetailRow label="Ganancia" value={formatMoney(item.ganancia)} />
-              <DetailRow label="Total" value={formatMoney(item.total)} />
-            </>
-          )}
-
-          {item.type === "gasto" && (
-            <>
-              <DetailRow label="Concepto" value={item.concepto} />
-              <DetailRow label="Descripción" value={item.descripcion} />
-              <DetailRow label="Monto" value={formatMoney(item.monto)} />
-              <DetailRow label="Tipo" value={item.tipo} />
-              <DetailRow
-                label="Fecha"
-                value={formatTimestampDateTime(item.fecha)}
-              />
-              <DetailRow
-                label="Cotización relacionada"
-                value={item.cotizacion_id}
-              />
-            </>
-          )}
-
-          {item.type === "producto" && (
-            <>
-              <DetailRow label="Nombre" value={item.nombre} />
-              <DetailRow label="Código" value={item.codigo} />
-              <DetailRow label="Categoría" value={item.categoria} />
-              <DetailRow label="Unidad" value={item.unidad} />
-              <DetailRow
-                label="Precio venta"
-                value={formatMoney(item.precio)}
-              />
-              <DetailRow
-                label="Precio compra"
-                value={formatMoney(item.precio_compra)}
-              />
-              <DetailRow
-                label="Utilidad"
-                value={formatMoney(item.precio_utilidad)}
-              />
-              <DetailRow label="Cantidad" value={String(item.cantidad ?? 0)} />
-              <DetailRow
-                label="Cantidad por caja"
-                value={String(item.cantidad_caja ?? 0)}
-              />
-              <DetailRow
-                label="Disponible"
-                value={item.disponibilidad ? "Sí" : "No"}
-              />
-              <DetailRow
-                label="Habilitado"
-                value={item.habilitado ? "Sí" : "No"}
-              />
-              <DetailRow label="Descripción" value={item.descripcion} />
-            </>
-          )}
         </div>
       </div>
     </div>

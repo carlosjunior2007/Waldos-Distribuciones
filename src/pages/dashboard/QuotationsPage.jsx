@@ -89,7 +89,6 @@ function formatTimestampDateTime(value) {
   });
 }
 
-
 function toBusinessInputDate(value) {
   const d = parseBusinessDate(value);
   if (!d || Number.isNaN(d.getTime())) return "";
@@ -171,7 +170,7 @@ function buildLastMonthsOptions(total = 12) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
       2,
-      "0"
+      "0",
     )}`;
     const label = d.toLocaleDateString("es-MX", {
       month: "long",
@@ -215,6 +214,17 @@ function cleanNumericInput(value, { allowDecimal = true } = {}) {
   return next;
 }
 
+function applyClientToForm(client) {
+  setSelectedClientId(client.id);
+
+  setForm((prev) => ({
+    ...prev,
+    cliente_nombre: client.nombre || "",
+    cliente_telefono: client.numero || "",
+    cliente_email: client.correo || "",
+  }));
+}
+
 function QuotationFormModal({
   open,
   onClose,
@@ -222,6 +232,12 @@ function QuotationFormModal({
   editingQuotation,
   currentMonth,
 }) {
+  const [clientMode, setClientMode] = useState("manual");
+  // manual | existing | new
+
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientResults, setClientResults] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [loading, setLoading] = useState(false);
   const [productQuery, setProductQuery] = useState("");
   const [productResults, setProductResults] = useState([]);
@@ -256,7 +272,7 @@ function QuotationFormModal({
             ? String(editingQuotation.gastos)
             : "",
         fecha_vencimiento: toBusinessInputDate(
-          editingQuotation.fecha_vencimiento
+          editingQuotation.fecha_vencimiento,
         ),
       });
 
@@ -271,7 +287,7 @@ function QuotationFormModal({
           costo_unitario: Number(item.costo_unitario ?? 0),
           importe: Number(item.importe || 0),
           ganancia_linea: Number(item.ganancia_linea || 0),
-        }))
+        })),
       );
     } else {
       const defaultDate = new Date();
@@ -292,6 +308,21 @@ function QuotationFormModal({
     setProductQuery("");
     setProductResults([]);
   }, [open, editingQuotation]);
+
+  useEffect(() => {
+    if (!open || clientMode !== "existing") return;
+
+    const t = setTimeout(async () => {
+      try {
+        const rows = await fetchQuotationClients({ search: clientSearch });
+        setClientResults(rows);
+      } catch (error) {
+        console.error(error);
+      }
+    }, 250);
+
+    return () => clearTimeout(t);
+  }, [open, clientMode, clientSearch]);
 
   useEffect(() => {
     if (!open) return;
@@ -322,11 +353,11 @@ function QuotationFormModal({
 
     const subtotal = rows.reduce(
       (acc, item) => acc + Number(item.importe || 0),
-      0
+      0,
     );
     const ganancia = rows.reduce(
       (acc, item) => acc + Number(item.ganancia_linea || 0),
-      0
+      0,
     );
     const total = subtotal - Number(form.descuento || 0);
 
@@ -335,7 +366,7 @@ function QuotationFormModal({
 
   function addProduct(product) {
     const existingIndex = items.findIndex(
-      (item) => item.producto_id === product.id
+      (item) => item.producto_id === product.id,
     );
 
     if (existingIndex >= 0) {
@@ -470,15 +501,16 @@ function QuotationFormModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/60 p-4 h-full">
-      <div className="flex h-full items-start justify-center overflow-y-auto">
-        <div className="w-full max-w-7xl max-h-[95vh] overflow-y-auto rounded-[28px] border border-border bg-surface shadow-2xl">
-          <div className="flex items-center justify-between border-b border-border p-5">
-            <div>
+    <div className="fixed inset-0 z-[80] h-dvh w-screen overflow-hidden bg-black/60">
+      <div className="flex h-full w-full items-end justify-center overflow-hidden sm:items-center sm:p-4">
+        <div className="flex h-full w-full max-w-none flex-col overflow-hidden rounded-none bg-surface shadow-2xl sm:h-auto sm:max-h-[95vh] sm:w-full sm:max-w-7xl sm:rounded-[28px] sm:border sm:border-border">
+          {" "}
+          <div className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-3 border-b border-border bg-surface px-4 py-4 sm:px-5">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-accent-600">
                 {editingQuotation ? "Editar cotización" : "Nueva cotización"}
               </p>
-              <h3 className="mt-1 text-xl font-bold text-text-primary">
+              <h3 className="mt-1 truncate text-lg font-bold text-text-primary sm:text-xl">
                 {editingQuotation?.folio || "Captura de cotización"}
               </h3>
             </div>
@@ -486,317 +518,728 @@ function QuotationFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-border px-4 py-2 text-sm font-semibold text-text-primary"
+              className="shrink-0 rounded-xl border border-border px-3 py-2 text-sm font-semibold text-text-primary transition hover:bg-background sm:px-4"
             >
               Cerrar
             </button>
           </div>
-
           <form
             onSubmit={handleSubmit}
-            className="grid gap-6 p-5 lg:grid-cols-12"
+            className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden"
           >
-            <div className="space-y-4 lg:col-span-4">
-              <div className="rounded-[24px] border border-border bg-background p-4">
-                <h4 className="text-sm font-bold text-text-primary">
-                  Datos del cliente
-                </h4>
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <div className="grid gap-4 p-4 pb-6 sm:gap-6 sm:p-5 lg:grid-cols-12">
+                <div className="min-w-0 space-y-4 lg:col-span-4">
+                  <div className="rounded-[20px] border border-border bg-background p-4 sm:rounded-[24px]">
+                    <h4 className="text-sm font-bold text-text-primary">
+                      Datos del cliente
+                    </h4>
 
-                <div className="mt-4 space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Nombre del cliente"
-                    value={form.cliente_nombre}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        cliente_nombre: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-                  />
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                      <input
+                        type="text"
+                        placeholder="Nombre del cliente"
+                        value={form.cliente_nombre}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            cliente_nombre: e.target.value,
+                          }))
+                        }
+                        className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
+                      />
 
-                  <input
-                    type="text"
-                    placeholder="Teléfono"
-                    value={form.cliente_telefono}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        cliente_telefono: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-                  />
+                      <input
+                        type="text"
+                        placeholder="Teléfono"
+                        value={form.cliente_telefono}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            cliente_telefono: e.target.value,
+                          }))
+                        }
+                        className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
+                      />
 
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={form.cliente_email}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        cliente_email: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-                  />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={form.cliente_email}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            cliente_email: e.target.value,
+                          }))
+                        }
+                        className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400 sm:col-span-2 lg:col-span-1"
+                      />
 
-                  <select
-                    value={form.estado}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, estado: e.target.value }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="en_proceso">En proceso</option>
-                    <option value="completado">Completado</option>
-                    <option value="cancelado">Cancelado</option>
-                  </select>
+                      <select
+                        value={form.estado}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            estado: e.target.value,
+                          }))
+                        }
+                        className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
+                      >
+                        <option value="pendiente">Pendiente</option>
+                        <option value="en_proceso">En proceso</option>
+                        <option value="completado">Completado</option>
+                        <option value="cancelado">Cancelado</option>
+                      </select>
 
-                  <input
-                    type="date"
-                    value={form.fecha_vencimiento}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        fecha_vencimiento: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-                  />
+                      <input
+                        type="date"
+                        value={form.fecha_vencimiento}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            fecha_vencimiento: e.target.value,
+                          }))
+                        }
+                        className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
+                      />
 
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Descuento"
-                    value={form.descuento}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        descuento: cleanNumericInput(e.target.value, {
-                          allowDecimal: true,
-                        }),
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-                  />
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="Descuento"
+                        value={form.descuento}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            descuento: cleanNumericInput(e.target.value, {
+                              allowDecimal: true,
+                            }),
+                          }))
+                        }
+                        className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400 sm:col-span-2 lg:col-span-1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="hidden rounded-[24px] border border-border bg-background p-4 lg:block">
+                    <h4 className="text-sm font-bold text-text-primary">
+                      Resumen
+                    </h4>
+
+                    <div className="mt-4 space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-text-secondary">Subtotal</span>
+                        <span className="font-semibold text-text-primary">
+                          {money(totals.subtotal)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-text-secondary">Descuento</span>
+                        <span className="font-semibold text-text-primary">
+                          {money(form.descuento || 0)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-text-secondary">Total</span>
+                        <span className="font-bold text-text-primary">
+                          {money(totals.total)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between rounded-xl border border-success-100 bg-success-50 px-3 py-2">
+                        <span className="text-success-700">
+                          {form.estado === "completado"
+                            ? "Ganancia real"
+                            : "Ganancia estimada"}
+                        </span>
+                        <span className="font-bold text-success-700">
+                          {money(totals.ganancia)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:opacity-60"
+                    >
+                      {loading ? "Guardando..." : "Guardar cotización"}
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="rounded-[24px] border border-border bg-background p-4">
-                <h4 className="text-sm font-bold text-text-primary">Resumen</h4>
+                <div className="flex min-w-0 flex-col gap-4 lg:col-span-8">
+                  <div className="order-1 min-w-0 rounded-[20px] border border-border bg-background p-4 sm:rounded-[24px] lg:order-2 sm:hidden">
+                    <h4 className="text-sm font-bold text-text-primary">
+                      Productos agregados
+                    </h4>
 
-                <div className="mt-4 space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-secondary">Subtotal</span>
-                    <span className="font-semibold text-text-primary">
-                      {money(totals.subtotal)}
-                    </span>
+                    {!totals.rows.length ? (
+                      <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">
+                        Todavía no agregas productos.
+                      </div>
+                    ) : (
+                      <>
+                        {/* Desktop / tablet */}
+                        <div className="mt-4 hidden max-w-full overflow-x-auto md:block">
+                          <table className="min-w-full table-auto">
+                            <thead>
+                              <tr className="border-b border-border">
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Producto
+                                </th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Cantidad
+                                </th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Precio
+                                </th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Importe
+                                </th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Ganancia
+                                </th>
+                                <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Acción
+                                </th>
+                              </tr>
+                            </thead>
+
+                            <tbody>
+                              {totals.rows.map((item, index) => (
+                                <tr
+                                  key={`${item.producto_id}-${index}`}
+                                  className="border-b border-border"
+                                >
+                                  <td className="px-3 py-3">
+                                    <p className="font-semibold text-text-primary">
+                                      {item.nombre_producto}
+                                    </p>
+                                    <p className="text-xs text-text-muted">
+                                      {item.codigo || "Sin código"} ·{" "}
+                                      {item.unidad || "-"}
+                                    </p>
+                                  </td>
+
+                                  <td className="px-3 py-3">
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={item.cantidad}
+                                      onChange={(e) =>
+                                        updateItem(
+                                          index,
+                                          "cantidad",
+                                          cleanNumericInput(e.target.value, {
+                                            allowDecimal: false,
+                                          }),
+                                        )
+                                      }
+                                      className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"
+                                    />
+                                  </td>
+
+                                  <td className="px-3 py-3">
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={item.precio_unitario}
+                                      onChange={(e) =>
+                                        updateItem(
+                                          index,
+                                          "precio_unitario",
+                                          cleanNumericInput(e.target.value, {
+                                            allowDecimal: true,
+                                          }),
+                                        )
+                                      }
+                                      className="h-10 w-28 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"
+                                    />
+                                  </td>
+
+                                  <td className="px-3 py-3 text-sm font-semibold text-text-primary">
+                                    {money(item.importe)}
+                                  </td>
+
+                                  <td className="px-3 py-3 text-sm font-semibold text-success-700">
+                                    {money(item.ganancia_linea)}
+                                  </td>
+
+                                  <td className="px-3 py-3 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeItem(index)}
+                                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-error-200 bg-error-50 text-error-700"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile */}
+                        <div className="mt-4 space-y-3 md:hidden">
+                          {totals.rows.map((item, index) => (
+                            <div
+                              key={`${item.producto_id}-${index}`}
+                              className="rounded-2xl border border-border bg-surface p-4"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-text-primary">
+                                    {item.nombre_producto}
+                                  </p>
+                                  <p className="text-xs text-text-muted">
+                                    {item.codigo || "Sin código"} ·{" "}
+                                    {item.unidad || "-"}
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => removeItem(index)}
+                                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-error-200 bg-error-50 text-error-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+
+                              <div className="mt-4 grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+                                    Cantidad
+                                  </label>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={item.cantidad}
+                                    onChange={(e) =>
+                                      updateItem(
+                                        index,
+                                        "cantidad",
+                                        cleanNumericInput(e.target.value, {
+                                          allowDecimal: false,
+                                        }),
+                                      )
+                                    }
+                                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-text-primary outline-none focus:border-primary-400"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+                                    Precio
+                                  </label>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={item.precio_unitario}
+                                    onChange={(e) =>
+                                      updateItem(
+                                        index,
+                                        "precio_unitario",
+                                        cleanNumericInput(e.target.value, {
+                                          allowDecimal: true,
+                                        }),
+                                      )
+                                    }
+                                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-text-primary outline-none focus:border-primary-400"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="mt-4 space-y-2 rounded-xl bg-background p-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-text-secondary">
+                                    Importe
+                                  </span>
+                                  <span className="font-semibold text-text-primary">
+                                    {money(item.importe)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-text-secondary">
+                                    Ganancia
+                                  </span>
+                                  <span className="font-semibold text-success-700">
+                                    {money(item.ganancia_linea)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-secondary">Descuento</span>
-                    <span className="font-semibold text-text-primary">
-                      {money(form.descuento || 0)}
-                    </span>
+                  <div className="order-3 min-w-0 rounded-[20px] border border-border bg-background p-4 sm:rounded-[24px] sm:hidden">
+                    <h4 className="text-sm font-bold text-text-primary">
+                      Buscar productos
+                    </h4>
+
+                    <div className="relative mt-4">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre o código..."
+                        value={productQuery}
+                        onChange={(e) => setProductQuery(e.target.value)}
+                        className="h-12 w-full rounded-2xl border border-border bg-surface pl-10 pr-4 text-sm text-text-primary outline-none focus:border-primary-400"
+                      />
+                    </div>
+
+                    <div className="mt-4 max-h-56 space-y-2 overflow-y-auto md:max-h-72">
+                      {productResults.map((product) => (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onClick={() => addProduct(product)}
+                          className="flex w-full flex-col gap-2 rounded-2xl border border-border bg-surface p-3 text-left transition hover:border-primary-200 hover:bg-surface-soft sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-text-primary">
+                              {product.nombre}
+                            </p>
+                            <p className="text-sm text-text-secondary">
+                              {product.codigo || "Sin código"} ·{" "}
+                              {product.unidad || "-"}
+                            </p>
+                          </div>
+
+                          <div className="text-left sm:text-right">
+                            <p className="font-semibold text-text-primary">
+                              {money(product.precio || 0)}
+                            </p>
+                            <p className="text-xs text-text-muted">
+                              costo: {money(product.precio_compra || 0)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+
+                      {!productResults.length && (
+                        <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">
+                          No hay productos para mostrar.
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-secondary">Total</span>
-                    <span className="font-bold text-text-primary">
-                      {money(totals.total)}
-                    </span>
+                  <div className="order-1 min-w-0 rounded-[20px] border border-border bg-background p-4 sm:rounded-[24px] hidden sm:block">
+                    <h4 className="text-sm font-bold text-text-primary">
+                      Buscar productos
+                    </h4>
+
+                    <div className="relative mt-4">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre o código..."
+                        value={productQuery}
+                        onChange={(e) => setProductQuery(e.target.value)}
+                        className="h-12 w-full rounded-2xl border border-border bg-surface pl-10 pr-4 text-sm text-text-primary outline-none focus:border-primary-400"
+                      />
+                    </div>
+
+                    <div className="mt-4 max-h-56 space-y-2 overflow-y-auto md:max-h-72">
+                      {productResults.map((product) => (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onClick={() => addProduct(product)}
+                          className="flex w-full flex-col gap-2 rounded-2xl border border-border bg-surface p-3 text-left transition hover:border-primary-200 hover:bg-surface-soft sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-text-primary">
+                              {product.nombre}
+                            </p>
+                            <p className="text-sm text-text-secondary">
+                              {product.codigo || "Sin código"} ·{" "}
+                              {product.unidad || "-"}
+                            </p>
+                          </div>
+
+                          <div className="text-left sm:text-right">
+                            <p className="font-semibold text-text-primary">
+                              {money(product.precio || 0)}
+                            </p>
+                            <p className="text-xs text-text-muted">
+                              costo: {money(product.precio_compra || 0)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+
+                      {!productResults.length && (
+                        <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">
+                          No hay productos para mostrar.
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between rounded-xl border border-success-100 bg-success-50 px-3 py-2">
-                    <span className="text-success-700">
-                      {form.estado === "completado"
-                        ? "Ganancia real"
-                        : "Ganancia estimada"}
-                    </span>
-                    <span className="font-bold text-success-700">
-                      {money(totals.ganancia)}
-                    </span>
+                  <div className="order-3 min-w-0 rounded-[20px] border border-border bg-background p-4 sm:rounded-[24px] lg:order-2 hidden sm:block">
+                    <h4 className="text-sm font-bold text-text-primary">
+                      Productos agregados
+                    </h4>
+
+                    {!totals.rows.length ? (
+                      <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">
+                        Todavía no agregas productos.
+                      </div>
+                    ) : (
+                      <>
+                        {/* Desktop / tablet */}
+                        <div className="mt-4 hidden max-w-full overflow-x-auto md:block">
+                          <table className="min-w-full table-auto">
+                            <thead>
+                              <tr className="border-b border-border">
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Producto
+                                </th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Cantidad
+                                </th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Precio
+                                </th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Importe
+                                </th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Ganancia
+                                </th>
+                                <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                                  Acción
+                                </th>
+                              </tr>
+                            </thead>
+
+                            <tbody>
+                              {totals.rows.map((item, index) => (
+                                <tr
+                                  key={`${item.producto_id}-${index}`}
+                                  className="border-b border-border"
+                                >
+                                  <td className="px-3 py-3">
+                                    <p className="font-semibold text-text-primary">
+                                      {item.nombre_producto}
+                                    </p>
+                                    <p className="text-xs text-text-muted">
+                                      {item.codigo || "Sin código"} ·{" "}
+                                      {item.unidad || "-"}
+                                    </p>
+                                  </td>
+
+                                  <td className="px-3 py-3">
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={item.cantidad}
+                                      onChange={(e) =>
+                                        updateItem(
+                                          index,
+                                          "cantidad",
+                                          cleanNumericInput(e.target.value, {
+                                            allowDecimal: false,
+                                          }),
+                                        )
+                                      }
+                                      className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"
+                                    />
+                                  </td>
+
+                                  <td className="px-3 py-3">
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={item.precio_unitario}
+                                      onChange={(e) =>
+                                        updateItem(
+                                          index,
+                                          "precio_unitario",
+                                          cleanNumericInput(e.target.value, {
+                                            allowDecimal: true,
+                                          }),
+                                        )
+                                      }
+                                      className="h-10 w-28 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"
+                                    />
+                                  </td>
+
+                                  <td className="px-3 py-3 text-sm font-semibold text-text-primary">
+                                    {money(item.importe)}
+                                  </td>
+
+                                  <td className="px-3 py-3 text-sm font-semibold text-success-700">
+                                    {money(item.ganancia_linea)}
+                                  </td>
+
+                                  <td className="px-3 py-3 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeItem(index)}
+                                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-error-200 bg-error-50 text-error-700"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile */}
+                        <div className="mt-4 space-y-3 md:hidden">
+                          {totals.rows.map((item, index) => (
+                            <div
+                              key={`${item.producto_id}-${index}`}
+                              className="rounded-2xl border border-border bg-surface p-4"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-text-primary">
+                                    {item.nombre_producto}
+                                  </p>
+                                  <p className="text-xs text-text-muted">
+                                    {item.codigo || "Sin código"} ·{" "}
+                                    {item.unidad || "-"}
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => removeItem(index)}
+                                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-error-200 bg-error-50 text-error-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+
+                              <div className="mt-4 grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+                                    Cantidad
+                                  </label>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={item.cantidad}
+                                    onChange={(e) =>
+                                      updateItem(
+                                        index,
+                                        "cantidad",
+                                        cleanNumericInput(e.target.value, {
+                                          allowDecimal: false,
+                                        }),
+                                      )
+                                    }
+                                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-text-primary outline-none focus:border-primary-400"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+                                    Precio
+                                  </label>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={item.precio_unitario}
+                                    onChange={(e) =>
+                                      updateItem(
+                                        index,
+                                        "precio_unitario",
+                                        cleanNumericInput(e.target.value, {
+                                          allowDecimal: true,
+                                        }),
+                                      )
+                                    }
+                                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-text-primary outline-none focus:border-primary-400"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="mt-4 space-y-2 rounded-xl bg-background p-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-text-secondary">
+                                    Importe
+                                  </span>
+                                  <span className="font-semibold text-text-primary">
+                                    {money(item.importe)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-text-secondary">
+                                    Ganancia
+                                  </span>
+                                  <span className="font-semibold text-success-700">
+                                    {money(item.ganancia_linea)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:opacity-60"
-                >
-                  {loading ? "Guardando..." : "Guardar cotización"}
-                </button>
               </div>
             </div>
 
-            <div className="space-y-4 lg:col-span-8">
-              <div className="rounded-[24px] border border-border bg-background p-4">
-                <h4 className="text-sm font-bold text-text-primary">
-                  Buscar productos
-                </h4>
+            <div className="order-2 w-full min-w-0 overflow-x-hidden rounded-[20px] border border-border bg-background p-4 lg:hidden">
+              <h4 className="text-sm font-bold text-text-primary">Resumen</h4>
 
-                <div className="relative mt-4">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por nombre o código..."
-                    value={productQuery}
-                    onChange={(e) => setProductQuery(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-border bg-surface pl-10 pr-4 text-sm text-text-primary outline-none focus:border-primary-400"
-                  />
+              <div className="mt-4 w-full min-w-0 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">Subtotal</span>
+                  <span className="font-semibold text-text-primary">
+                    {money(totals.subtotal)}
+                  </span>
                 </div>
 
-                <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
-                  {productResults.map((product) => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      onClick={() => addProduct(product)}
-                      className="flex w-full items-center justify-between rounded-2xl border border-border bg-surface p-3 text-left transition hover:border-primary-200 hover:bg-surface-soft"
-                    >
-                      <div>
-                        <p className="font-semibold text-text-primary">
-                          {product.nombre}
-                        </p>
-                        <p className="text-sm text-text-secondary">
-                          {product.codigo || "Sin código"} ·{" "}
-                          {product.unidad || "-"}
-                        </p>
-                      </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">Descuento</span>
+                  <span className="font-semibold text-text-primary">
+                    {money(form.descuento || 0)}
+                  </span>
+                </div>
 
-                      <div className="text-right">
-                        <p className="font-semibold text-text-primary">
-                          {money(product.precio || 0)}
-                        </p>
-                        <p className="text-xs text-text-muted">
-                          costo: {money(product.precio_compra || 0)}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">Total</span>
+                  <span className="font-bold text-text-primary">
+                    {money(totals.total)}
+                  </span>
+                </div>
 
-                  {!productResults.length && (
-                    <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">
-                      No hay productos para mostrar.
-                    </div>
-                  )}
+                <div className="flex items-center justify-between rounded-xl border border-success-100 bg-success-50 px-3 py-2">
+                  <span className="text-success-700">
+                    {form.estado === "completado"
+                      ? "Ganancia real"
+                      : "Ganancia estimada"}
+                  </span>
+                  <span className="font-bold text-success-700">
+                    {money(totals.ganancia)}
+                  </span>
                 </div>
               </div>
 
-              <div className="rounded-[24px] border border-border bg-background p-4">
-                <h4 className="text-sm font-bold text-text-primary">
-                  Productos agregados
-                </h4>
-
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                          Producto
-                        </th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                          Cantidad
-                        </th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                          Precio
-                        </th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                          Importe
-                        </th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                          Ganancia
-                        </th>
-                        <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                          Acción
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {totals.rows.map((item, index) => (
-                        <tr
-                          key={`${item.producto_id}-${index}`}
-                          className="border-b border-border"
-                        >
-                          <td className="px-3 py-3">
-                            <p className="font-semibold text-text-primary">
-                              {item.nombre_producto}
-                            </p>
-                            <p className="text-xs text-text-muted">
-                              {item.codigo || "Sin código"} ·{" "}
-                              {item.unidad || "-"}
-                            </p>
-                          </td>
-
-                          <td className="px-3 py-3">
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={item.cantidad}
-                              onChange={(e) =>
-                                updateItem(
-                                  index,
-                                  "cantidad",
-                                  cleanNumericInput(e.target.value, {
-                                    allowDecimal: false,
-                                  })
-                                )
-                              }
-                              className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"
-                            />
-                          </td>
-
-                          <td className="px-3 py-3">
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={item.precio_unitario}
-                              onChange={(e) =>
-                                updateItem(
-                                  index,
-                                  "precio_unitario",
-                                  cleanNumericInput(e.target.value, {
-                                    allowDecimal: true,
-                                  })
-                                )
-                              }
-                              className="h-10 w-28 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400"
-                            />
-                          </td>
-
-                          <td className="px-3 py-3 text-sm font-semibold text-text-primary">
-                            {money(item.importe)}
-                          </td>
-
-                          <td className="px-3 py-3 text-sm font-semibold text-success-700">
-                            {money(item.ganancia_linea)}
-                          </td>
-
-                          <td className="px-3 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => removeItem(index)}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-error-200 bg-error-50 text-error-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  {!totals.rows.length && (
-                    <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">
-                      Todavía no agregas productos.
-                    </div>
-                  )}
-                </div>
-              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-4 inline-flex h-12 w-full max-w-full items-center justify-center rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:opacity-60"
+              >
+                {loading ? "Guardando..." : "Guardar cotización"}
+              </button>
             </div>
           </form>
         </div>
@@ -1175,12 +1618,15 @@ export default function QuotationsPage() {
                         <div className="space-y-1 flex items-start gap-4">
                           <div className="inline-flex items-center gap-1 text-sm text-text-secondary">
                             <CalendarDays className="h-4 w-4 text-primary-500" />
-                            <span>Creada: {formatTimestampDateTime(item.created_at)}</span>
+                            <span>
+                              Creada: {formatTimestampDateTime(item.created_at)}
+                            </span>
                           </div>
                           <div className="inline-flex items-center gap-1 text-sm text-text-secondary">
                             <Clock3 className="h-4 w-4 text-accent-500" />
                             <span>
-                              Vence: {formatTimestampDateTime(item.fecha_vencimiento)}
+                              Vence:{" "}
+                              {formatTimestampDateTime(item.fecha_vencimiento)}
                             </span>
                           </div>
                         </div>

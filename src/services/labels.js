@@ -8,7 +8,7 @@ export async function fetchClients({ search = "", page = 1 }) {
 
   let query = supabase
     .from("clientes")
-    .select("id, nombre, logo, numero, correo", { count: "exact" })
+    .select("id, nombre, logo, numero, correo", { count: "exact" }).eq('isLabel', true)
     .order("nombre", { ascending: true })
     .range(from, to);
 

@@ -71,6 +71,18 @@ const INITIAL_FORM = {
   codigo: "",
 };
 
+function generateUUID() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16);
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 function formatMoney(value) {
   const n = Number(value || 0);
   return n.toLocaleString("es-MX", {
@@ -189,33 +201,62 @@ function Modal({
   children,
   width = "max-w-4xl",
 }) {
+  useEffect(() => {
+    if (!open) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-      <div
-        className={`w-full ${width} overflow-hidden rounded-[28px] border border-border bg-surface shadow-2xl`}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-border p-5 md:p-6">
-          <div>
-            <h3 className="text-lg font-bold text-text-primary md:text-xl">
-              {title}
-            </h3>
-            {subtitle ? (
-              <p className="mt-1 text-sm text-text-secondary">{subtitle}</p>
-            ) : null}
+    <div className="fixed inset-0 z-[70] bg-black/50">
+      <div className="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
+        <div
+          className={[
+            "w-full border border-border bg-surface shadow-2xl",
+            "h-[100dvh] rounded-none",
+            "sm:h-auto sm:max-h-[90vh] sm:rounded-[28px]",
+            width,
+            "overflow-hidden",
+          ].join(" ")}
+        >
+          <div className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur p-4 sm:p-5 md:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-text-primary sm:text-lg md:text-xl">
+                  {title}
+                </h3>
+                {subtitle ? (
+                  <p className="mt-1 text-sm text-text-secondary">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary transition hover:border-border-strong hover:bg-surface-soft hover:text-text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary transition hover:border-border-strong hover:bg-surface-soft hover:text-text-primary"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="h-[calc(100dvh-81px)] overflow-y-auto sm:h-auto sm:max-h-[calc(90vh-88px)]">
+            {children}
+          </div>
         </div>
-
-        <div className="max-h-[85vh] overflow-y-auto">{children}</div>
       </div>
     </div>
   );
@@ -790,7 +831,7 @@ export default function ProductsAdminPage() {
   }
 
   function openCreateModal() {
-    const newId = crypto.randomUUID();
+    const newId = generateUUID();
 
     setSelectedProduct(null);
     setLocalImagePreview("");
@@ -963,7 +1004,7 @@ export default function ProductsAdminPage() {
       const userId = await getCurrentUserId();
       const isEdit = modalMode === "edit";
 
-      const productId = form.id || crypto.randomUUID();
+      const productId = form.id || generateUUID();
       const codigo = form.codigo || generarCodigoProducto(productId);
 
       let imageUrl = form.imagen || null;

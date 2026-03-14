@@ -1367,7 +1367,6 @@ export default function ProductsAdminPage() {
       const pageHeight = pdf.internal.pageSize.getHeight();
 
       const marginX = 14;
-      const marginTop = 14;
       const marginBottom = 12;
 
       // Colores de marca
@@ -1375,7 +1374,6 @@ export default function ProductsAdminPage() {
       const BRAND_ACCENT = [226, 17, 42]; // #e2112a
       const BG = [248, 250, 252]; // #f8fafc
       const SURFACE = [255, 255, 255];
-      const SURFACE_SOFT = [241, 245, 249]; // #f1f5f9
       const BORDER = [226, 232, 240]; // #e2e8f0
       const TEXT_PRIMARY = [15, 23, 42]; // #0f172a
       const TEXT_SECONDARY = [51, 65, 85]; // #334155
@@ -1385,193 +1383,73 @@ export default function ProductsAdminPage() {
       const logoData = await loadImageAsDataUrl("/Logo.png");
 
       // =========================
-      // PORTADA
-      // =========================
-      pdf.setFillColor(...BG);
-      pdf.rect(0, 0, pageWidth, pageHeight, "F");
-
-      // barra superior delgada
-      pdf.setFillColor(...BRAND_PRIMARY);
-      pdf.rect(0, 0, pageWidth, 10, "F");
-
-      // logo
-      if (logoData) {
-        try {
-          const logoW = 58;
-          const logoH = 20;
-          pdf.addImage(logoData, "PNG", marginX, 22, logoW, logoH);
-        } catch (error) {
-          console.error("No se pudo insertar el logo:", error);
-        }
-      }
-
-      // título principal
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(...TEXT_PRIMARY);
-      pdf.setFontSize(28);
-      pdf.text("Catálogo de productos", marginX, 64);
-
-      // subtítulo
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(11);
-      pdf.setTextColor(...TEXT_MUTED);
-      pdf.text(
-        "Selección visual de productos disponibles en catálogo.",
-        marginX,
-        73,
-        { maxWidth: 125 },
-      );
-
-      // línea decorativa fina
-      pdf.setDrawColor(...BRAND_ACCENT);
-      pdf.setLineWidth(1.2);
-      pdf.line(marginX, 82, marginX + 42, 82);
-
-      // =========================
-      // CARD RESUMEN
-      // =========================
-      const summaryX = marginX;
-      const summaryY = 96;
-      const summaryW = pageWidth - marginX * 2;
-      const summaryH = 42;
-
-      pdf.setDrawColor(...BORDER);
-      pdf.setFillColor(...SURFACE);
-      pdf.roundedRect(summaryX, summaryY, summaryW, summaryH, 6, 6, "FD");
-
-      // bloque número
-      pdf.setFillColor(...SURFACE_SOFT);
-      pdf.roundedRect(summaryX + 8, summaryY + 8, 28, 26, 5, 5, "F");
-
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(22);
-      pdf.setTextColor(...BRAND_PRIMARY);
-      pdf.text(`${dataToExport.length}`, summaryX + 22, summaryY + 25, {
-        align: "center",
-      });
-
-      // texto resumen
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(13);
-      pdf.setTextColor(...TEXT_PRIMARY);
-      pdf.text("productos disponibles", summaryX + 44, summaryY + 17);
-
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(10.2);
-      pdf.setTextColor(...TEXT_SECONDARY);
-      pdf.text(
-        "Incluye imagen, nombre, código, categoría, precio y descripción.",
-        summaryX + 44,
-        summaryY + 26,
-        { maxWidth: summaryW - 54 },
-      );
-
-      // =========================
-      // BLOQUE EDITORIAL INFERIOR
-      // =========================
-      const editorialY = 158;
-
-      // línea superior sutil
-      pdf.setDrawColor(...BORDER);
-      pdf.setLineWidth(0.5);
-      pdf.line(marginX, editorialY, pageWidth - marginX, editorialY);
-
-      // pequeño acento rojo
-      pdf.setDrawColor(...BRAND_ACCENT);
-      pdf.setLineWidth(1.4);
-      pdf.line(marginX, editorialY + 10, marginX + 28, editorialY + 10);
-
-      // título editorial
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(20);
-      pdf.setTextColor(...TEXT_PRIMARY);
-      pdf.text("Presentación clara y profesional", marginX, editorialY + 26);
-
-      // texto de apoyo
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(11);
-      pdf.setTextColor(...TEXT_SECONDARY);
-      pdf.text(
-        "Un catálogo visual pensado para consultar productos de forma rápida, ordenada y comercial.",
-        marginX,
-        editorialY + 38,
-        { maxWidth: pageWidth - marginX * 2 },
-      );
-
-      // mini highlights en línea
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10);
-      pdf.setTextColor(...BRAND_PRIMARY);
-      pdf.text("Visual", marginX, editorialY + 56);
-      pdf.text("•", marginX + 24, editorialY + 56);
-      pdf.text("Ordenado", marginX + 30, editorialY + 56);
-      pdf.text("•", marginX + 64, editorialY + 56);
-      pdf.text("Profesional", marginX + 70, editorialY + 56);
-
-      // footer discreto
-      pdf.setDrawColor(...BORDER);
-      pdf.setLineWidth(0.4);
-      pdf.line(marginX, pageHeight - 18, pageWidth - marginX, pageHeight - 18);
-
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(8.8);
-      pdf.setTextColor(...TEXT_MUTED);
-      pdf.text("Waldo Distribuciones", pageWidth / 2, pageHeight - 12, {
-        align: "center",
-      });
-
-      // =========================
-      // PRODUCTOS
+      // PRODUCTOS DESDE LA PÁGINA 1
       // =========================
       const groupedProducts = splitIntoChunks(dataToExport, 3);
+      const totalPages = groupedProducts.length;
 
       for (let pageIndex = 0; pageIndex < groupedProducts.length; pageIndex++) {
         const group = groupedProducts[pageIndex];
-        pdf.addPage();
+
+        // Solo agregar nueva página después de la primera
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
 
         // fondo
-        pdf.setFillColor(...BG);
+        pdf.setFillColor(...SURFACE);
         pdf.rect(0, 0, pageWidth, pageHeight, "F");
 
-        // header
-        pdf.setFillColor(...BRAND_PRIMARY);
-        pdf.rect(0, 0, pageWidth, 18, "F");
+        // =========================
+        // HEADER MINIMALISTA CON MARCA
+        // =========================
+        const headerH = 18;
 
-        pdf.setFillColor(...BRAND_ACCENT);
-        pdf.rect(0, 18, pageWidth, 2.5, "F");
-
-        // base clara para el logo
-        const logoBoxX = marginX;
-        const logoBoxY = 3.2;
-        const logoBoxW = 24;
-        const logoBoxH = 10.5;
-
+        // fondo blanco
         pdf.setFillColor(255, 255, 255);
-        pdf.roundedRect(logoBoxX, logoBoxY, logoBoxW, logoBoxH, 2.5, 2.5, "F");
+        pdf.rect(0, 0, pageWidth, headerH, "F");
 
+        // logo izquierda (más grande)
         if (logoData) {
           try {
-            pdf.addImage(logoData, "PNG", logoBoxX + 2, logoBoxY + 1.2, 20, 7);
+            const logoW = 30;
+            const logoH = 9;
+            const logoX = marginX;
+            const logoY = 4;
+
+            pdf.addImage(logoData, "PNG", logoX, logoY, logoW, logoH);
           } catch (error) {
-            console.error("No se pudo insertar el logo en header:", error);
+            console.error("No se pudo insertar el logo:", error);
           }
         }
 
+        // título centrado
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(11);
-        pdf.text("Catálogo de productos", marginX + 28, 11.5);
+        pdf.setFontSize(12);
+        pdf.setTextColor(35, 35, 35);
+        pdf.text("Catálogo de productos", pageWidth / 2, 11, {
+          align: "center",
+        });
 
+        // número de página derecha
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(9);
+        pdf.setTextColor(120, 120, 120);
         pdf.text(
-          `Página ${pageIndex + 2} de ${groupedProducts.length + 1}`,
+          `Página ${pageIndex + 1} de ${totalPages}`,
           pageWidth - marginX,
-          11.5,
+          11,
           { align: "right" },
         );
 
-        // layout de cards
+        // línea inferior gris suave
+        pdf.setDrawColor(220, 220, 220);
+        pdf.setLineWidth(0.4);
+        pdf.line(marginX, headerH - 1.5, pageWidth - marginX, headerH - 1.5);
+
+        // =========================
+        // LAYOUT DE PRODUCTOS
+        // =========================
         const contentTop = 28;
         const contentBottom = pageHeight - marginBottom;
         const availableHeight = contentBottom - contentTop;

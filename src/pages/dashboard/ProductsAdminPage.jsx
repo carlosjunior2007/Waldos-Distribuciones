@@ -1566,17 +1566,6 @@ export default function ProductsAdminPage() {
             afterTitleY,
           );
 
-          // precio
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(13);
-          pdf.setTextColor(...PRICE);
-          pdf.text(
-            `${formatMoney(item.precio)}`,
-            cardX + cardWidth - innerPad,
-            cardY + 12,
-            { align: "right" },
-          );
-
           // descripción
           pdf.setFont("helvetica", "normal");
           pdf.setFontSize(9.5);

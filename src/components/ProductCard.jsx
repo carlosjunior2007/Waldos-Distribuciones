@@ -32,6 +32,8 @@ export default function ProductCard({ producto, from }) {
           hover:shadow-strong
           transition
           overflow-hidden
+          min-h-[370px]
+          relative
         "
       >
         <div className="relative bg-surface-soft">
@@ -87,14 +89,7 @@ export default function ProductCard({ producto, from }) {
             </span>
           </div>
 
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[11px] text-text-muted">Precio</div>
-              <div className="text-base font-bold text-primary-700 leading-none">
-                {precio}
-              </div>
-            </div>
-
+          <div className="mt-4 flex items-center justify-end gap-3 absolute bottom-4 right-4">
             <div
               className="
                 h-9

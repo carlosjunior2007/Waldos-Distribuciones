@@ -103,13 +103,6 @@ export default function CatalogLayout() {
                   >
                     <X className="h-4 w-4" />
                   </button>
-
-                  <button
-                    type="submit"
-                    className="inline-flex h-8 items-center justify-center rounded-md bg-accent-500 px-3 text-sm font-semibold text-white hover:bg-accent-600"
-                  >
-                    Buscar
-                  </button>
                 </div>
               </form>
             </div>

@@ -25,9 +25,10 @@ export default function Catalogo() {
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
+  const DEFAULT_PAGE_SIZE = 21;
   const busqueda = searchParams.get("q") || "";
   const catUI = searchParams.get("cat") || "todas";
-  const pageSize = Number(searchParams.get("pageSize")) || 20;
+  const pageSize = Number(searchParams.get("pageSize")) || DEFAULT_PAGE_SIZE;
   const page = Number(searchParams.get("page")) || 1;
 
   useEffect(() => {
@@ -75,7 +76,12 @@ export default function Catalogo() {
     if (!params.get("q")) params.delete("q");
     if ((params.get("cat") || "todas") === "todas") params.delete("cat");
     if ((params.get("page") || "1") === "1") params.delete("page");
-    if ((params.get("pageSize") || "20") === "20") params.delete("pageSize");
+    if (
+      (params.get("pageSize") || String(DEFAULT_PAGE_SIZE)) ===
+      String(DEFAULT_PAGE_SIZE)
+    ) {
+      params.delete("pageSize");
+    }
 
     setSearchParams(params, { replace: true });
   }
@@ -121,7 +127,9 @@ export default function Catalogo() {
     if (busqueda.trim()) params.set("q", busqueda.trim());
     if (catUI !== "todas") params.set("cat", catUI);
     if (page > 1) params.set("page", String(page));
-    if (pageSize !== 20) params.set("pageSize", String(pageSize));
+    if (pageSize !== DEFAULT_PAGE_SIZE) {
+      params.set("pageSize", String(pageSize));
+    }
 
     const query = params.toString();
     return query ? `/catalogo?${query}` : "/catalogo";
@@ -167,7 +175,9 @@ export default function Catalogo() {
               <div className="flex items-center gap-2 text-sm">
                 <button
                   disabled={pageSafe <= 1}
-                  onClick={() => updateParams({ page: Math.max(1, pageSafe - 1) })}
+                  onClick={() =>
+                    updateParams({ page: Math.max(1, pageSafe - 1) })
+                  }
                   className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
                 >
                   {"<"}

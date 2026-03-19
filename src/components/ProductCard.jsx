@@ -1,15 +1,9 @@
 import { Link } from "react-router-dom";
 import { Package, CheckCircle2, XCircle } from "lucide-react";
 
-function formatMXN(value) {
-  const n = Number(value || 0);
-  return n.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
-}
-
 export default function ProductCard({ producto, from }) {
   const nombre = producto?.nombre || "Producto";
   const codigo = (producto?.codigo || "—").toString().trim();
-  const precio = formatMXN(producto?.precio);
 
   const stock = Number(producto?.cantidad ?? 0);
   const disponible = (producto?.disponibilidad ?? true) && stock > 0;

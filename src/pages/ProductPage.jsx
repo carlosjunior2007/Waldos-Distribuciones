@@ -147,13 +147,6 @@ export default function ProductPage() {
             {/* precio / cantidad */}
             <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
               <div className="flex items-baseline gap-2">
-                <span className="text-text-muted">Precio:</span>
-                <span className="font-semibold text-text-primary">
-                  {meta.precio}
-                </span>
-              </div>
-
-              <div className="flex items-baseline gap-2">
                 <span className="text-text-muted">Existencia:</span>
                 <span className="font-semibold text-text-primary">
                   {meta.stock} piezas

@@ -88,13 +88,6 @@ export default function ProductCard({ producto, from }) {
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[11px] text-text-muted">Precio</div>
-              <div className="text-base font-bold text-primary-700 leading-none">
-                {precio}
-              </div>
-            </div>
-
             <div
               className="
                 h-9

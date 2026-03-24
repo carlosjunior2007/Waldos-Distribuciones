@@ -1168,16 +1168,27 @@ export default function ProductsAdminPage() {
   }, []);
 
   const filteredProducts = useMemo(() => {
-    const q = normalizeText(search);
+    const rawSearch = normalizeText(search);
+
+    const searchTerms = rawSearch
+      .split(",")
+      .map((term) => normalizeText(term))
+      .filter(Boolean);
 
     return products.filter((item) => {
       const status = getInventoryStatus(item);
 
+      const searchableFields = [
+        normalizeText(item.nombre),
+        normalizeText(item.codigo),
+        normalizeText(item.categoria),
+      ];
+
       const matchesSearch =
-        !q ||
-        normalizeText(item.nombre).includes(q) ||
-        normalizeText(item.codigo).includes(q) ||
-        normalizeText(item.categoria).includes(q);
+        searchTerms.length === 0 ||
+        searchTerms.some((term) =>
+          searchableFields.some((field) => field.includes(term)),
+        );
 
       const matchesStatus =
         statusFilter === "todos" ? true : status.key === statusFilter;
@@ -1712,7 +1723,7 @@ export default function ProductsAdminPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por nombre, código o categoría..."
+                placeholder="Buscar por nombre, código o categoría. Usa comas para varios: WAL-8554E9, WAL-1234ABC"
                 className="h-12 w-full rounded-2xl border border-border bg-background pl-10 pr-4 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
               />
             </div>

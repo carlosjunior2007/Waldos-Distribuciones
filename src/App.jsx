@@ -13,6 +13,8 @@ import DashboardHome from "./pages/dashboard/DashboardHome.jsx";
 import QuotationsPage from "./pages/dashboard/QuotationsPage.jsx";
 import ProductsAdminPage from "./pages/dashboard/ProductsAdminPage.jsx";
 import ExpensesPage from "./pages/dashboard/ExpensesPage.jsx";
+import ClientsPage from "./pages/dashboard/ClientsPage.jsx";
+import ReceiptsPage from "./pages/dashboard/ReceiptsPage.jsx";
 import TagsPage from "./pages/dashboard/LabelsPage.jsx";
 
 export default function App() {
@@ -38,6 +40,8 @@ export default function App() {
         <Route path="productos" element={<ProductsAdminPage />} />
         <Route path="gastos" element={<ExpensesPage />} />
         <Route path="etiquetas" element={<TagsPage />} />
+        <Route path="clientes" element={<ClientsPage />} />
+        <Route path="contrarecibo" element={<ReceiptsPage />} />
       </Route>
 
       {/* CATALOGO */}

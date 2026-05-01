@@ -9,8 +9,10 @@ import {
   ChevronRight,
   Mail,
   LogOut,
-  Tag ,
+  Tag,
   ShieldCheck,
+  UserRound,
+  CheckCheck 
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import supabase from "../../utils/supabase.js";
@@ -41,9 +43,21 @@ const NAV_ITEMS = [
     end: true,
   },
   {
-    label: "Etiquetas y clientes",
+    label: "Contra Recibo",
+    to: "/dashboard/contrarecibo",
+    icon: CheckCheck,
+    end: true,
+  },
+  {
+    label: "Etiquetas",
     to: "/dashboard/etiquetas",
-    icon: Tag ,
+    icon: Tag,
+    end: true,
+  },
+  {
+    label: "Clientes",
+    to: "/dashboard/clientes",
+    icon: UserRound,
     end: true,
   },
 ];

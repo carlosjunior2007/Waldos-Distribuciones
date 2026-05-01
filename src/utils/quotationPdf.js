@@ -11,7 +11,11 @@ function money(value) {
 
 function dateMX(value) {
   if (!value) return "-";
+
   const d = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(d.getTime())) return "-";
+
   return d.toLocaleDateString("es-MX", {
     year: "numeric",
     month: "2-digit",
@@ -35,6 +39,7 @@ export function generateQuotationPDF(quotation) {
   const BRAND_MUTED = [107, 114, 128];
   const BRAND_LIGHT = [246, 247, 250];
   const BRAND_BORDER = [221, 226, 232];
+  const BRAND_SUCCESS = [22, 101, 52];
   const WHITE = [255, 255, 255];
 
   const {
@@ -42,27 +47,40 @@ export function generateQuotationPDF(quotation) {
     cliente_nombre,
     cliente_telefono,
     cliente_email,
+    cliente_rfc,
+    cliente_razon_social,
     created_at,
     fecha_vencimiento,
     subtotal,
     descuento,
     total,
+    iva_porcentaje,
+    iva_monto,
+    isr_porcentaje,
+    isr_monto,
+    retencion_iva_porcentaje,
+    retencion_iva_monto,
+    total_impuestos,
+    total_retenciones,
     notas,
     detalles = [],
-  } = quotation;
+  } = quotation || {};
 
   const marginX = 12;
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  const totalsBoxW = 64;
-  const totalsBoxH = 30;
-  const totalsBoxX = pageWidth - marginX - totalsBoxW;
-  const totalsBoxY = pageHeight - 54;
-
+  const footerLineY = pageHeight - 20;
   const footerReservedSpace = 24;
-  const lastPageReservedSpace = 60;
-  const contentStartY = 98;
+
+  const totalsBoxW = 76;
+  const totalsBoxH = 66;
+  const totalsBoxX = pageWidth - marginX - totalsBoxW;
+  const totalsBoxBottomY = footerLineY - 8;
+  const totalsBoxFixedY = totalsBoxBottomY - totalsBoxH;
+
+  const contentStartY = 104;
+  const contentBottomLimit = totalsBoxFixedY - 8;
 
   function drawHeader() {
     const contentWidth = pageWidth - marginX * 2;
@@ -80,10 +98,10 @@ export function generateQuotationPDF(quotation) {
     }
 
     const infoY = 50;
-    const boxH = 34;
+    const boxH = 42;
     const leftBoxX = marginX;
-    const leftBoxW = 96;
-    const rightBoxW = 84;
+    const leftBoxW = 88;
+    const rightBoxW = 96;
     const rightBoxX = pageWidth - marginX - rightBoxW;
 
     doc.setDrawColor(...BRAND_BORDER);
@@ -96,14 +114,18 @@ export function generateQuotationPDF(quotation) {
     doc.text("Cotización", leftBoxX + 4, infoY + 9);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setTextColor(...BRAND_DARK);
     doc.text(`Folio: ${safeText(folio)}`, leftBoxX + 4, infoY + 17);
-    doc.text(`Fecha de emisión: ${dateMX(created_at)}`, leftBoxX + 4, infoY + 23);
+    doc.text(
+      `Fecha de emisión: ${dateMX(created_at)}`,
+      leftBoxX + 4,
+      infoY + 24
+    );
     doc.text(
       `Fecha de vencimiento: ${dateMX(fecha_vencimiento)}`,
       leftBoxX + 4,
-      infoY + 29
+      infoY + 31
     );
 
     doc.setDrawColor(...BRAND_BORDER);
@@ -116,33 +138,48 @@ export function generateQuotationPDF(quotation) {
     doc.text("Cliente", rightBoxX + 4, infoY + 7);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(...BRAND_DARK);
+
+    let y = infoY + 14;
 
     const clientNameLines = doc.splitTextToSize(
       safeText(cliente_nombre),
       rightBoxW - 8
     );
-    doc.text(clientNameLines, rightBoxX + 4, infoY + 14);
+    doc.text(clientNameLines, rightBoxX + 4, y);
+    y += clientNameLines.length * 4.5;
 
-    const clientTelY = infoY + 20 + (clientNameLines.length - 1) * 4;
-    doc.text(`Tel: ${safeText(cliente_telefono)}`, rightBoxX + 4, clientTelY);
+    if (cliente_razon_social) {
+      const rsLines = doc.splitTextToSize(
+        `Razón social: ${cliente_razon_social}`,
+        rightBoxW - 8
+      );
+      doc.text(rsLines, rightBoxX + 4, y);
+      y += rsLines.length * 4.5;
+    }
 
-    const clientEmailY = clientTelY + 6;
+    if (cliente_rfc) {
+      doc.text(`RFC: ${cliente_rfc}`, rightBoxX + 4, y);
+      y += 4.5;
+    }
+
+    doc.text(`Tel: ${safeText(cliente_telefono)}`, rightBoxX + 4, y);
+    y += 4.5;
+
     const clientEmailLines = doc.splitTextToSize(
       `Email: ${safeText(cliente_email)}`,
       rightBoxW - 8
     );
-    doc.text(clientEmailLines, rightBoxX + 4, clientEmailY);
+    doc.text(clientEmailLines, rightBoxX + 4, y);
 
-    const dividerY = 92;
+    const dividerY = 98;
     doc.setDrawColor(...BRAND_PRIMARY);
     doc.setLineWidth(0.9);
     doc.line(marginX, dividerY, pageWidth - marginX, dividerY);
   }
 
   function drawFooter() {
-    const footerLineY = pageHeight - 20;
     const footerTextY = pageHeight - 12;
 
     doc.setDrawColor(...BRAND_BORDER);
@@ -163,34 +200,76 @@ export function generateQuotationPDF(quotation) {
     );
   }
 
-  function drawTotalsBox() {
-    doc.setFillColor(...BRAND_LIGHT);
-    doc.setDrawColor(...BRAND_BORDER);
-    doc.roundedRect(totalsBoxX, totalsBoxY, totalsBoxW, totalsBoxH, 3, 3, "FD");
+  function drawTotalLine(label, value, y, options = {}) {
+    const {
+      bold = false,
+      negative = false,
+      color = BRAND_DARK,
+      labelColor = BRAND_DARK,
+    } = options;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(...BRAND_DARK);
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...labelColor);
+    doc.text(label, totalsBoxX + 4, y);
 
-    doc.text("Subtotal:", totalsBoxX + 4, totalsBoxY + 8);
-    doc.text(money(subtotal || 0), totalsBoxX + totalsBoxW - 4, totalsBoxY + 8, {
-      align: "right",
-    });
-
-    doc.text("Descuento:", totalsBoxX + 4, totalsBoxY + 16);
+    doc.setTextColor(...color);
     doc.text(
-      money(descuento || 0),
+      `${negative ? "-" : ""}${money(value || 0)}`,
       totalsBoxX + totalsBoxW - 4,
-      totalsBoxY + 16,
+      y,
       { align: "right" }
     );
+  }
+
+  function drawTotalsBox(y) {
+    doc.setFillColor(...BRAND_LIGHT);
+    doc.setDrawColor(...BRAND_BORDER);
+    doc.roundedRect(totalsBoxX, y, totalsBoxW, totalsBoxH, 3, 3, "FD");
+
+    let lineY = y + 8;
+
+    drawTotalLine("Subtotal:", subtotal, lineY);
+    lineY += 7;
+
+    drawTotalLine("Descuento:", descuento, lineY, { negative: true });
+    lineY += 7;
+
+    drawTotalLine(`IVA ${Number(iva_porcentaje || 0)}%:`, iva_monto, lineY);
+    lineY += 7;
+
+    drawTotalLine(
+      `ISR retenido ${Number(isr_porcentaje || 0)}%:`,
+      isr_monto,
+      lineY,
+      { negative: true }
+    );
+    lineY += 7;
+
+    drawTotalLine(
+      `IVA retenido ${Number(retencion_iva_porcentaje || 0)}%:`,
+      retencion_iva_monto,
+      lineY,
+      { negative: true }
+    );
+    lineY += 7;
+
+    drawTotalLine("Impuestos:", total_impuestos, lineY, {
+      color: BRAND_SUCCESS,
+    });
+    lineY += 7;
+
+    drawTotalLine("Retenciones:", total_retenciones, lineY, {
+      negative: true,
+      color: BRAND_PRIMARY,
+    });
 
     doc.setFillColor(...BRAND_PRIMARY);
     doc.roundedRect(
       totalsBoxX + 2,
-      totalsBoxY + 20,
+      y + totalsBoxH - 11,
       totalsBoxW - 4,
-      8,
+      9,
       2,
       2,
       "F"
@@ -199,10 +278,34 @@ export function generateQuotationPDF(quotation) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(...WHITE);
-    doc.text("Total", totalsBoxX + 6, totalsBoxY + 25.5);
-    doc.text(money(total || 0), totalsBoxX + totalsBoxW - 6, totalsBoxY + 25.5, {
+    doc.text("Total", totalsBoxX + 6, y + totalsBoxH - 5);
+    doc.text(money(total || 0), totalsBoxX + totalsBoxW - 6, y + totalsBoxH - 5, {
       align: "right",
     });
+  }
+
+  function drawNotesBox(y) {
+    if (!notas) return 0;
+
+    const notesWidth = 106;
+    const splitNotes = doc.splitTextToSize(String(notas), notesWidth - 8);
+    const notesBoxH = Math.max(24, 10 + splitNotes.length * 4.5);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...BRAND_PRIMARY);
+    doc.text("Notas", marginX, y - 2);
+
+    doc.setDrawColor(...BRAND_BORDER);
+    doc.setFillColor(...WHITE);
+    doc.roundedRect(marginX, y, notesWidth, notesBoxH, 3, 3, "FD");
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...BRAND_DARK);
+    doc.text(splitNotes, marginX + 4, y + 7);
+
+    return notesBoxH;
   }
 
   autoTable(doc, {
@@ -256,53 +359,50 @@ export function generateQuotationPDF(quotation) {
     },
   });
 
-  let finalY = doc.lastAutoTable?.finalY || 110;
   let currentPage = doc.getNumberOfPages();
-
   doc.setPage(currentPage);
 
-  let currentY = finalY + 8;
+  const finalY = doc.lastAutoTable?.finalY || contentStartY;
+  let afterTableY = finalY + 8;
 
+  const hasNotes = Boolean(notas);
   let notesBoxH = 0;
-  let splitNotes = [];
 
-  if (notas) {
-    splitNotes = doc.splitTextToSize(String(notas), 110 - 8);
+  if (hasNotes) {
+    const splitNotes = doc.splitTextToSize(String(notas), 98);
     notesBoxH = Math.max(24, 10 + splitNotes.length * 4.5);
   }
 
-  const bottomSafeLimitLastPage = pageHeight - lastPageReservedSpace;
-  const sectionHeight = Math.max(notas ? notesBoxH : 0, totalsBoxH);
+  const notesWouldFitAboveTotals =
+    hasNotes && afterTableY + notesBoxH <= totalsBoxFixedY - 8;
 
-  if (currentY + sectionHeight > bottomSafeLimitLastPage) {
+  const totalsWouldOverlapTable = finalY + 8 > totalsBoxFixedY;
+
+  if (totalsWouldOverlapTable || (hasNotes && !notesWouldFitAboveTotals)) {
     doc.addPage();
     currentPage = doc.getNumberOfPages();
     doc.setPage(currentPage);
     drawHeader();
     drawFooter();
-    currentY = contentStartY;
+    afterTableY = contentStartY;
   }
 
-  if (notas) {
-    const notesBoxY = currentY;
-    const notesBoxW = 110;
+  if (hasNotes) {
+    const notesFit = afterTableY + notesBoxH <= totalsBoxFixedY - 8;
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(...BRAND_PRIMARY);
-    doc.text("Notas", marginX, notesBoxY - 2);
-
-    doc.setDrawColor(...BRAND_BORDER);
-    doc.setFillColor(...WHITE);
-    doc.roundedRect(marginX, notesBoxY, notesBoxW, notesBoxH, 3, 3, "FD");
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(...BRAND_DARK);
-    doc.text(splitNotes, marginX + 4, notesBoxY + 7);
+    if (notesFit) {
+      drawNotesBox(afterTableY);
+    } else {
+      doc.addPage();
+      currentPage = doc.getNumberOfPages();
+      doc.setPage(currentPage);
+      drawHeader();
+      drawFooter();
+      drawNotesBox(contentStartY);
+    }
   }
 
-  drawTotalsBox();
+  drawTotalsBox(totalsBoxFixedY);
 
   doc.save(`${folio || "cotizacion"}.pdf`);
 }

@@ -34,6 +34,7 @@ import Modal from "../../components/ui/Modal";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import EmptyState from "../../components/ui/EmptyState";
 import ActionIconButton from "../../components/ui/ActionIconButton";
+import logoWaldo from "../../assets/Logo.png";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -746,12 +747,87 @@ export default function ProductsAdminPage() {
     );
   }
 
+  async function loadImageAsDataUrl(url) {
+    if (!url) return null;
+
+    try {
+      const response = await fetch(url, { mode: "cors" });
+      if (!response.ok) throw new Error("No se pudo cargar la imagen");
+
+      const blob = await response.blob();
+
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error("No se pudo cargar la imagen para PDF:", error);
+      return null;
+    }
+  }
+
+  function splitIntoChunks(array, size) {
+    const chunks = [];
+
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+
+    return chunks;
+  }
+
+  function safeText(value, fallback = "") {
+    return String(value ?? fallback).trim();
+  }
+
+  function fitImageContain(imgW, imgH, boxW, boxH) {
+    if (!imgW || !imgH) {
+      return {
+        width: boxW,
+        height: boxH,
+        x: 0,
+        y: 0,
+      };
+    }
+
+    const ratio = Math.min(boxW / imgW, boxH / imgH);
+    const width = imgW * ratio;
+    const height = imgH * ratio;
+
+    return {
+      width,
+      height,
+      x: (boxW - width) / 2,
+      y: (boxH - height) / 2,
+    };
+  }
+
+  async function getImageDimensions(dataUrl) {
+    if (!dataUrl) return null;
+
+    return await new Promise((resolve) => {
+      const img = new Image();
+
+      img.onload = () => {
+        resolve({
+          width: img.width,
+          height: img.height,
+        });
+      };
+
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  }
+
   async function handleExportPDF() {
-    const rows = filteredProducts.filter(
+    const dataToExport = filteredProducts.filter(
       (item) => Boolean(item.disponibilidad) && Boolean(item.habilitado),
     );
 
-    if (!rows.length) {
+    if (dataToExport.length === 0) {
       alert(
         "No hay productos visibles en web y disponibles para exportar en PDF.",
       );
@@ -765,66 +841,269 @@ export default function ProductsAdminPage() {
         orientation: "portrait",
         unit: "mm",
         format: "a4",
+        compress: true,
       });
 
       const pageWidth = pdf.internal.pageSize.getWidth();
-      const margin = 14;
-      let y = 20;
+      const pageHeight = pdf.internal.pageSize.getHeight();
 
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(16);
-      pdf.text("Catálogo de productos", margin, y);
+      const marginX = 14;
+      const marginBottom = 12;
 
-      y += 10;
+      // Colores de marca
+      const BRAND_PRIMARY = [16, 59, 117]; // #103b75
+      const BRAND_ACCENT = [226, 17, 42]; // #e2112a
+      const BG = [248, 250, 252]; // #f8fafc
+      const SURFACE = [255, 255, 255];
+      const BORDER = [226, 232, 240]; // #e2e8f0
+      const TEXT_PRIMARY = [15, 23, 42]; // #0f172a
+      const TEXT_SECONDARY = [51, 65, 85]; // #334155
+      const TEXT_MUTED = [100, 116, 139]; // #64748b
+      const PRICE = [16, 59, 117];
 
-      rows.forEach((item, index) => {
-        if (y > 260) {
+      const logoData = await loadImageAsDataUrl("/Logo.png");
+
+      // =========================
+      // PRODUCTOS DESDE LA PÁGINA 1
+      // =========================
+      const groupedProducts = splitIntoChunks(dataToExport, 3);
+      const totalPages = groupedProducts.length;
+
+      for (let pageIndex = 0; pageIndex < groupedProducts.length; pageIndex++) {
+        const group = groupedProducts[pageIndex];
+
+        // Solo agregar nueva página después de la primera
+        if (pageIndex > 0) {
           pdf.addPage();
-          y = 20;
         }
 
-        pdf.setDrawColor(220, 220, 220);
-        pdf.roundedRect(margin, y, pageWidth - margin * 2, 34, 4, 4);
+        // fondo
+        pdf.setFillColor(...SURFACE);
+        pdf.rect(0, 0, pageWidth, pageHeight, "F");
 
+        // =========================
+        // HEADER MINIMALISTA CON MARCA
+        // =========================
+        const headerH = 18;
+
+        // fondo blanco
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, pageWidth, headerH, "F");
+
+        // logo izquierda (más grande)
+        if (logoData) {
+          try {
+            const logoW = 30;
+            const logoH = 9;
+            const logoX = marginX;
+            const logoY = 4;
+
+            pdf.addImage(logoData, "PNG", logoX, logoY, logoW, logoH);
+          } catch (error) {
+            console.error("No se pudo insertar el logo:", error);
+          }
+        }
+
+        // título centrado
         pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(11);
-        pdf.text(
-          String(item.nombre || "Sin nombre").slice(0, 65),
-          margin + 5,
-          y + 8,
-        );
-
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(9);
-        pdf.text(`Código: ${item.codigo || "Sin código"}`, margin + 5, y + 15);
-        pdf.text(
-          `Categoría: ${getCategoryLabel(item.categoria)}`,
-          margin + 5,
-          y + 21,
-        );
-        pdf.text(
-          `Stock: ${Number(item.cantidad || 0)} ${item.unidad || ""}`,
-          margin + 5,
-          y + 27,
-        );
-
-        pdf.setFont("helvetica", "bold");
-        pdf.text(formatMoney(item.precio), pageWidth - margin - 5, y + 15, {
-          align: "right",
+        pdf.setFontSize(12);
+        pdf.setTextColor(35, 35, 35);
+        pdf.text("Catálogo de productos", pageWidth / 2, 11, {
+          align: "center",
         });
 
-        y += 42;
+        // número de página derecha
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        pdf.setTextColor(120, 120, 120);
+        pdf.text(
+          `Página ${pageIndex + 1} de ${totalPages}`,
+          pageWidth - marginX,
+          11,
+          { align: "right" },
+        );
 
-        if (index === rows.length - 1) {
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(8);
-          pdf.text(
-            `Generado el ${new Date().toLocaleDateString("es-MX")}`,
-            margin,
-            288,
+        // línea inferior gris suave
+        pdf.setDrawColor(220, 220, 220);
+        pdf.setLineWidth(0.4);
+        pdf.line(marginX, headerH - 1.5, pageWidth - marginX, headerH - 1.5);
+
+        // =========================
+        // LAYOUT DE PRODUCTOS
+        // =========================
+        const contentTop = 28;
+        const contentBottom = pageHeight - marginBottom;
+        const availableHeight = contentBottom - contentTop;
+        const gap = 8;
+        const cardHeight = (availableHeight - gap * 2) / 3;
+        const cardWidth = pageWidth - marginX * 2;
+
+        for (let i = 0; i < group.length; i++) {
+          const item = group[i];
+
+          const cardX = marginX;
+          const cardY = contentTop + i * (cardHeight + gap);
+
+          // card
+          pdf.setFillColor(...SURFACE);
+          pdf.setDrawColor(...BORDER);
+          pdf.roundedRect(cardX, cardY, cardWidth, cardHeight, 5, 5, "FD");
+
+          // medidas internas
+          const innerPad = 6;
+          const imageBoxX = cardX + innerPad;
+          const imageBoxY = cardY + 18;
+          const imageBoxW = 42;
+          const imageBoxH = cardHeight - 24;
+
+          const textX = imageBoxX + imageBoxW + 8;
+          const textW = cardWidth - (textX - cardX) - innerPad;
+          const titleY = cardY + 24;
+
+          // contenedor imagen
+          pdf.setFillColor(...BG);
+          pdf.setDrawColor(...BORDER);
+          pdf.roundedRect(
+            imageBoxX,
+            imageBoxY,
+            imageBoxW,
+            imageBoxH,
+            4,
+            4,
+            "FD",
           );
+
+          const imageData = await loadImageAsDataUrl(item.imagen);
+
+          if (imageData) {
+            try {
+              const dimensions = await getImageDimensions(imageData);
+              const fit = fitImageContain(
+                dimensions?.width || imageBoxW,
+                dimensions?.height || imageBoxH,
+                imageBoxW - 4,
+                imageBoxH - 4,
+              );
+
+              let format = "JPEG";
+              if (String(imageData).startsWith("data:image/png")) {
+                format = "PNG";
+              } else if (String(imageData).startsWith("data:image/webp")) {
+                format = "WEBP";
+              }
+
+              pdf.addImage(
+                imageData,
+                format,
+                imageBoxX + 2 + fit.x,
+                imageBoxY + 2 + fit.y,
+                fit.width,
+                fit.height,
+              );
+            } catch (error) {
+              console.error("No se pudo insertar la imagen en el card:", error);
+              pdf.setTextColor(...TEXT_MUTED);
+              pdf.setFont("helvetica", "normal");
+              pdf.setFontSize(9);
+              pdf.text("Imagen no disponible", imageBoxX + 5, imageBoxY + 12);
+            }
+          } else {
+            pdf.setTextColor(...TEXT_MUTED);
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(9);
+            pdf.text("Sin imagen", imageBoxX + 11, imageBoxY + imageBoxH / 2);
+          }
+
+          // categoría badge
+          const categoryLabel = getCategoryLabel(item.categoria);
+          pdf.setFillColor(...BRAND_ACCENT);
+          pdf.roundedRect(textX, cardY + 6, 34, 6.5, 2, 2, "F");
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(8.5);
+          pdf.text(categoryLabel, textX + 2.5, cardY + 10.5);
+
+          // nombre
+          pdf.setTextColor(...TEXT_PRIMARY);
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(13);
+
+          const titleLines = pdf.splitTextToSize(
+            safeText(item.nombre, "Sin nombre"),
+            textW,
+          );
+          pdf.text(titleLines.slice(0, 2), textX, titleY);
+
+          const titleLineCount = Math.min(titleLines.length, 2);
+          const afterTitleY = titleY + titleLineCount * 5.5 + 2;
+
+          // código
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(9.5);
+          pdf.setTextColor(...TEXT_MUTED);
+          pdf.text(
+            `Código: ${safeText(item.codigo, "Sin código")}`,
+            textX,
+            afterTitleY,
+          );
+
+          // descripción
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(9.5);
+          pdf.setTextColor(...TEXT_SECONDARY);
+
+          const desc = safeText(
+            item.descripcion,
+            "Sin descripción disponible.",
+          );
+
+          const descLines = pdf.splitTextToSize(desc, textW);
+          const maxDescLines = 6;
+
+          let finalDescLines = descLines.slice(0, maxDescLines);
+          if (descLines.length > maxDescLines) {
+            const last = finalDescLines[maxDescLines - 1];
+            finalDescLines[maxDescLines - 1] =
+              `${last.slice(0, Math.max(0, last.length - 3))}...`;
+          }
+
+          pdf.text(finalDescLines, textX, afterTitleY + 8);
+
+          // línea decorativa inferior
+          pdf.setDrawColor(...BORDER);
+          pdf.line(
+            textX,
+            cardY + cardHeight - 12,
+            cardX + cardWidth - innerPad,
+            cardY + cardHeight - 12,
+          );
+
+          // footer interno de card
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(...TEXT_MUTED);
+          pdf.text("Disponible en catálogo", textX, cardY + cardHeight - 6);
         }
-      });
+
+        // footer general
+        pdf.setDrawColor(...BORDER);
+        pdf.line(marginX, pageHeight - 8, pageWidth - marginX, pageHeight - 8);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(...TEXT_MUTED);
+        pdf.text(
+          "Catálogo generado automáticamente",
+          marginX,
+          pageHeight - 3.5,
+        );
+        pdf.text(
+          new Date().toLocaleDateString("es-MX"),
+          pageWidth - marginX,
+          pageHeight - 3.5,
+          { align: "right" },
+        );
+      }
 
       pdf.save(
         `catalogo_productos_${new Date().toISOString().slice(0, 10)}.pdf`,

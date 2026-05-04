@@ -172,9 +172,8 @@ export default function ReceiptsPage() {
           setModalOpen(false);
           setEditingReceipt(null);
         }}
-        onSaved={async (receipt) => {
+        onSaved={async () => {
           await loadData();
-          generateReceiptPDF(receipt);
         }}
       />
 
@@ -771,7 +770,7 @@ function ReceiptModal({ open, editingReceipt, onClose, onSaved }) {
               className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white disabled:opacity-60"
             >
               <FileText className="h-4 w-4" />
-              {saving ? "Guardando..." : "Guardar y generar PDF"}
+              {saving ? "Guardando..." : "Guardar contra recibo"}
             </button>
           </div>
         </div>

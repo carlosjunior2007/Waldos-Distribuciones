@@ -330,9 +330,8 @@ export async function fetchReceiptById(id) {
   };
 }
 
-function cleanReceiptPayload(header = {}) {
-  return {
-    folio: header.folio || null,
+function cleanReceiptPayload(header = {}, { includeFolio = false } = {}) {
+  const payload = {
     cliente_id: header.cliente_id || null,
     cotizacion_id: header.cotizacion_id || null,
     cliente_nombre: header.cliente_nombre?.trim() || "",
@@ -345,6 +344,12 @@ function cleanReceiptPayload(header = {}) {
     notas: header.notas?.trim() || null,
     updated_at: new Date().toISOString(),
   };
+
+  if (includeFolio) {
+    payload.folio = header.folio || null;
+  }
+
+  return payload;
 }
 
 function cleanDetailPayload(items = [], receiptId) {
@@ -366,7 +371,7 @@ export async function createReceipt({ header, items }) {
   const payload = cleanReceiptPayload({
     ...header,
     folio,
-  });
+  }, { includeFolio: true });
 
   const { data: created, error: receiptError } = await supabase
     .from("contra_recibos")
@@ -393,7 +398,7 @@ export async function createReceipt({ header, items }) {
 }
 
 export async function updateReceipt(id, { header, items }) {
-  const payload = cleanReceiptPayload(header);
+  const payload = cleanReceiptPayload(header, { includeFolio: false });
 
   const { error: receiptError } = await supabase
     .from("contra_recibos")

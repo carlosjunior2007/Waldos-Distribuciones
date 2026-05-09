@@ -9,13 +9,13 @@ import ProductPage from "./pages/ProductPage.jsx";
 import LoginPage from "./pages/Login.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import DashboardLayout from "./pages/Layout/DashboardLayout.jsx";
-import DashboardHome from "./pages/dashboard/DashboardHome.jsx";
-import QuotationsPage from "./pages/dashboard/QuotationsPage.jsx";
-import ProductsAdminPage from "./pages/dashboard/ProductsAdminPage.jsx";
-import ExpensesPage from "./pages/dashboard/ExpensesPage.jsx";
-import ClientsPage from "./pages/dashboard/ClientsPage.jsx";
-import ReceiptsPage from "./pages/dashboard/ReceiptsPage.jsx";
-import TagsPage from "./pages/dashboard/LabelsPage.jsx";
+import DashboardHome from "./features/dashboard/pages/DashboardHome.jsx";
+import QuotationsPage from "./features/quotations/pages/QuotationsPage.jsx";
+import ProductsAdminPage from "./features/products/pages/ProductsAdminPage.jsx";
+import ExpensesPage from "./features/expenses/pages/ExpensesPage.jsx";
+import ClientsPage from "./features/clients/pages/ClientsPage.jsx";
+import ReceiptsPage from "./features/receipts/pages/ReceiptsPage.jsx";
+import TagsPage from "./features/labels/pages/LabelsPage.jsx";
 
 export default function App() {
   return (

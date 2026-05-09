@@ -222,7 +222,7 @@ export default function ContactSection() {
                   Correo
                 </h3>
                 <p className="mt-1 text-sm text-text-on-light-secondary">
-                  {TO_EMAIL || "ventas@tudominio.com"}
+                  {TO_EMAIL || "contacto@waldodistribuciones.com"}
                 </p>
               </div>
             </div>

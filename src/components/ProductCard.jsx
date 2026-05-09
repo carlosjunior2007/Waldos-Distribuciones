@@ -1,107 +1,103 @@
 import { Link } from "react-router-dom";
-import { Package, CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Package, XCircle } from "lucide-react";
 
 export default function ProductCard({ producto, from }) {
   const nombre = producto?.nombre || "Producto";
-  const codigo = (producto?.codigo || "—").toString().trim();
+  const codigo = String(producto?.codigo || "—").trim();
 
   const stock = Number(producto?.cantidad ?? 0);
-  const disponible = (producto?.disponibilidad ?? true) && stock > 0;
+  const disponible = Boolean(producto?.disponibilidad ?? true) && stock > 0;
 
-  const img = (producto?.imagen || "").trim();
+  const img = String(producto?.imagen || "").trim();
   const tieneImagen = img.length > 0;
 
   return (
     <Link
       to={`/catalogo/${producto.id}`}
       state={{ from }}
-      className="block group"
+      className="group block h-full"
     >
-      <article
-        className="
-          rounded-lg
-          border border-border
-          bg-surface
-          shadow-soft
-          hover:shadow-strong
-          transition
-          overflow-hidden
-          min-h-[370px]
-          relative
-        "
-      >
-        <div className="relative bg-surface-soft">
-          <div className="aspect-[4/3] w-full overflow-hidden">
+      <article className="flex h-full min-h-[370px] flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white transition hover:border-slate-300">
+        <div className="relative bg-white px-5 pt-5">
+          <div className="flex h-[190px] items-center justify-center rounded-[18px] bg-slate-50 p-4">
             {tieneImagen ? (
               <img
                 src={img}
                 alt={nombre}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                 loading="lazy"
+                className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-[1.025]"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="h-12 w-12 rounded-xl bg-surface border border-border flex items-center justify-center">
-                  <Package className="h-6 w-6 text-primary-500" />
-                </div>
+              <div className="flex h-full w-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white">
+                <Package className="h-10 w-10 text-slate-300" />
               </div>
             )}
           </div>
 
-          <div className="absolute right-3 top-3">
+          <div className="absolute right-7 top-7">
             {disponible ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 text-success-700 border border-success-100 px-3 py-1 text-xs font-semibold">
-                <CheckCircle2 className="h-4 w-4" />
-                Disponible
-              </span>
+              <StatusBadge
+                icon={CheckCircle2}
+                label="Disponible"
+                className="border-[#081f3a]/15 bg-white text-[#081f3a]"
+              />
             ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-error-50 text-error-700 border border-error-100 px-3 py-1 text-xs font-semibold">
-                <XCircle className="h-4 w-4" />
-                Agotado
-              </span>
+              <StatusBadge
+                icon={XCircle}
+                label="Agotado"
+                className="border-red-100 bg-white text-red-700"
+              />
             )}
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="flex flex-1 flex-col px-5 pb-5 pt-4">
           <h3
-            className="text-sm font-semibold text-text-primary leading-snug line-clamp-2"
+            className="line-clamp-2 min-h-[44px] text-[15px] font-bold leading-snug text-slate-900"
             title={nombre}
           >
             {nombre}
           </h3>
 
-          <div className="mt-2 text-xs text-text-secondary">
-            <span className="text-text-muted">Código: </span>
-            <span className="font-semibold text-text-secondary">{codigo}</span>
+          <div className="mt-4 space-y-1.5 text-sm">
+            <p className="flex justify-between gap-3 text-slate-500">
+              <span>Código</span>
+              <span className="truncate font-semibold text-slate-800">
+                {codigo}
+              </span>
+            </p>
+
+            <p className="flex justify-between gap-3 text-slate-500">
+              <span>Existencia</span>
+              <span className="font-semibold text-slate-800">
+                {Number.isFinite(stock) ? stock : "—"}
+              </span>
+            </p>
           </div>
 
-          <div className="mt-1 text-xs text-text-secondary">
-            <span className="text-text-muted">Cantidad: </span>
-            <span className="font-semibold">
-              {Number.isFinite(stock) ? stock : "—"}
+          <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4">
+            <span className="text-xs font-semibold text-slate-400">
+              Detalles del producto
             </span>
-          </div>
 
-          <div className="mt-4 flex items-center justify-end gap-3 absolute bottom-4 right-4">
-            <div
-              className="
-                h-9
-                px-4
-                rounded-md
-                bg-primary-500
-                text-white
-                text-sm font-semibold
-                inline-flex items-center justify-center
-                transition
-                group-hover:bg-primary-600
-              "
-            >
+            <div className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#081f3a] px-4 text-sm font-bold text-white transition group-hover:bg-[#123765]">
+              <Eye className="h-4 w-4" />
               Ver
             </div>
           </div>
         </div>
       </article>
     </Link>
+  );
+}
+
+function StatusBadge({ icon: Icon, label, className }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${className}`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </span>
   );
 }

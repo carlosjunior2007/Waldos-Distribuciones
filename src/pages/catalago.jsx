@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
+
 import supabase from "../utils/supabase";
 import ProductCard from "../components/ProductCard";
-import { SlidersHorizontal } from "lucide-react";
 
 const CATEGORIAS_UI = [
-  { key: "todas", label: "Todas" },
   { key: "limpieza", label: "Limpieza" },
   { key: "lavanderia", label: "Lavandería" },
   { key: "higiene_personal", label: "Higiene" },
@@ -18,6 +18,8 @@ const CATEGORIAS_UI = [
   { key: "otros", label: "Otros" },
 ];
 
+const DEFAULT_PAGE_SIZE = 21;
+
 export default function Catalogo() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -25,14 +27,23 @@ export default function Catalogo() {
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
-  const DEFAULT_PAGE_SIZE = 21;
   const busqueda = searchParams.get("q") || "";
-  const catUI = searchParams.get("cat") || "todas";
   const pageSize = Number(searchParams.get("pageSize")) || DEFAULT_PAGE_SIZE;
   const page = Number(searchParams.get("page")) || 1;
 
+  const selectedCats = useMemo(() => {
+    const raw = searchParams.get("cats") || "";
+
+    return raw
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+  }, [searchParams]);
+
+  const hasActiveCategories = selectedCats.length > 0;
+
   useEffect(() => {
-    const fetchProductos = async () => {
+    async function fetchProductos() {
       setLoading(true);
 
       const { data, error } = await supabase
@@ -51,7 +62,7 @@ export default function Catalogo() {
       }
 
       setLoading(false);
-    };
+    }
 
     fetchProductos();
   }, []);
@@ -72,10 +83,10 @@ export default function Catalogo() {
       }
     });
 
-    // limpiar valores default
     if (!params.get("q")) params.delete("q");
-    if ((params.get("cat") || "todas") === "todas") params.delete("cat");
+    if (!params.get("cats")) params.delete("cats");
     if ((params.get("page") || "1") === "1") params.delete("page");
+
     if (
       (params.get("pageSize") || String(DEFAULT_PAGE_SIZE)) ===
       String(DEFAULT_PAGE_SIZE)
@@ -86,46 +97,74 @@ export default function Catalogo() {
     setSearchParams(params, { replace: true });
   }
 
+  function toggleCategory(categoryKey) {
+    const next = new Set(selectedCats);
+
+    if (next.has(categoryKey)) {
+      next.delete(categoryKey);
+    } else {
+      next.add(categoryKey);
+    }
+
+    updateParams({
+      cats: Array.from(next).join(","),
+      page: "",
+    });
+  }
+
+  function clearCategories() {
+    updateParams({
+      cats: "",
+      page: "",
+    });
+  }
+
+  function limpiarFiltros() {
+    setSearchParams({}, { replace: true });
+    setShowFilters(false);
+  }
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
 
     return (productos || [])
-      .filter((p) => {
-        if (catUI === "todas") return true;
-        return (p.categoria || "").toLowerCase() === catUI;
+      .filter((producto) => {
+        if (!hasActiveCategories) return true;
+
+        return selectedCats.includes(
+          String(producto.categoria || "").toLowerCase(),
+        );
       })
-      .filter((p) => {
+      .filter((producto) => {
         if (!q) return true;
 
-        const nombre = (p.nombre || "").toLowerCase();
-        const codigo = (p.codigo || "").toLowerCase();
-        const desc = (p.descripcion || "").toLowerCase();
+        const nombre = String(producto.nombre || "").toLowerCase();
+        const codigo = String(producto.codigo || "").toLowerCase();
+        const descripcion = String(producto.descripcion || "").toLowerCase();
 
-        return nombre.includes(q) || codigo.includes(q) || desc.includes(q);
+        return (
+          nombre.includes(q) ||
+          codigo.includes(q) ||
+          descripcion.includes(q)
+        );
       });
-  }, [productos, busqueda, catUI]);
+  }, [productos, busqueda, selectedCats, hasActiveCategories]);
 
-  const total = productos?.length || 0;
-  const totalFiltrados = filtrados?.length || 0;
+  const total = productos.length;
+  const totalFiltrados = filtrados.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltrados / pageSize));
   const pageSafe = Math.min(page, totalPages);
 
   const pageItems = useMemo(() => {
     const start = (pageSafe - 1) * pageSize;
-    const end = start + pageSize;
-    return filtrados.slice(start, end);
+    return filtrados.slice(start, start + pageSize);
   }, [filtrados, pageSafe, pageSize]);
-
-  const limpiarFiltros = () => {
-    setSearchParams({}, { replace: true });
-    setShowFilters(false);
-  };
 
   const fromPath = useMemo(() => {
     const params = new URLSearchParams();
 
     if (busqueda.trim()) params.set("q", busqueda.trim());
-    if (catUI !== "todas") params.set("cat", catUI);
+    if (selectedCats.length) params.set("cats", selectedCats.join(","));
     if (page > 1) params.set("page", String(page));
     if (pageSize !== DEFAULT_PAGE_SIZE) {
       params.set("pageSize", String(pageSize));
@@ -133,230 +172,269 @@ export default function Catalogo() {
 
     const query = params.toString();
     return query ? `/catalogo?${query}` : "/catalogo";
-  }, [busqueda, catUI, page, pageSize]);
+  }, [busqueda, selectedCats, page, pageSize]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <main className="flex-1">
-        <div className="mx-auto max-w-[1200px] px-4 py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <div className="text-sm text-text-secondary">
-              {loading ? (
-                "Cargando resultados…"
-              ) : (
-                <>
-                  Resultados:{" "}
-                  <span className="font-semibold text-text-primary">
-                    {totalFiltrados}
-                  </span>{" "}
-                  (de {total})
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between sm:justify-end gap-2">
-              <button
-                onClick={() => setShowFilters((v) => !v)}
-                className="
-                  sm:hidden
-                  h-9 px-3
-                  rounded-md
-                  border border-border
-                  bg-surface
-                  text-sm font-medium
-                  text-text-secondary
-                  inline-flex items-center gap-2
-                "
-              >
-                <SlidersHorizontal className="h-4 w-4 text-primary-500" />
-                Filtros
-              </button>
-
-              <div className="flex items-center gap-2 text-sm">
-                <button
-                  disabled={pageSafe <= 1}
-                  onClick={() =>
-                    updateParams({ page: Math.max(1, pageSafe - 1) })
-                  }
-                  className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
-                >
-                  {"<"}
-                </button>
-
-                <span className="text-text-secondary whitespace-nowrap">
-                  Página{" "}
-                  <span className="font-semibold text-text-primary">
-                    {pageSafe}
-                  </span>{" "}
-                  de{" "}
-                  <span className="font-semibold text-text-primary">
-                    {totalPages}
-                  </span>
-                </span>
-
-                <button
-                  disabled={pageSafe >= totalPages}
-                  onClick={() =>
-                    updateParams({ page: Math.min(totalPages, pageSafe + 1) })
-                  }
-                  className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
-                >
-                  {">"}
-                </button>
-              </div>
-            </div>
+    <div className="min-h-screen bg-slate-50">
+      <main className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-7">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600">
+            {loading ? (
+              "Cargando productos..."
+            ) : (
+              <>
+                <span className="font-semibold text-slate-900">
+                  {totalFiltrados}
+                </span>{" "}
+                productos encontrados
+                <span className="text-slate-400"> de {total}</span>
+              </>
+            )}
           </div>
 
-          <div className="grid grid-cols-12 gap-6">
-            <aside
-              className={[
-                "col-span-12 md:col-span-3",
-                "md:block",
-                showFilters ? "block" : "hidden",
-              ].join(" ")}
+          <div className="flex items-center gap-2">
+            {(hasActiveCategories || busqueda) && (
+              <button
+                type="button"
+                onClick={limpiarFiltros}
+                className="text-sm font-semibold text-[#081f3a] transition hover:text-blue-700"
+              >
+                Limpiar filtros
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowFilters((value) => !value)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 md:hidden"
             >
-              <div className="bg-surface border border-border rounded-md shadow-soft">
-                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <SlidersHorizontal className="h-4 w-4 text-primary-500" />
-                    <h3 className="font-semibold text-text-primary text-sm">
+              <SlidersHorizontal className="h-4 w-4 text-[#081f3a]" />
+              Filtros
+            </button>
+          </div>
+        </div>
+
+        {(hasActiveCategories || busqueda) && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {busqueda ? (
+              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                Búsqueda: {busqueda}
+              </span>
+            ) : null}
+
+            {selectedCats.map((cat) => {
+              const category = CATEGORIAS_UI.find((item) => item.key === cat);
+
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => toggleCategory(cat)}
+                  className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-[#081f3a]"
+                >
+                  {category?.label || cat}
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="grid grid-cols-12 gap-5">
+          <aside
+            className={[
+              "col-span-12 md:col-span-3",
+              "md:block",
+              showFilters ? "block" : "hidden",
+            ].join(" ")}
+          >
+            <div className="sticky top-24 rounded-[22px] border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-[#081f3a]">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
                       Filtros
                     </h3>
+                    <p className="text-xs text-slate-500">
+                      Categorías del catálogo
+                    </p>
                   </div>
-
-                  <button
-                    onClick={limpiarFiltros}
-                    className="text-xs text-accent-600 hover:text-accent-700 font-medium"
-                  >
-                    Limpiar
-                  </button>
                 </div>
 
-                <div className="p-4">
-                  <p className="text-xs text-text-muted mb-2">Categorías</p>
+                {hasActiveCategories ? (
+                  <button
+                    type="button"
+                    onClick={clearCategories}
+                    className="text-xs font-semibold text-[#081f3a] transition hover:text-blue-700"
+                  >
+                    Quitar
+                  </button>
+                ) : null}
+              </div>
 
-                  <div className="space-y-2">
-                    {CATEGORIAS_UI.map((c) => {
-                      const active = catUI === c.key;
-                      return (
-                        <button
-                          key={c.key}
-                          onClick={() => {
-                            updateParams({
-                              cat: c.key === "todas" ? "" : c.key,
-                              page: "",
-                            });
-                            setShowFilters(false);
-                          }}
+              <div className="p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  Categorías
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
+                  {CATEGORIAS_UI.map((categoria) => {
+                    const active = selectedCats.includes(categoria.key);
+
+                    return (
+                      <button
+                        key={categoria.key}
+                        type="button"
+                        onClick={() => toggleCategory(categoria.key)}
+                        className={[
+                          "group flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition",
+                          active
+                            ? "border-blue-200 bg-blue-50 text-[#081f3a] shadow-sm"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50/60 hover:text-[#081f3a]",
+                        ].join(" ")}
+                      >
+                        <span>{categoria.label}</span>
+
+                        <span
                           className={[
-                            "w-full text-left px-3 py-2 rounded-md border text-sm transition",
+                            "flex h-5 w-5 items-center justify-center rounded-full border text-[11px]",
                             active
-                              ? "bg-primary-50 border-primary-200 text-primary-800"
-                              : "bg-surface border-border text-text-secondary hover:bg-surface-soft",
+                              ? "border-[#081f3a] bg-[#081f3a] text-white"
+                              : "border-slate-200 text-transparent group-hover:text-[#081f3a]",
                           ].join(" ")}
                         >
-                          {c.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                          ✓
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            </aside>
+            </div>
+          </aside>
 
-            <section className="col-span-12 md:col-span-9">
-              <div className="bg-surface border border-border rounded-md shadow-soft">
-                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <div className="text-sm font-semibold text-text-primary">
+          <section className="col-span-12 md:col-span-9">
+            <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
                     Productos
-                  </div>
-                  <div className="text-xs text-text-muted">
+                  </h3>
+
+                  <p className="text-sm text-slate-500">
                     Mostrando{" "}
-                    <span className="font-medium text-text-secondary">
+                    <span className="font-semibold text-slate-900">
                       {pageItems.length}
                     </span>{" "}
                     de{" "}
-                    <span className="font-medium text-text-secondary">
+                    <span className="font-semibold text-slate-900">
                       {totalFiltrados}
                     </span>
-                  </div>
+                  </p>
                 </div>
 
-                <div className="p-4">
-                  {loading ? (
-                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                      {Array.from({ length: 6 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="h-56 rounded-md border border-border bg-surface-soft animate-pulse"
+                <Pagination
+                  pageSafe={pageSafe}
+                  totalPages={totalPages}
+                  updateParams={updateParams}
+                />
+              </div>
+
+              <div className="p-4 md:p-5">
+                {loading ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="h-64 animate-pulse rounded-[20px] border border-slate-200 bg-slate-100"
+                      />
+                    ))}
+                  </div>
+                ) : totalFiltrados === 0 ? (
+                  <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
+                    <p className="text-lg font-bold text-slate-900">
+                      Sin resultados
+                    </p>
+
+                    <p className="mt-2 text-sm text-slate-500">
+                      Cambia la búsqueda o selecciona otras categorías.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={limpiarFiltros}
+                      className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-[#081f3a] px-4 text-sm font-semibold text-white transition hover:bg-blue-900"
+                    >
+                      Limpiar filtros
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {pageItems.map((producto) => (
+                        <ProductCard
+                          key={producto.id}
+                          producto={producto}
+                          from={fromPath}
                         />
                       ))}
                     </div>
-                  ) : totalFiltrados === 0 ? (
-                    <div className="rounded-md border border-border bg-surface-soft p-8 text-center">
-                      <p className="text-text-primary font-semibold">
-                        Sin resultados
-                      </p>
-                      <p className="text-text-muted text-sm mt-1">
-                        Cambia la búsqueda o selecciona otra categoría.
-                      </p>
+
+                    <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
+                      <Pagination
+                        pageSafe={pageSafe}
+                        totalPages={totalPages}
+                        updateParams={updateParams}
+                      />
                     </div>
-                  ) : (
-                    <>
-                      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                        {pageItems.map((producto) => (
-                          <ProductCard
-                            key={producto.id}
-                            producto={producto}
-                            from={fromPath}
-                          />
-                        ))}
-                      </div>
-
-                      <div className="mt-6 flex items-center justify-center sm:justify-between gap-3 flex-col sm:flex-row border-t border-border pt-4">
-                        <div className="text-sm text-text-secondary whitespace-nowrap">
-                          Página{" "}
-                          <span className="font-semibold text-text-primary">
-                            {pageSafe}
-                          </span>{" "}
-                          de{" "}
-                          <span className="font-semibold text-text-primary">
-                            {totalPages}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm">
-                          <button
-                            disabled={pageSafe <= 1}
-                            onClick={() =>
-                              updateParams({ page: Math.max(1, pageSafe - 1) })
-                            }
-                            className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
-                          >
-                            {"<"}
-                          </button>
-
-                          <button
-                            disabled={pageSafe >= totalPages}
-                            onClick={() =>
-                              updateParams({
-                                page: Math.min(totalPages, pageSafe + 1),
-                              })
-                            }
-                            className="h-9 px-3 rounded-md border border-border bg-surface disabled:opacity-40"
-                          >
-                            {">"}
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
-            </section>
-          </div>
+            </div>
+          </section>
         </div>
       </main>
+    </div>
+  );
+}
+
+function Pagination({ pageSafe, totalPages, updateParams }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="hidden text-sm font-medium text-slate-500 sm:inline">
+        Página{" "}
+        <span className="font-bold text-slate-900">{pageSafe}</span>{" "}
+        de{" "}
+        <span className="font-bold text-slate-900">{totalPages}</span>
+      </span>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={pageSafe <= 1}
+          onClick={() => updateParams({ page: Math.max(1, pageSafe - 1) })}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Anterior</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={pageSafe >= totalPages}
+          onClick={() =>
+            updateParams({ page: Math.min(totalPages, pageSafe + 1) })
+          }
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <span className="hidden sm:inline">Siguiente</span>
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

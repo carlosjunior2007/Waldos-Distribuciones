@@ -17,17 +17,15 @@ import { formatMoney } from "../../../utils/formatters";
 import { formatInputDate } from "../../../utils/dates";
 import { cleanNumericInput } from "../../../utils/input";
 
-import {
-  INITIAL_QUOTATION_FORM,
-  IVA_OPTIONS,
-  ISR_OPTIONS,
-  RETENCION_IVA_OPTIONS,
-} from "../quotation.constants";
+import { INITIAL_QUOTATION_FORM, IVA_OPTIONS } from "../quotation.constants";
 
 import {
   buildQuotationItemsFromDetails,
   buildQuotationPayload,
+  calculateLine,
   calculateQuotationTotals,
+  calculateSalePriceFromUtility,
+  calculateUtilityPercent,
   toBusinessInputDate,
 } from "../quotation.helpers";
 
@@ -63,22 +61,11 @@ export default function QuotationFormModal({
         cliente_nombre: editingQuotation.cliente_nombre || "",
         cliente_telefono: editingQuotation.cliente_telefono || "",
         cliente_email: editingQuotation.cliente_email || "",
-        cliente_rfc:
-          editingQuotation.cliente_rfc || editingQuotation.clientes?.rfc || "",
-        cliente_razon_social:
-          editingQuotation.cliente_razon_social ||
-          editingQuotation.clientes?.razon_social ||
-          "",
-        estado: editingQuotation.estado || "pendiente",
+        estado: editingQuotation.estado || "borrador",
         descuento:
           editingQuotation.descuento !== null &&
           editingQuotation.descuento !== undefined
             ? String(editingQuotation.descuento)
-            : "",
-        gastos:
-          editingQuotation.gastos !== null &&
-          editingQuotation.gastos !== undefined
-            ? String(editingQuotation.gastos)
             : "",
         fecha_vencimiento: toBusinessInputDate(
           editingQuotation.fecha_vencimiento,
@@ -88,26 +75,18 @@ export default function QuotationFormModal({
           editingQuotation.iva_porcentaje !== undefined
             ? String(editingQuotation.iva_porcentaje)
             : "16",
-        isr_porcentaje:
-          editingQuotation.isr_porcentaje !== null &&
-          editingQuotation.isr_porcentaje !== undefined
-            ? String(editingQuotation.isr_porcentaje)
-            : "0",
-        retencion_iva_porcentaje:
-          editingQuotation.retencion_iva_porcentaje !== null &&
-          editingQuotation.retencion_iva_porcentaje !== undefined
-            ? String(editingQuotation.retencion_iva_porcentaje)
-            : "0",
+        notas: editingQuotation.notas || "",
       });
 
       setItems(buildQuotationItemsFromDetails(editingQuotation.detalles || []));
     } else {
       const defaultDate = new Date();
-      defaultDate.setDate(defaultDate.getDate() + 7);
+      defaultDate.setDate(defaultDate.getDate() + 14);
 
       setClientMode("manual");
       setForm({
         ...INITIAL_QUOTATION_FORM,
+        estado: "borrador",
         fecha_vencimiento: formatInputDate(defaultDate),
       });
 
@@ -152,11 +131,12 @@ export default function QuotationFormModal({
         }
 
         const { data, error } = await query;
+
         if (error) throw error;
 
         setClientResults(data || []);
       } catch (error) {
-        console.error(error);
+        console.error("Error buscando clientes:", error);
         setClientResults([]);
       }
     }, 300);
@@ -172,7 +152,8 @@ export default function QuotationFormModal({
         const rows = await searchProducts(productQuery);
         setProductResults(rows);
       } catch (error) {
-        console.error(error);
+        console.error("Error buscando productos:", error);
+        setProductResults([]);
       }
     }, 300);
 
@@ -181,13 +162,7 @@ export default function QuotationFormModal({
 
   const totals = useMemo(() => {
     return calculateQuotationTotals(items, form);
-  }, [
-    items,
-    form.descuento,
-    form.iva_porcentaje,
-    form.isr_porcentaje,
-    form.retencion_iva_porcentaje,
-  ]);
+  }, [items, form.descuento, form.iva_porcentaje]);
 
   function updateFormField(key, value) {
     setForm((prev) => ({
@@ -203,8 +178,6 @@ export default function QuotationFormModal({
       cliente_nombre: client.nombre || "",
       cliente_telefono: client.numero || "",
       cliente_email: client.correo || "",
-      cliente_rfc: client.rfc || "",
-      cliente_razon_social: client.razon_social || "",
     }));
   }
 
@@ -215,13 +188,11 @@ export default function QuotationFormModal({
       cliente_nombre: "",
       cliente_telefono: "",
       cliente_email: "",
-      cliente_rfc: "",
-      cliente_razon_social: "",
     }));
   }
 
   function addProduct(product) {
-    const stockDisponible = Number(product.cantidad || 0);
+    const stockDisponible = Number(product.stock || 0);
 
     if (stockDisponible <= 0) {
       alert("Este producto no tiene stock disponible.");
@@ -235,6 +206,7 @@ export default function QuotationFormModal({
     if (existingIndex >= 0) {
       const next = [...items];
       const current = next[existingIndex];
+
       const newQty = Number(current.cantidad || 0) + 1;
       const maxQty = Number(current.stock_disponible || stockDisponible);
 
@@ -243,14 +215,14 @@ export default function QuotationFormModal({
         return;
       }
 
-      next[existingIndex] = {
+      const updated = {
         ...current,
-        cantidad: newQty,
-        importe: newQty * Number(current.precio_unitario || 0),
-        ganancia_linea:
-          newQty *
-          (Number(current.precio_unitario || 0) -
-            Number(current.costo_unitario || 0)),
+        cantidad: String(newQty),
+      };
+
+      next[existingIndex] = {
+        ...updated,
+        ...calculateLine(updated),
       };
 
       setItems(next);
@@ -259,47 +231,118 @@ export default function QuotationFormModal({
 
     const precio = Number(product.precio || 0);
     const costo = Number(product.precio_compra || 0);
+    const utilidad = calculateUtilityPercent(costo, precio);
+
+    const newItem = {
+      producto_id: product.id,
+      nombre_producto: product.nombre,
+      codigo: product.codigo || "",
+      unidad: product.unidad || "",
+      cantidad: "1",
+      stock_disponible: stockDisponible,
+      precio_unitario: precio,
+      costo_unitario: costo,
+      utilidad_porcentaje: Number(utilidad.toFixed(2)),
+    };
 
     setItems((prev) => [
       ...prev,
       {
-        producto_id: product.id,
-        nombre_producto: product.nombre,
-        codigo: product.codigo || "",
-        unidad: product.unidad || "",
-        cantidad: "1",
-        stock_disponible: stockDisponible,
-        precio_unitario: precio,
-        costo_unitario: costo,
-        importe: precio,
-        ganancia_linea: precio - costo,
+        ...newItem,
+        ...calculateLine(newItem),
       },
     ]);
   }
 
+  function updateItemRaw(index, key, value) {
+    setItems((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [key]: value,
+      };
+      return next;
+    });
+  }
+
+  function recalculateItem(index, changedKey) {
+    setItems((prev) => {
+      const next = [...prev];
+      const current = { ...next[index] };
+
+      if (changedKey === "utilidad_porcentaje") {
+        const utilidad = Number(current.utilidad_porcentaje || 0);
+        const costo = Number(current.costo_unitario || 0);
+
+        current.precio_unitario = Number(
+          calculateSalePriceFromUtility(costo, utilidad).toFixed(2),
+        );
+      }
+
+      if (changedKey === "precio_unitario") {
+        const precio = Number(current.precio_unitario || 0);
+        const costo = Number(current.costo_unitario || 0);
+
+        current.utilidad_porcentaje = Number(
+          calculateUtilityPercent(costo, precio).toFixed(2),
+        );
+      }
+
+      next[index] = {
+        ...current,
+        ...calculateLine(current),
+      };
+
+      return next;
+    });
+  }
+
   function updateItem(index, key, value) {
     const next = [...items];
+    const current = { ...next[index] };
 
     if (key === "cantidad") {
-      const maxQty = Number(next[index].stock_disponible || 0);
+      const maxQty = Number(current.stock_disponible || 0);
       const requestedQty = Number(value || 0);
 
       if (requestedQty > maxQty) {
         alert(`Solo hay ${maxQty} unidades disponibles de este producto.`);
-        next[index] = { ...next[index], [key]: String(maxQty) };
+        current.cantidad = String(maxQty);
       } else {
-        next[index] = { ...next[index], [key]: value };
+        current.cantidad = value;
       }
+    } else if (key === "utilidad_porcentaje") {
+      const utilidad = Number(value || 0);
+      const costo = Number(current.costo_unitario || 0);
+
+      current.utilidad_porcentaje = value;
+      current.precio_unitario = Number(
+        calculateSalePriceFromUtility(costo, utilidad).toFixed(2),
+      );
+    } else if (key === "precio_unitario") {
+      const precio = Number(value || 0);
+      const costo = Number(current.costo_unitario || 0);
+
+      current.precio_unitario = value;
+      current.utilidad_porcentaje = Number(
+        calculateUtilityPercent(costo, precio).toFixed(2),
+      );
+    } else if (key === "costo_unitario") {
+      const costo = Number(value || 0);
+      const utilidad = Number(current.utilidad_porcentaje || 0);
+
+      current.costo_unitario = value;
+      current.precio_unitario = Number(
+        calculateSalePriceFromUtility(costo, utilidad).toFixed(2),
+      );
     } else {
-      next[index] = { ...next[index], [key]: value };
+      current[key] = value;
     }
 
-    const cantidad = Number(next[index].cantidad || 0);
-    const precio = Number(next[index].precio_unitario || 0);
-    const costo = Number(next[index].costo_unitario || 0);
-
-    next[index].importe = cantidad * precio;
-    next[index].ganancia_linea = cantidad * (precio - costo);
+    next[index] = {
+      ...current,
+      ...calculateLine(current),
+    };
 
     setItems(next);
   }
@@ -335,10 +378,10 @@ export default function QuotationFormModal({
         });
       }
 
-      onSaved();
+      await onSaved();
       onClose();
     } catch (error) {
-      console.error(error);
+      console.error("Error guardando cotización:", error);
       alert(error.message || "No se pudo guardar la cotización.");
     } finally {
       setLoading(false);
@@ -372,7 +415,7 @@ export default function QuotationFormModal({
               clearAssociatedClient={clearAssociatedClient}
             />
 
-            <TaxSection form={form} updateFormField={updateFormField} />
+            <QuoteConfigSection form={form} updateFormField={updateFormField} />
 
             <SummarySection
               form={form}
@@ -391,8 +434,10 @@ export default function QuotationFormModal({
             />
 
             <AddedProductsSection
-              rows={totals.rows}
+              rows={items}
               updateItem={updateItem}
+              updateItemRaw={updateItemRaw}
+              recalculateItem={recalculateItem}
               removeItem={removeItem}
             />
           </div>
@@ -511,24 +556,6 @@ function ClientFormSection({
 
         <input
           type="text"
-          placeholder="Razón social"
-          value={form.cliente_razon_social}
-          onChange={(e) =>
-            updateFormField("cliente_razon_social", e.target.value)
-          }
-          className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-        />
-
-        <input
-          type="text"
-          placeholder="RFC"
-          value={form.cliente_rfc}
-          onChange={(e) => updateFormField("cliente_rfc", e.target.value)}
-          className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-        />
-
-        <input
-          type="text"
           placeholder="Teléfono"
           value={form.cliente_telefono}
           onChange={(e) => updateFormField("cliente_telefono", e.target.value)}
@@ -542,47 +569,55 @@ function ClientFormSection({
           onChange={(e) => updateFormField("cliente_email", e.target.value)}
           className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
         />
-
-        <select
-          value={form.estado}
-          onChange={(e) => updateFormField("estado", e.target.value)}
-          className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-        >
-          <option value="pendiente">Pendiente</option>
-          <option value="en_proceso">En proceso</option>
-          <option value="completado">Completado</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-
-        <input
-          type="date"
-          value={form.fecha_vencimiento}
-          onChange={(e) => updateFormField("fecha_vencimiento", e.target.value)}
-          className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
-        />
       </div>
     </div>
   );
 }
 
-function TaxSection({ form, updateFormField }) {
+function QuoteConfigSection({ form, updateFormField }) {
   return (
     <div className="rounded-[20px] border border-border bg-background p-4 sm:rounded-[24px]">
       <h4 className="text-sm font-bold text-text-primary">
-        Impuestos y retenciones
+        Configuración de cotización
       </h4>
 
       <div className="mt-4 grid gap-3">
+        <label className="space-y-2">
+          <span className="text-sm font-semibold text-text-primary">
+            Estado
+          </span>
+
+          <select
+            value={form.estado}
+            onChange={(e) => updateFormField("estado", e.target.value)}
+            className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
+          >
+            <option value="borrador">Borrador</option>
+            <option value="enviada">Enviada</option>
+            <option value="aceptada">Aceptada</option>
+            <option value="rechazada">Rechazada</option>
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-semibold text-text-primary">
+            Fecha de vencimiento
+          </span>
+
+          <input
+            type="date"
+            value={form.fecha_vencimiento}
+            onChange={(e) =>
+              updateFormField("fecha_vencimiento", e.target.value)
+            }
+            className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
+          />
+        </label>
+
         <MoneyInput
           label="Descuento"
           value={form.descuento}
           onChange={(value) => updateFormField("descuento", value)}
-        />
-
-        <MoneyInput
-          label="Gastos internos"
-          value={form.gastos}
-          onChange={(value) => updateFormField("gastos", value)}
         />
 
         <SelectPercentInput
@@ -592,21 +627,17 @@ function TaxSection({ form, updateFormField }) {
           onChange={(value) => updateFormField("iva_porcentaje", value)}
         />
 
-        <SelectPercentInput
-          label="ISR retenido"
-          value={form.isr_porcentaje}
-          options={ISR_OPTIONS}
-          onChange={(value) => updateFormField("isr_porcentaje", value)}
-        />
+        <label className="space-y-2">
+          <span className="text-sm font-semibold text-text-primary">Notas</span>
 
-        <SelectPercentInput
-          label="IVA retenido"
-          value={form.retencion_iva_porcentaje}
-          options={RETENCION_IVA_OPTIONS}
-          onChange={(value) =>
-            updateFormField("retencion_iva_porcentaje", value)
-          }
-        />
+          <textarea
+            value={form.notas}
+            onChange={(e) => updateFormField("notas", e.target.value)}
+            placeholder="Notas internas o comentarios para la cotización..."
+            rows={4}
+            className="w-full resize-none rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-primary outline-none focus:border-primary-400"
+          />
+        </label>
       </div>
     </div>
   );
@@ -671,24 +702,10 @@ function SummarySection({ form, totals, loading, className = "" }) {
           value={formatMoney(totals.ivaMonto)}
         />
 
-        <SummaryLine
-          label={`ISR retenido ${form.isr_porcentaje || 0}%`}
-          value={`-${formatMoney(totals.isrMonto)}`}
-        />
-
-        <SummaryLine
-          label={`IVA retenido ${form.retencion_iva_porcentaje || 0}%`}
-          value={`-${formatMoney(totals.retencionIvaMonto)}`}
-        />
-
         <SummaryLine label="Total" value={formatMoney(totals.total)} bold />
 
         <div className="flex items-center justify-between rounded-xl border border-success-100 bg-success-50 px-3 py-2">
-          <span className="text-success-700">
-            {form.estado === "completado"
-              ? "Ganancia real"
-              : "Ganancia estimada"}
-          </span>
+          <span className="text-success-700">Utilidad estimada</span>
 
           <span className="font-bold text-success-700">
             {formatMoney(totals.ganancia)}
@@ -754,13 +771,12 @@ function ProductSearchSection({
 
                 <p
                   className={`text-xs font-semibold ${
-                    Number(product.cantidad || 0) <= 5
+                    Number(product.stock || 0) <= 5
                       ? "text-error-700"
                       : "text-success-700"
                   }`}
                 >
-                  stock: {Number(product.cantidad || 0)}{" "}
-                  {product.unidad || "pzas"}
+                  stock: {Number(product.stock || 0)} {product.unidad || "pzas"}
                 </p>
               </div>
             </button>
@@ -775,7 +791,13 @@ function ProductSearchSection({
   );
 }
 
-function AddedProductsSection({ rows, updateItem, removeItem }) {
+function AddedProductsSection({
+  rows,
+  updateItem,
+  updateItemRaw,
+  recalculateItem,
+  removeItem,
+}) {
   return (
     <div className="min-w-0 rounded-[20px] border border-border bg-background p-4 sm:rounded-[24px]">
       <h4 className="text-sm font-bold text-text-primary">
@@ -795,6 +817,8 @@ function AddedProductsSection({ rows, updateItem, removeItem }) {
                   {[
                     "Producto",
                     "Cantidad",
+                    "Costo",
+                    "Utilidad %",
                     "Precio",
                     "Importe",
                     "Ganancia",
@@ -814,27 +838,169 @@ function AddedProductsSection({ rows, updateItem, removeItem }) {
 
               <tbody>
                 {rows.map((item, index) => (
-                  <AddedProductRow
+                  <tr
                     key={`${item.producto_id}-${index}`}
-                    item={item}
-                    index={index}
-                    updateItem={updateItem}
-                    removeItem={removeItem}
-                  />
+                    className="border-b border-border"
+                  >
+                    <td className="min-w-[220px] px-3 py-3">
+                      <p className="text-sm font-semibold text-text-primary">
+                        {item.nombre_producto}
+                      </p>
+
+                      <p className="text-xs text-text-muted">
+                        {item.codigo || "Sin código"} · Stock:{" "}
+                        {Number(item.stock_disponible || 0)}
+                      </p>
+                    </td>
+
+                    <td className="px-3 py-3">
+                      <NumberInput
+                        value={item.cantidad}
+                        onChange={(value) =>
+                          updateItem(index, "cantidad", value)
+                        }
+                        className="w-24"
+                      />
+                    </td>
+
+                    <td className="px-3 py-3">
+                      <MoneyMiniInput
+                        value={item.costo_unitario}
+                        onChange={(value) =>
+                          updateItem(index, "costo_unitario", value)
+                        }
+                        className="w-28"
+                      />
+                    </td>
+
+                    <td className="px-3 py-3">
+                      <PercentMiniInput
+                        value={item.utilidad_porcentaje}
+                        onChange={(value) =>
+                          updateItemRaw(index, "utilidad_porcentaje", value)
+                        }
+                        onBlur={() =>
+                          recalculateItem(index, "utilidad_porcentaje")
+                        }
+                        className="w-28"
+                      />
+                    </td>
+
+                    <td className="px-3 py-3">
+                      <MoneyMiniInput
+                        value={item.precio_unitario}
+                        onChange={(value) =>
+                          updateItemRaw(index, "precio_unitario", value)
+                        }
+                        onBlur={() => recalculateItem(index, "precio_unitario")}
+                        className="w-28"
+                      />
+                    </td>
+
+                    <td className="px-3 py-3 text-sm font-semibold text-text-primary">
+                      {formatMoney(item.importe)}
+                    </td>
+
+                    <td className="px-3 py-3 text-sm font-semibold text-success-700">
+                      {formatMoney(item.ganancia_linea)}
+                    </td>
+
+                    <td className="px-3 py-3 text-right">
+                      <ActionIconButton
+                        icon={Trash2}
+                        label="Eliminar"
+                        tone="danger"
+                        onClick={() => removeItem(index)}
+                      />
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div className="mt-4 space-y-3 md:hidden">
+          <div className="mt-4 grid gap-3 md:hidden">
             {rows.map((item, index) => (
-              <AddedProductCard
+              <div
                 key={`${item.producto_id}-${index}`}
-                item={item}
-                index={index}
-                updateItem={updateItem}
-                removeItem={removeItem}
-              />
+                className="rounded-2xl border border-border bg-surface p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">
+                      {item.nombre_producto}
+                    </p>
+
+                    <p className="mt-1 text-xs text-text-muted">
+                      {item.codigo || "Sin código"} · Stock:{" "}
+                      {Number(item.stock_disponible || 0)}
+                    </p>
+                  </div>
+
+                  <ActionIconButton
+                    icon={Trash2}
+                    label="Eliminar"
+                    tone="danger"
+                    onClick={() => removeItem(index)}
+                  />
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <FieldGroup label="Cantidad">
+                    <NumberInput
+                      value={item.cantidad}
+                      onChange={(value) => updateItem(index, "cantidad", value)}
+                    />
+                  </FieldGroup>
+
+                  <FieldGroup label="Costo">
+                    <MoneyMiniInput
+                      value={item.costo_unitario}
+                      onChange={(value) =>
+                        updateItem(index, "costo_unitario", value)
+                      }
+                    />
+                  </FieldGroup>
+
+                  <FieldGroup label="Utilidad %">
+                    <PercentMiniInput
+                      value={item.utilidad_porcentaje}
+                      onChange={(value) =>
+                        updateItemRaw(index, "utilidad_porcentaje", value)
+                      }
+                      onBlur={() =>
+                        recalculateItem(index, "utilidad_porcentaje")
+                      }
+                    />
+                  </FieldGroup>
+
+                  <FieldGroup label="Precio">
+                    <MoneyMiniInput
+                      value={item.precio_unitario}
+                      onChange={(value) =>
+                        updateItemRaw(index, "precio_unitario", value)
+                      }
+                      onBlur={() => recalculateItem(index, "precio_unitario")}
+                    />
+                  </FieldGroup>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl bg-background p-3">
+                    <p className="text-xs text-text-muted">Importe</p>
+                    <p className="font-bold text-text-primary">
+                      {formatMoney(item.importe)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-success-50 p-3">
+                    <p className="text-xs text-success-700">Ganancia</p>
+                    <p className="font-bold text-success-700">
+                      {formatMoney(item.ganancia_linea)}
+                    </p>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </>
@@ -843,160 +1009,98 @@ function AddedProductsSection({ rows, updateItem, removeItem }) {
   );
 }
 
-function AddedProductRow({ item, index, updateItem, removeItem }) {
-  return (
-    <tr className="border-b border-border">
-      <td className="px-3 py-3">
-        <p className="font-semibold text-text-primary">
-          {item.nombre_producto}
-        </p>
-
-        <p className="text-xs text-text-muted">
-          {item.codigo || "Sin código"} · {item.unidad || "-"}
-        </p>
-
-        <p className="text-xs font-semibold text-text-secondary">
-          Disponible: {Number(item.stock_disponible || 0)}
-        </p>
-      </td>
-
-      <td className="px-3 py-3">
-        <NumberCell
-          value={item.cantidad}
-          allowDecimal={false}
-          onChange={(value) => updateItem(index, "cantidad", value)}
-        />
-      </td>
-
-      <td className="px-3 py-3">
-        <NumberCell
-          value={item.precio_unitario}
-          allowDecimal
-          onChange={(value) => updateItem(index, "precio_unitario", value)}
-          className="w-28"
-        />
-      </td>
-
-      <td className="px-3 py-3 text-sm font-semibold text-text-primary">
-        {formatMoney(item.importe)}
-      </td>
-
-      <td className="px-3 py-3 text-sm font-semibold text-success-700">
-        {formatMoney(item.ganancia_linea)}
-      </td>
-
-      <td className="px-3 py-3 text-right">
-        <ActionIconButton
-          icon={Trash2}
-          label="Quitar producto"
-          tone="error"
-          onClick={() => removeItem(index)}
-        />
-      </td>
-    </tr>
-  );
-}
-
-function AddedProductCard({ item, index, updateItem, removeItem }) {
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-semibold text-text-primary">
-            {item.nombre_producto}
-          </p>
-
-          <p className="text-xs text-text-muted">
-            {item.codigo || "Sin código"} · {item.unidad || "-"}
-          </p>
-        </div>
-
-        <ActionIconButton
-          icon={Trash2}
-          label="Quitar producto"
-          tone="error"
-          onClick={() => removeItem(index)}
-        />
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Field label="Cantidad">
-          <NumberCell
-            value={item.cantidad}
-            allowDecimal={false}
-            onChange={(value) => updateItem(index, "cantidad", value)}
-            className="w-full"
-          />
-        </Field>
-
-        <Field label="Precio">
-          <NumberCell
-            value={item.precio_unitario}
-            allowDecimal
-            onChange={(value) => updateItem(index, "precio_unitario", value)}
-            className="w-full"
-          />
-        </Field>
-      </div>
-
-      <div className="mt-4 space-y-2 rounded-xl bg-background p-3 text-sm">
-        <SummaryLine label="Importe" value={formatMoney(item.importe)} />
-
-        <SummaryLine
-          label="Ganancia"
-          value={formatMoney(item.ganancia_linea)}
-        />
-      </div>
-    </div>
-  );
-}
-
-function NumberCell({
-  value,
-  onChange,
-  allowDecimal = true,
-  className = "w-24",
-}) {
+function NumberInput({ value, onChange, className = "" }) {
   return (
     <input
       type="text"
-      inputMode={allowDecimal ? "decimal" : "numeric"}
-      value={value}
+      inputMode="decimal"
+      value={value ?? ""}
       onChange={(e) =>
-        onChange(
-          cleanNumericInput(e.target.value, {
-            allowDecimal,
-          }),
-        )
+        onChange(cleanNumericInput(e.target.value, { allowDecimal: true }))
       }
       className={`h-10 rounded-xl border border-border bg-surface px-3 text-sm text-text-primary outline-none focus:border-primary-400 ${className}`}
     />
   );
 }
 
-function SummaryLine({ label, value, bold = false }) {
+function MoneyMiniInput({ value, onChange, onBlur, className = "" }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-text-secondary">{label}</span>
+    <div
+      className={`flex h-10 items-center rounded-xl border border-border bg-surface px-3 focus-within:border-primary-400 ${className}`}
+    >
+      <span className="mr-1 text-xs font-semibold text-text-muted">$</span>
 
-      <span
-        className={`text-right ${
-          bold ? "font-bold" : "font-semibold"
-        } text-text-primary`}
-      >
-        {value}
-      </span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value ?? ""}
+        onChange={(e) =>
+          onChange(cleanNumericInput(e.target.value, { allowDecimal: true }))
+        }
+        onBlur={onBlur}
+        className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none"
+      />
     </div>
   );
 }
 
-function Field({ label, children }) {
+function PercentMiniInput({ value, onChange, onBlur, className = "" }) {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+    <div
+      className={`flex h-10 items-center rounded-xl border border-border bg-surface px-3 focus-within:border-primary-400 ${className}`}
+    >
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value ?? ""}
+        onChange={(e) =>
+          onChange(cleanNumericInput(e.target.value, { allowDecimal: true }))
+        }
+        onBlur={onBlur}
+        className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none"
+      />
+
+      <span className="ml-1 text-xs font-semibold text-text-muted">%</span>
+    </div>
+  );
+}
+
+function FieldGroup({ label, children }) {
+  return (
+    <label className="space-y-2">
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
         {label}
-      </label>
+      </span>
+
       {children}
+    </label>
+  );
+}
+
+function SummaryLine({ label, value, bold = false }) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${
+        bold ? "bg-primary-50" : "bg-surface"
+      }`}
+    >
+      <span
+        className={`text-sm ${
+          bold ? "font-bold text-primary-700" : "text-text-secondary"
+        }`}
+      >
+        {label}
+      </span>
+
+      <span
+        className={`text-sm ${
+          bold
+            ? "font-bold text-primary-700"
+            : "font-semibold text-text-primary"
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }

@@ -79,6 +79,7 @@ export default function QuotationsPage() {
               onDownloadPdf={quotations.downloadPdf}
               onEdit={quotations.openEditModal}
               onDelete={quotations.setQuotationToDelete}
+              onConvertToOrder={quotations.convertToOrder}
             />
 
             <QuotationsMobileList

@@ -1,4 +1,9 @@
-import { CheckCircle2, Clock3, FileText, TimerReset } from "lucide-react";
+import {
+  CheckCircle2,
+  FileText,
+  Send,
+  FileCheck2,
+} from "lucide-react";
 
 import SummaryCard from "../../../components/ui/SummaryCard";
 import { formatMoney } from "../../../utils/formatters";
@@ -9,32 +14,32 @@ export default function QuotationsStats({ summary }) {
       <SummaryCard
         icon={FileText}
         title="Cotizaciones del mes"
-        value={summary.total}
-        note="Total del mes seleccionado."
+        value={summary.total || 0}
+        note={`Total cotizado: ${formatMoney(summary.totalCotizado || 0)}`}
         tone="primary"
       />
 
       <SummaryCard
-        icon={Clock3}
-        title="Pendientes"
-        value={summary.pendientes}
-        note="A la espera de respuesta."
-        tone="warning"
-      />
-
-      <SummaryCard
-        icon={TimerReset}
-        title="En proceso"
-        value={summary.enProceso}
-        note="Con seguimiento activo."
+        icon={Send}
+        title="Enviadas"
+        value={summary.enviadas || 0}
+        note="Cotizaciones esperando respuesta."
         tone="info"
       />
 
       <SummaryCard
         icon={CheckCircle2}
-        title="Ganancia real"
-        value={formatMoney(summary.totalGananciaReal)}
-        note="Solo cotizaciones completadas."
+        title="Aceptadas"
+        value={summary.aceptadas || 0}
+        note="Listas para convertirse en pedido."
+        tone="success"
+      />
+
+      <SummaryCard
+        icon={FileCheck2}
+        title="Convertidas"
+        value={summary.convertidas || 0}
+        note="Cotizaciones que ya pasaron a pedido."
         tone="success"
       />
     </div>

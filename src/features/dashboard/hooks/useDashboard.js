@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  CircleDollarSign,
-  ReceiptText,
-  Package,
-  Wallet,
-} from "lucide-react";
+import { CircleDollarSign, ReceiptText, Package, Wallet } from "lucide-react";
 
 import { formatMoney } from "../../../utils/formatters";
 
@@ -13,6 +8,7 @@ import {
   buildExpenseMovement,
   buildProductMovement,
   buildQuotationMovement,
+  buildOrderMovement,
   calculateDashboardSummary,
   getLatestMovements,
   getRangeDates,
@@ -27,6 +23,8 @@ export function useDashboard() {
   const [range, setRange] = useState("month");
 
   const [cotizaciones, setCotizaciones] = useState([]);
+  const [pedidos, setPedidos] = useState([]);
+  const [pedidoDetalles, setPedidoDetalles] = useState([]);
   const [gastos, setGastos] = useState([]);
   const [productos, setProductos] = useState([]);
 
@@ -45,6 +43,8 @@ export function useDashboard() {
         if (!mounted) return;
 
         setCotizaciones(data.cotizaciones);
+        setPedidos(data.pedidos);
+        setPedidoDetalles(data.pedidoDetalles);
         setGastos(data.gastos);
         setProductos(data.productos);
       } catch (err) {
@@ -74,6 +74,10 @@ export function useDashboard() {
       isBetween(item.created_at, start, end),
     );
 
+    const filteredPedidos = pedidos.filter((item) =>
+      isBetween(item.created_at, start, end),
+    );
+
     const filteredGastos = gastos.filter((item) =>
       isBetween(item.fecha || item.created_at, start, end),
     );
@@ -85,28 +89,33 @@ export function useDashboard() {
 
     return {
       cotizaciones: filteredCotizaciones,
+      pedidos: filteredPedidos,
       gastos: filteredGastos,
       productos: filteredProductos,
     };
-  }, [cotizaciones, gastos, productos, range, rangeDates]);
+  }, [cotizaciones, pedidos, gastos, productos, range, rangeDates]);
 
   const resumen = useMemo(() => {
-    return calculateDashboardSummary({ filteredData, productos });
-  }, [filteredData, productos]);
+    return calculateDashboardSummary({
+      filteredData,
+      productos,
+      pedidoDetalles,
+    });
+  }, [filteredData, productos, pedidoDetalles]);
 
   const stats = useMemo(
     () => [
       {
         title: "Ganancia neta",
         value: formatMoney(resumen.gananciaNetaReal),
-        note: "Ganancia de cotizaciones completadas menos gastos del rango",
+        note: "Ganancia de pedidos cerrados menos gastos del rango",
         icon: CircleDollarSign,
         tone: resumen.gananciaNetaReal >= 0 ? "success" : "error",
       },
       {
-        title: "Ventas completadas",
+        title: "Ventas",
         value: formatMoney(resumen.ventaTotalCompletada),
-        note: "Total vendido en cotizaciones completadas",
+        note: "Total vendido en pedidos entregados o parciales",
         icon: ReceiptText,
         tone: "info",
       },
@@ -120,7 +129,7 @@ export function useDashboard() {
       {
         title: "Productos",
         value: String(resumen.totalProductos),
-        note: `${resumen.productosActivos} activos en catálogo`,
+        note: `${resumen.productosActivos} activos con stock`,
         icon: Package,
         tone: "primary",
       },
@@ -130,6 +139,7 @@ export function useDashboard() {
 
   const recentActivity = useMemo(() => {
     return [
+      ...getLatestMovements(filteredData.pedidos, buildOrderMovement),
       ...getLatestMovements(filteredData.cotizaciones, buildQuotationMovement),
       ...getLatestMovements(filteredData.gastos, buildExpenseMovement),
       ...getLatestMovements(filteredData.productos, buildProductMovement),
@@ -140,10 +150,12 @@ export function useDashboard() {
     () =>
       groupByPeriod({
         cotizaciones: filteredData.cotizaciones,
+        pedidos: filteredData.pedidos,
+        pedidoDetalles,
         gastos: filteredData.gastos,
         range,
       }),
-    [filteredData, range],
+    [filteredData, pedidoDetalles, range],
   );
 
   const quotationChartData = useMemo(

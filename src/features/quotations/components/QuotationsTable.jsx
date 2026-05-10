@@ -2,7 +2,8 @@ import {
   CalendarDays,
   CircleDollarSign,
   Clock3,
-  Eye,
+  Download,
+  FileCheck2,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -17,6 +18,7 @@ export default function QuotationsTable({
   onDownloadPdf,
   onEdit,
   onDelete,
+  onConvertToOrder,
 }) {
   return (
     <div className="hidden xl:block">
@@ -53,6 +55,7 @@ export default function QuotationsTable({
                 onDownloadPdf={onDownloadPdf}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onConvertToOrder={onConvertToOrder}
               />
             ))}
           </tbody>
@@ -62,9 +65,17 @@ export default function QuotationsTable({
   );
 }
 
-function QuotationRow({ item, onDownloadPdf, onEdit, onDelete }) {
+function QuotationRow({
+  item,
+  onDownloadPdf,
+  onEdit,
+  onDelete,
+  onConvertToOrder,
+}) {
   const statusMeta = getStatusStyles(item.estado);
   const StatusIcon = statusMeta.icon;
+
+  const canConvert = ["aceptada", "enviada", "borrador"].includes(item.estado);
 
   return (
     <tr className="border-t border-border transition hover:bg-surface-soft/70">
@@ -110,28 +121,20 @@ function QuotationRow({ item, onDownloadPdf, onEdit, onDelete }) {
             Subtotal: {formatMoney(item.subtotal || 0)}
           </p>
 
-          {Number(item.iva_monto || 0) > 0 ? (
-            <p className="mt-1 text-xs text-text-muted">
-              IVA: {formatMoney(item.iva_monto)}
-            </p>
-          ) : null}
-
-          {Number(item.total_retenciones || 0) > 0 ? (
-            <p className="mt-1 text-xs text-text-muted">
-              Ret.: -{formatMoney(item.total_retenciones)}
-            </p>
-          ) : null}
+          <p className="mt-1 text-xs text-text-muted">
+            IVA: {Number(item.iva_porcentaje || 0)}%
+          </p>
         </div>
       </td>
 
       <td className="px-6 py-5">
-        <AmountBadge>{formatMoney(item.ganancia || 0)}</AmountBadge>
+        <AmountBadge>{formatMoney(item.ganancia_estimada || 0)}</AmountBadge>
       </td>
 
       <td className="px-6 py-5">
         <div className="flex items-center justify-end gap-2">
           <ActionIconButton
-            icon={Eye}
+            icon={Download}
             label="Descargar PDF"
             tone="default"
             onClick={() => onDownloadPdf(item.id)}
@@ -143,6 +146,15 @@ function QuotationRow({ item, onDownloadPdf, onEdit, onDelete }) {
             tone="default"
             onClick={() => onEdit(item.id)}
           />
+
+          {canConvert ? (
+            <ActionIconButton
+              icon={FileCheck2}
+              label="Convertir a pedido"
+              tone="default"
+              onClick={() => onConvertToOrder(item.id)}
+            />
+          ) : null}
 
           <ActionIconButton
             icon={Trash2}

@@ -11,6 +11,7 @@ export default function ProductsToolbar({
   isExportingPDF,
   onExportExcel,
   onExportPDF,
+  onImportExcel,
 }) {
   return (
     <div className="flex flex-col gap-4 border-b border-border p-5 md:p-6">
@@ -23,6 +24,15 @@ export default function ProductsToolbar({
         />
 
         <div className="flex flex-col gap-3 sm:flex-row">
+          <label className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-border bg-surface px-4 text-sm font-semibold text-text-primary transition hover:border-border-strong hover:bg-surface-soft">
+            Subir Excel
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => onImportExcel(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+          </label>
           <button
             type="button"
             onClick={onExportExcel}

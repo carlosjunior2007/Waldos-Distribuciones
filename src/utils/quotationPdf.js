@@ -27,6 +27,11 @@ function safeText(value) {
   return value ? String(value) : "-";
 }
 
+function calculateIva({ subtotal, descuento, iva_porcentaje }) {
+  const base = Math.max(Number(subtotal || 0) - Number(descuento || 0), 0);
+  return base * (Number(iva_porcentaje || 0) / 100);
+}
+
 export function generateQuotationPDF(quotation) {
   const doc = new jsPDF({
     orientation: "portrait",
@@ -39,7 +44,6 @@ export function generateQuotationPDF(quotation) {
   const BRAND_MUTED = [107, 114, 128];
   const BRAND_LIGHT = [246, 247, 250];
   const BRAND_BORDER = [221, 226, 232];
-  const BRAND_SUCCESS = [22, 101, 52];
   const WHITE = [255, 255, 255];
 
   const {
@@ -47,24 +51,23 @@ export function generateQuotationPDF(quotation) {
     cliente_nombre,
     cliente_telefono,
     cliente_email,
-    cliente_rfc,
-    cliente_razon_social,
     created_at,
     fecha_vencimiento,
     subtotal,
     descuento,
     total,
     iva_porcentaje,
-    iva_monto,
-    isr_porcentaje,
-    isr_monto,
-    retencion_iva_porcentaje,
-    retencion_iva_monto,
-    total_impuestos,
-    total_retenciones,
     notas,
     detalles = [],
   } = quotation || {};
+
+  const ivaMonto = calculateIva({
+    subtotal,
+    descuento,
+    iva_porcentaje,
+  });
+
+  const base = Math.max(Number(subtotal || 0) - Number(descuento || 0), 0);
 
   const marginX = 12;
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -74,17 +77,15 @@ export function generateQuotationPDF(quotation) {
   const footerReservedSpace = 24;
 
   const totalsBoxW = 76;
-  const totalsBoxH = 66;
+  const totalsBoxH = 42;
   const totalsBoxX = pageWidth - marginX - totalsBoxW;
   const totalsBoxBottomY = footerLineY - 8;
   const totalsBoxFixedY = totalsBoxBottomY - totalsBoxH;
 
   const contentStartY = 104;
-  const contentBottomLimit = totalsBoxFixedY - 8;
 
   function drawHeader() {
     const contentWidth = pageWidth - marginX * 2;
-
     const headerY = 12;
     const headerH = 30;
 
@@ -117,15 +118,11 @@ export function generateQuotationPDF(quotation) {
     doc.setFontSize(9);
     doc.setTextColor(...BRAND_DARK);
     doc.text(`Folio: ${safeText(folio)}`, leftBoxX + 4, infoY + 17);
-    doc.text(
-      `Fecha de emisión: ${dateMX(created_at)}`,
-      leftBoxX + 4,
-      infoY + 24
-    );
+    doc.text(`Fecha de emisión: ${dateMX(created_at)}`, leftBoxX + 4, infoY + 24);
     doc.text(
       `Fecha de vencimiento: ${dateMX(fecha_vencimiento)}`,
       leftBoxX + 4,
-      infoY + 31
+      infoY + 31,
     );
 
     doc.setDrawColor(...BRAND_BORDER);
@@ -145,31 +142,17 @@ export function generateQuotationPDF(quotation) {
 
     const clientNameLines = doc.splitTextToSize(
       safeText(cliente_nombre),
-      rightBoxW - 8
+      rightBoxW - 8,
     );
     doc.text(clientNameLines, rightBoxX + 4, y);
     y += clientNameLines.length * 4.5;
-
-    if (cliente_razon_social) {
-      const rsLines = doc.splitTextToSize(
-        `Razón social: ${cliente_razon_social}`,
-        rightBoxW - 8
-      );
-      doc.text(rsLines, rightBoxX + 4, y);
-      y += rsLines.length * 4.5;
-    }
-
-    if (cliente_rfc) {
-      doc.text(`RFC: ${cliente_rfc}`, rightBoxX + 4, y);
-      y += 4.5;
-    }
 
     doc.text(`Tel: ${safeText(cliente_telefono)}`, rightBoxX + 4, y);
     y += 4.5;
 
     const clientEmailLines = doc.splitTextToSize(
       `Email: ${safeText(cliente_email)}`,
-      rightBoxW - 8
+      rightBoxW - 8,
     );
     doc.text(clientEmailLines, rightBoxX + 4, y);
 
@@ -196,29 +179,23 @@ export function generateQuotationPDF(quotation) {
       `Documento generado el ${dateMX(new Date())}`,
       pageWidth - marginX,
       footerTextY,
-      { align: "right" }
+      { align: "right" },
     );
   }
 
   function drawTotalLine(label, value, y, options = {}) {
-    const {
-      bold = false,
-      negative = false,
-      color = BRAND_DARK,
-      labelColor = BRAND_DARK,
-    } = options;
+    const { bold = false, negative = false } = options;
 
     doc.setFont("helvetica", bold ? "bold" : "normal");
     doc.setFontSize(8.5);
-    doc.setTextColor(...labelColor);
+    doc.setTextColor(...BRAND_DARK);
     doc.text(label, totalsBoxX + 4, y);
 
-    doc.setTextColor(...color);
     doc.text(
       `${negative ? "-" : ""}${money(value || 0)}`,
       totalsBoxX + totalsBoxW - 4,
       y,
-      { align: "right" }
+      { align: "right" },
     );
   }
 
@@ -235,34 +212,10 @@ export function generateQuotationPDF(quotation) {
     drawTotalLine("Descuento:", descuento, lineY, { negative: true });
     lineY += 7;
 
-    drawTotalLine(`IVA ${Number(iva_porcentaje || 0)}%:`, iva_monto, lineY);
+    drawTotalLine("Base:", base, lineY);
     lineY += 7;
 
-    drawTotalLine(
-      `ISR retenido ${Number(isr_porcentaje || 0)}%:`,
-      isr_monto,
-      lineY,
-      { negative: true }
-    );
-    lineY += 7;
-
-    drawTotalLine(
-      `IVA retenido ${Number(retencion_iva_porcentaje || 0)}%:`,
-      retencion_iva_monto,
-      lineY,
-      { negative: true }
-    );
-    lineY += 7;
-
-    drawTotalLine("Impuestos:", total_impuestos, lineY, {
-      color: BRAND_SUCCESS,
-    });
-    lineY += 7;
-
-    drawTotalLine("Retenciones:", total_retenciones, lineY, {
-      negative: true,
-      color: BRAND_PRIMARY,
-    });
+    drawTotalLine(`IVA ${Number(iva_porcentaje || 0)}%:`, ivaMonto, lineY);
 
     doc.setFillColor(...BRAND_PRIMARY);
     doc.roundedRect(
@@ -272,7 +225,7 @@ export function generateQuotationPDF(quotation) {
       9,
       2,
       2,
-      "F"
+      "F",
     );
 
     doc.setFont("helvetica", "bold");

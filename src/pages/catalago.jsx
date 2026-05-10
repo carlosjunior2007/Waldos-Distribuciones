@@ -20,6 +20,16 @@ const CATEGORIAS_UI = [
 
 const DEFAULT_PAGE_SIZE = 21;
 
+function normalizeProduct(producto) {
+  const stock = Number(producto.stock ?? 0);
+
+  return {
+    ...producto,
+    cantidad: stock,
+    disponibilidad: producto.habilitado === true && stock > 0,
+  };
+}
+
 export default function Catalogo() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -32,9 +42,7 @@ export default function Catalogo() {
   const page = Number(searchParams.get("page")) || 1;
 
   const selectedCats = useMemo(() => {
-    const raw = searchParams.get("cats") || "";
-
-    return raw
+    return (searchParams.get("cats") || "")
       .split(",")
       .map((item) => item.trim().toLowerCase())
       .filter(Boolean);
@@ -48,17 +56,31 @@ export default function Catalogo() {
 
       const { data, error } = await supabase
         .from("productos")
-        .select(
-          "id,nombre,descripcion,precio,imagen,disponibilidad,cantidad,categoria,codigo,created_at",
-        )
+        .select(`
+          id,
+          nombre,
+          descripcion,
+          precio,
+          imagen,
+          stock,
+          categoria,
+          codigo,
+          unidad,
+          cantidad_caja,
+          habilitado,
+          clave_sat,
+          clave_unidad_sat,
+          iva_porcentaje,
+          created_at
+        `)
         .eq("habilitado", true)
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error(error);
+        console.error("Error cargando productos:", error);
         setProductos([]);
       } else {
-        setProductos(data || []);
+        setProductos((data || []).map(normalizeProduct));
       }
 
       setLoading(false);
@@ -71,26 +93,12 @@ export default function Catalogo() {
     const params = new URLSearchParams(searchParams);
 
     Object.entries(updates).forEach(([key, value]) => {
-      if (
-        value === undefined ||
-        value === null ||
-        value === "" ||
-        value === false
-      ) {
-        params.delete(key);
-      } else {
-        params.set(key, String(value));
-      }
+      if (!value) params.delete(key);
+      else params.set(key, String(value));
     });
 
-    if (!params.get("q")) params.delete("q");
-    if (!params.get("cats")) params.delete("cats");
     if ((params.get("page") || "1") === "1") params.delete("page");
-
-    if (
-      (params.get("pageSize") || String(DEFAULT_PAGE_SIZE)) ===
-      String(DEFAULT_PAGE_SIZE)
-    ) {
+    if ((params.get("pageSize") || String(DEFAULT_PAGE_SIZE)) === String(DEFAULT_PAGE_SIZE)) {
       params.delete("pageSize");
     }
 
@@ -100,21 +108,11 @@ export default function Catalogo() {
   function toggleCategory(categoryKey) {
     const next = new Set(selectedCats);
 
-    if (next.has(categoryKey)) {
-      next.delete(categoryKey);
-    } else {
-      next.add(categoryKey);
-    }
+    if (next.has(categoryKey)) next.delete(categoryKey);
+    else next.add(categoryKey);
 
     updateParams({
       cats: Array.from(next).join(","),
-      page: "",
-    });
-  }
-
-  function clearCategories() {
-    updateParams({
-      cats: "",
       page: "",
     });
   }
@@ -127,13 +125,10 @@ export default function Catalogo() {
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
 
-    return (productos || [])
+    return productos
       .filter((producto) => {
         if (!hasActiveCategories) return true;
-
-        return selectedCats.includes(
-          String(producto.categoria || "").toLowerCase(),
-        );
+        return selectedCats.includes(String(producto.categoria || "").toLowerCase());
       })
       .filter((producto) => {
         if (!q) return true;
@@ -142,11 +137,7 @@ export default function Catalogo() {
         const codigo = String(producto.codigo || "").toLowerCase();
         const descripcion = String(producto.descripcion || "").toLowerCase();
 
-        return (
-          nombre.includes(q) ||
-          codigo.includes(q) ||
-          descripcion.includes(q)
-        );
+        return nombre.includes(q) || codigo.includes(q) || descripcion.includes(q);
       });
   }, [productos, busqueda, selectedCats, hasActiveCategories]);
 
@@ -165,14 +156,11 @@ export default function Catalogo() {
 
     if (busqueda.trim()) params.set("q", busqueda.trim());
     if (selectedCats.length) params.set("cats", selectedCats.join(","));
-    if (page > 1) params.set("page", String(page));
-    if (pageSize !== DEFAULT_PAGE_SIZE) {
-      params.set("pageSize", String(pageSize));
-    }
+    if (pageSafe > 1) params.set("page", String(pageSafe));
 
     const query = params.toString();
     return query ? `/catalogo?${query}` : "/catalogo";
-  }, [busqueda, selectedCats, page, pageSize]);
+  }, [busqueda, selectedCats, pageSafe]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -183,9 +171,7 @@ export default function Catalogo() {
               "Cargando productos..."
             ) : (
               <>
-                <span className="font-semibold text-slate-900">
-                  {totalFiltrados}
-                </span>{" "}
+                <span className="font-semibold text-slate-900">{totalFiltrados}</span>{" "}
                 productos encontrados
                 <span className="text-slate-400"> de {total}</span>
               </>
@@ -197,7 +183,7 @@ export default function Catalogo() {
               <button
                 type="button"
                 onClick={limpiarFiltros}
-                className="text-sm font-semibold text-[#081f3a] transition hover:text-blue-700"
+                className="text-sm font-semibold text-[#081f3a] hover:text-blue-700"
               >
                 Limpiar filtros
               </button>
@@ -206,7 +192,7 @@ export default function Catalogo() {
             <button
               type="button"
               onClick={() => setShowFilters((value) => !value)}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 md:hidden"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 md:hidden"
             >
               <SlidersHorizontal className="h-4 w-4 text-[#081f3a]" />
               Filtros
@@ -216,11 +202,11 @@ export default function Catalogo() {
 
         {(hasActiveCategories || busqueda) && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            {busqueda ? (
-              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+            {busqueda && (
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
                 Búsqueda: {busqueda}
               </span>
-            ) : null}
+            )}
 
             {selectedCats.map((cat) => {
               const category = CATEGORIAS_UI.find((item) => item.key === cat);
@@ -249,70 +235,31 @@ export default function Catalogo() {
             ].join(" ")}
           >
             <div className="sticky top-24 rounded-[22px] border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-[#081f3a]">
-                    <SlidersHorizontal className="h-4 w-4" />
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      Filtros
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Categorías del catálogo
-                    </p>
-                  </div>
-                </div>
-
-                {hasActiveCategories ? (
-                  <button
-                    type="button"
-                    onClick={clearCategories}
-                    className="text-xs font-semibold text-[#081f3a] transition hover:text-blue-700"
-                  >
-                    Quitar
-                  </button>
-                ) : null}
+              <div className="border-b border-slate-100 px-4 py-4">
+                <h3 className="text-sm font-bold text-slate-900">Filtros</h3>
+                <p className="text-xs text-slate-500">Categorías del catálogo</p>
               </div>
 
-              <div className="p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                  Categorías
-                </p>
+              <div className="grid grid-cols-2 gap-2 p-4 md:grid-cols-1">
+                {CATEGORIAS_UI.map((categoria) => {
+                  const active = selectedCats.includes(categoria.key);
 
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
-                  {CATEGORIAS_UI.map((categoria) => {
-                    const active = selectedCats.includes(categoria.key);
-
-                    return (
-                      <button
-                        key={categoria.key}
-                        type="button"
-                        onClick={() => toggleCategory(categoria.key)}
-                        className={[
-                          "group flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition",
-                          active
-                            ? "border-blue-200 bg-blue-50 text-[#081f3a] shadow-sm"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50/60 hover:text-[#081f3a]",
-                        ].join(" ")}
-                      >
-                        <span>{categoria.label}</span>
-
-                        <span
-                          className={[
-                            "flex h-5 w-5 items-center justify-center rounded-full border text-[11px]",
-                            active
-                              ? "border-[#081f3a] bg-[#081f3a] text-white"
-                              : "border-slate-200 text-transparent group-hover:text-[#081f3a]",
-                          ].join(" ")}
-                        >
-                          ✓
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                  return (
+                    <button
+                      key={categoria.key}
+                      type="button"
+                      onClick={() => toggleCategory(categoria.key)}
+                      className={[
+                        "rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition",
+                        active
+                          ? "border-blue-200 bg-blue-50 text-[#081f3a]"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-blue-50",
+                      ].join(" ")}
+                    >
+                      {categoria.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </aside>
@@ -321,27 +268,16 @@ export default function Catalogo() {
             <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Productos
-                  </h3>
-
+                  <h3 className="text-base font-bold text-slate-900">Productos</h3>
                   <p className="text-sm text-slate-500">
                     Mostrando{" "}
-                    <span className="font-semibold text-slate-900">
-                      {pageItems.length}
-                    </span>{" "}
+                    <span className="font-semibold text-slate-900">{pageItems.length}</span>{" "}
                     de{" "}
-                    <span className="font-semibold text-slate-900">
-                      {totalFiltrados}
-                    </span>
+                    <span className="font-semibold text-slate-900">{totalFiltrados}</span>
                   </p>
                 </div>
 
-                <Pagination
-                  pageSafe={pageSafe}
-                  totalPages={totalPages}
-                  updateParams={updateParams}
-                />
+                <Pagination pageSafe={pageSafe} totalPages={totalPages} updateParams={updateParams} />
               </div>
 
               <div className="p-4 md:p-5">
@@ -356,40 +292,21 @@ export default function Catalogo() {
                   </div>
                 ) : totalFiltrados === 0 ? (
                   <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
-                    <p className="text-lg font-bold text-slate-900">
-                      Sin resultados
-                    </p>
-
+                    <p className="text-lg font-bold text-slate-900">Sin resultados</p>
                     <p className="mt-2 text-sm text-slate-500">
                       Cambia la búsqueda o selecciona otras categorías.
                     </p>
-
-                    <button
-                      type="button"
-                      onClick={limpiarFiltros}
-                      className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-[#081f3a] px-4 text-sm font-semibold text-white transition hover:bg-blue-900"
-                    >
-                      Limpiar filtros
-                    </button>
                   </div>
                 ) : (
                   <>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {pageItems.map((producto) => (
-                        <ProductCard
-                          key={producto.id}
-                          producto={producto}
-                          from={fromPath}
-                        />
+                        <ProductCard key={producto.id} producto={producto} from={fromPath} />
                       ))}
                     </div>
 
-                    <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
-                      <Pagination
-                        pageSafe={pageSafe}
-                        totalPages={totalPages}
-                        updateParams={updateParams}
-                      />
+                    <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
+                      <Pagination pageSafe={pageSafe} totalPages={totalPages} updateParams={updateParams} />
                     </div>
                   </>
                 )}
@@ -406,35 +323,27 @@ function Pagination({ pageSafe, totalPages, updateParams }) {
   return (
     <div className="flex items-center gap-3">
       <span className="hidden text-sm font-medium text-slate-500 sm:inline">
-        Página{" "}
-        <span className="font-bold text-slate-900">{pageSafe}</span>{" "}
-        de{" "}
+        Página <span className="font-bold text-slate-900">{pageSafe}</span> de{" "}
         <span className="font-bold text-slate-900">{totalPages}</span>
       </span>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={pageSafe <= 1}
-          onClick={() => updateParams({ page: Math.max(1, pageSafe - 1) })}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Anterior</span>
-        </button>
+      <button
+        type="button"
+        disabled={pageSafe <= 1}
+        onClick={() => updateParams({ page: Math.max(1, pageSafe - 1) })}
+        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold disabled:opacity-40"
+      >
+        <ChevronLeft className="inline h-4 w-4" /> Anterior
+      </button>
 
-        <button
-          type="button"
-          disabled={pageSafe >= totalPages}
-          onClick={() =>
-            updateParams({ page: Math.min(totalPages, pageSafe + 1) })
-          }
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <span className="hidden sm:inline">Siguiente</span>
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
+      <button
+        type="button"
+        disabled={pageSafe >= totalPages}
+        onClick={() => updateParams({ page: Math.min(totalPages, pageSafe + 1) })}
+        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold disabled:opacity-40"
+      >
+        Siguiente <ChevronRight className="inline h-4 w-4" />
+      </button>
     </div>
   );
 }

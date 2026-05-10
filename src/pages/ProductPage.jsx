@@ -37,7 +37,20 @@ export default function ProductPage() {
       const { data, error } = await supabase
         .from("productos")
         .select(
-          "id,nombre,descripcion,precio,imagen,disponibilidad,cantidad,categoria,codigo,unidad,cantidad_caja",
+          `
+  id,
+  nombre,
+  descripcion,
+  precio,
+  imagen,
+  stock,
+  categoria,
+  codigo,
+  unidad,
+  cantidad_caja,
+  habilitado,
+  created_at
+`,
         )
         .eq("id", id)
         .single();
@@ -97,17 +110,19 @@ export default function ProductPage() {
           .from("productos")
           .select(
             `
-          id,
-          nombre,
-          descripcion,
-          precio,
-          imagen,
-          disponibilidad,
-          cantidad,
-          categoria,
-          codigo,
-          created_at
-        `,
+    id,
+    nombre,
+    descripcion,
+    precio,
+    imagen,
+    stock,
+    categoria,
+    codigo,
+    unidad,
+    cantidad_caja,
+    habilitado,
+    created_at
+  `,
           )
           .eq("habilitado", true)
           .eq("categoria", producto.categoria)
@@ -118,8 +133,20 @@ export default function ProductPage() {
           throw error;
         }
 
+        const productosNormalizados = (data || []).map((item) => {
+          const stock = Number(item.stock ?? 0);
+
+          return {
+            ...item,
+            cantidad: stock,
+            disponibilidad: item.habilitado === true && stock > 0,
+          };
+        });
+
         const productosUnicos = Array.from(
-          new Map((data || []).map((item) => [item.id, item])).values(),
+          new Map(
+            productosNormalizados.map((item) => [item.id, item]),
+          ).values(),
         );
 
         const mezclados = productosUnicos.sort(() => Math.random() - 0.5);
@@ -148,8 +175,8 @@ export default function ProductPage() {
   const meta = useMemo(() => {
     if (!producto) return null;
 
-    const stock = Number(producto.cantidad ?? 0);
-    const disponible = Boolean(producto.disponibilidad ?? true) && stock > 0;
+    const stock = Number(producto.stock ?? 0);
+    const disponible = producto.habilitado === true && stock > 0;
 
     return {
       precio: formatMXN(producto.precio),

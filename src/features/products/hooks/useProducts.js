@@ -24,10 +24,7 @@ import {
   validateProductForm,
 } from "../product.helpers";
 
-import {
-  INITIAL_PRODUCT_FORM,
-  ITEMS_PER_PAGE,
-} from "../product.constants";
+import { INITIAL_PRODUCT_FORM, ITEMS_PER_PAGE } from "../product.constants";
 
 export function useProducts() {
   const [products, setProducts] = useState([]);
@@ -135,6 +132,7 @@ export function useProducts() {
       ...INITIAL_PRODUCT_FORM,
       id: newId,
       codigo: generarCodigoProducto(newId),
+      habilitado: true,
     });
     setModalMode("create");
   }
@@ -226,7 +224,12 @@ export function useProducts() {
       let imageUrl = form.imagen || null;
 
       if (form.imagenFile) {
-        const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+        const validTypes = [
+          "image/png",
+          "image/jpeg",
+          "image/jpg",
+          "image/webp",
+        ];
         const maxSize = 2 * 1024 * 1024;
 
         if (!validTypes.includes(form.imagenFile.type)) {
@@ -249,14 +252,20 @@ export function useProducts() {
         descripcion: form.descripcion.trim(),
         precio: Number(form.precio),
         imagen: imageUrl,
-        disponibilidad: Boolean(form.disponibilidad),
-        cantidad: Number(form.cantidad),
+
+        stock: Number(form.stock),
         cantidad_caja: Number(form.cantidad_caja),
         precio_compra: Number(form.precio_compra),
-        precio_utilidad: Number(form.precio_utilidad),
+
         habilitado: Boolean(form.habilitado),
         categoria: form.categoria,
         unidad: form.unidad,
+        codigo,
+
+        clave_sat: form.clave_sat.trim(),
+        clave_unidad_sat: form.clave_unidad_sat.trim(),
+        iva_porcentaje: Number(form.iva_porcentaje),
+
         modified_by: userId,
         updated_at: new Date().toISOString(),
       };
@@ -342,7 +351,10 @@ export function useProducts() {
     });
   }, [products, search, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProducts.length / ITEMS_PER_PAGE),
+  );
 
   const paginatedProducts = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -352,17 +364,68 @@ export function useProducts() {
   const stats = useMemo(() => {
     return {
       total: products.length,
-      activos: products.filter((item) => getInventoryStatus(item).key === "activo").length,
-      bajo: products.filter((item) => getInventoryStatus(item).key === "stock_bajo").length,
-      agotados: products.filter((item) => getInventoryStatus(item).key === "agotado").length,
-      ocultos: products.filter((item) => getInventoryStatus(item).key === "oculto").length,
+      activos: products.filter(
+        (item) => getInventoryStatus(item).key === "activo",
+      ).length,
+      bajo: products.filter(
+        (item) => getInventoryStatus(item).key === "stock_bajo",
+      ).length,
+      agotados: products.filter(
+        (item) => getInventoryStatus(item).key === "agotado",
+      ).length,
+      ocultos: products.filter(
+        (item) => getInventoryStatus(item).key === "oculto",
+      ).length,
     };
   }, [products]);
 
   const startItem =
     filteredProducts.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
 
-  const endItem = Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length);
+  const endItem = Math.min(
+    currentPage * ITEMS_PER_PAGE,
+    filteredProducts.length,
+  );
+
+  function calculateSalePriceFromUtility(cost, utilityPercent) {
+    const costo = Number(cost || 0);
+    const utilidad = Number(utilityPercent || 0);
+
+    return costo * (1 + utilidad / 100);
+  }
+
+  function calculateUtilityPercent(cost, salePrice) {
+    const costo = Number(cost || 0);
+    const precio = Number(salePrice || 0);
+
+    if (costo <= 0) return 0;
+
+    return ((precio - costo) / costo) * 100;
+  }
+
+  function onPriceBlur(fieldName) {
+    setForm((prev) => {
+      const next = { ...prev };
+
+      const costo = Number(next.precio_compra || 0);
+      const utilidad = Number(next.precio_utilidad || 0);
+      const precio = Number(next.precio || 0);
+
+      if (fieldName === "precio_utilidad" || fieldName === "precio_compra") {
+        next.precio = Number(
+          calculateSalePriceFromUtility(costo, utilidad).toFixed(2),
+        );
+      }
+
+      if (fieldName === "precio") {
+        next.precio_utilidad = Number(
+          calculateUtilityPercent(costo, precio).toFixed(2),
+        );
+      }
+
+      return next;
+    });
+  }
 
   return {
     products,
@@ -402,8 +465,11 @@ export function useProducts() {
     saveProduct,
     removeProduct,
     removeCurrentImage,
+    loadProducts,
+    onPriceBlur,
 
     goToPreviousPage: () => setCurrentPage((prev) => Math.max(prev - 1, 1)),
-    goToNextPage: () => setCurrentPage((prev) => Math.min(prev + 1, totalPages)),
+    goToNextPage: () =>
+      setCurrentPage((prev) => Math.min(prev + 1, totalPages)),
   };
 }

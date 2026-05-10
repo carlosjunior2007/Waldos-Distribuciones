@@ -2,7 +2,12 @@ import { Image as ImageIcon, Loader2, Package } from "lucide-react";
 
 import Modal from "../../../components/ui/Modal";
 
-import { CATEGORY_OPTIONS, UNIT_OPTIONS } from "../product.constants";
+import {
+  CATEGORY_OPTIONS,
+  UNIT_OPTIONS,
+  SAT_PRODUCT_OPTIONS,
+  SAT_UNIT_OPTIONS,
+} from "../product.constants";
 import {
   formatDate,
   getInventoryStatus,
@@ -17,6 +22,7 @@ export default function ProductModal({
   onClose,
   onChange,
   onSubmit,
+  onPriceBlur,
   selectedProduct,
   onRemoveImage,
   uploadingImage,
@@ -69,6 +75,7 @@ export default function ProductModal({
           form={form}
           isView={isView}
           onChange={onChange}
+          onPriceBlur={onPriceBlur}
           onRemoveImage={onRemoveImage}
           uploadingImage={uploadingImage}
           localImagePreview={localImagePreview}
@@ -168,7 +175,10 @@ function ProductAuditHeader({
         </p>
 
         <div className="mt-4 space-y-3">
-          <MiniInfo label="Creado el" value={formatDate(selectedProduct.created_at)} />
+          <MiniInfo
+            label="Creado el"
+            value={formatDate(selectedProduct.created_at)}
+          />
 
           <MiniInfo
             label="Actualizado el"
@@ -192,6 +202,7 @@ function ProductFormFields({
   onRemoveImage,
   uploadingImage,
   localImagePreview,
+  onPriceBlur,
 }) {
   return (
     <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -263,11 +274,67 @@ function ProductFormFields({
         </select>
       </Field>
 
+      <Field label="Clave SAT producto/servicio">
+        <SatInput
+          name="clave_sat"
+          value={form.clave_sat}
+          onChange={onChange}
+          disabled={isView}
+          options={SAT_PRODUCT_OPTIONS}
+          placeholder="Ej. 47131800"
+          listId="sat-product-options"
+        />
+      </Field>
+
+      <Field label="Clave unidad SAT">
+        <SatInput
+          name="clave_unidad_sat"
+          value={form.clave_unidad_sat}
+          onChange={onChange}
+          disabled={isView}
+          options={SAT_UNIT_OPTIONS}
+          placeholder="Ej. H87"
+          listId="sat-unit-options"
+        />
+      </Field>
+
+      <Field label="IVA %">
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          name="iva_porcentaje"
+          value={form.iva_porcentaje}
+          onChange={onChange}
+          disabled={isView}
+          placeholder="16"
+          className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none disabled:opacity-70"
+        />
+      </Field>
+
       {[
         ["Precio compra", "precio_compra", "0.00"],
-        ["Utilidad", "precio_utilidad", "0.00"],
+        ["Utilidad %", "precio_utilidad", "0.00"],
         ["Precio venta", "precio", "0.00"],
-        ["Cantidad", "cantidad", "0"],
+      ].map(([label, name, placeholder]) => (
+        <Field key={name} label={label}>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            name={name}
+            value={form[name]}
+            onChange={onChange}
+            onBlur={() => onPriceBlur(name)}
+            disabled={isView}
+            placeholder={placeholder}
+            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none disabled:opacity-70"
+          />
+        </Field>
+      ))}
+
+      {[
+        ["Stock", "stock", "0"],
         ["Cantidad por caja", "cantidad_caja", "0"],
       ].map(([label, name, placeholder]) => (
         <Field key={name} label={label}>
@@ -301,15 +368,6 @@ function ProductFormFields({
         disabled={isView}
         title="Visible en web"
         description="Si está apagado, no se muestra en tu página pública."
-      />
-
-      <CheckField
-        name="disponibilidad"
-        checked={form.disponibilidad}
-        onChange={onChange}
-        disabled={isView}
-        title="Disponible para venta"
-        description="Marca si el producto está disponible comercialmente."
       />
     </section>
   );
@@ -442,6 +500,46 @@ function MiniInfo({ label, value, strong = false }) {
         } text-text-primary`}
       >
         {value}
+      </p>
+    </div>
+  );
+}
+
+function SatInput({
+  name,
+  value,
+  onChange,
+  disabled,
+  options,
+  placeholder,
+  listId,
+}) {
+  const selected = options.find((item) => item.clave === value);
+
+  return (
+    <div className="space-y-2">
+      <input
+        name={name}
+        value={value || ""}
+        onChange={onChange}
+        disabled={disabled}
+        list={listId}
+        placeholder={placeholder}
+        className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none disabled:opacity-70"
+      />
+
+      <datalist id={listId}>
+        {options.map((item) => (
+          <option key={item.clave} value={item.clave}>
+            {item.descripcion}
+          </option>
+        ))}
+      </datalist>
+
+      <p className="text-xs text-text-muted">
+        {selected
+          ? selected.descripcion
+          : "Puedes buscar, pegar o escribir una clave manualmente."}
       </p>
     </div>
   );

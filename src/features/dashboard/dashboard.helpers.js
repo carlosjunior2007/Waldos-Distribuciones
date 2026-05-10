@@ -1,14 +1,6 @@
-import {
-  Receipt,
-  Package2,
-  WalletCards,
-} from "lucide-react";
+import { Receipt, Package2, WalletCards, ShoppingCart } from "lucide-react";
 
 import { formatMoney } from "../../utils/formatters";
-import {
-  normalizeQuotationStatus,
-  isCompletedQuotation,
-} from "../../utils/status";
 import { getToneClass } from "../../utils/styles";
 
 export function toDate(value) {
@@ -74,7 +66,10 @@ export function getMonthKey(value) {
 
   if (!date) return "Sin fecha";
 
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}`;
 }
 
 export function getMonthLabel(monthKey) {
@@ -101,7 +96,32 @@ export function getWeekKey(value) {
   return `${date.getFullYear()}-S${String(week).padStart(2, "0")}`;
 }
 
+export function isClosedOrder(estado) {
+  return ["entregado", "parcialmente_entregado"].includes(
+    String(estado || "").toLowerCase(),
+  );
+}
+
+export function calculateOrderProfit(order, pedidoDetalles) {
+  const detalles = pedidoDetalles.filter((item) => item.pedido_id === order.id);
+
+  return detalles.reduce((acc, item) => {
+    const cantidad = Number(item.cantidad_pedida || 0);
+    const precio = Number(item.precio_unitario || 0);
+    const costo = Number(item.costo_unitario || 0);
+
+    return acc + (precio - costo) * cantidad;
+  }, 0);
+}
+
 export function getMovementMeta(type) {
+  if (type === "pedido") {
+    return {
+      icon: ShoppingCart,
+      className: getToneClass("success"),
+    };
+  }
+
   if (type === "cotizacion") {
     return {
       icon: Receipt,
@@ -119,6 +139,20 @@ export function getMovementMeta(type) {
   return {
     icon: Package2,
     className: getToneClass("primary"),
+  };
+}
+
+export function buildOrderMovement(item) {
+  return {
+    id: `ped-${item.id}`,
+    entityId: item.id,
+    title: `Pedido ${item.folio || item.id?.slice(0, 8) || "sin folio"}`,
+    description: `${item.cliente_nombre || "Cliente sin nombre"} • Estado: ${
+      item.estado || "sin estado"
+    } • Total: ${formatMoney(item.total)}`,
+    date: item.updated_at || item.created_at,
+    type: "pedido",
+    ...item,
   };
 }
 
@@ -172,7 +206,13 @@ export function getLatestMovements(rows, builder, limit = 3) {
     .slice(0, limit);
 }
 
-export function groupByPeriod({ cotizaciones, gastos, range }) {
+export function groupByPeriod({
+  cotizaciones = [],
+  pedidos = [],
+  pedidoDetalles = [],
+  gastos = [],
+  range,
+}) {
   const useWeekly = range === "week";
   const keyGetter = useWeekly ? getWeekKey : getMonthKey;
   const labelGetter = useWeekly ? (key) => key : getMonthLabel;
@@ -185,6 +225,7 @@ export function groupByPeriod({ cotizaciones, gastos, range }) {
         key,
         label: labelGetter(key),
         cotizaciones: 0,
+        pedidos: 0,
         ganancias: 0,
         gastos: 0,
         neto: 0,
@@ -197,18 +238,23 @@ export function groupByPeriod({ cotizaciones, gastos, range }) {
   cotizaciones.forEach((item) => {
     const key = keyGetter(item.created_at);
     const bucket = ensure(key);
-
     bucket.cotizaciones += 1;
+  });
 
-    if (isCompletedQuotation(item.estado)) {
-      bucket.ganancias += Number(item.ganancia || 0);
+  pedidos.forEach((item) => {
+    const key = keyGetter(item.created_at);
+    const bucket = ensure(key);
+
+    bucket.pedidos += 1;
+
+    if (isClosedOrder(item.estado)) {
+      bucket.ganancias += calculateOrderProfit(item, pedidoDetalles);
     }
   });
 
   gastos.forEach((item) => {
     const key = keyGetter(item.fecha || item.created_at);
     const bucket = ensure(key);
-
     bucket.gastos += Number(item.monto || 0);
   });
 
@@ -220,18 +266,22 @@ export function groupByPeriod({ cotizaciones, gastos, range }) {
     .sort((a, b) => String(a.key).localeCompare(String(b.key)));
 }
 
-export function calculateDashboardSummary({ filteredData, productos }) {
-  const cotizacionesCompletadas = filteredData.cotizaciones.filter((item) =>
-    isCompletedQuotation(item.estado),
+export function calculateDashboardSummary({
+  filteredData,
+  productos,
+  pedidoDetalles,
+}) {
+  const pedidosCerrados = filteredData.pedidos.filter((item) =>
+    isClosedOrder(item.estado),
   );
 
-  const ventaTotalCompletada = cotizacionesCompletadas.reduce(
+  const ventaTotal = pedidosCerrados.reduce(
     (acc, item) => acc + Number(item.total || 0),
     0,
   );
 
-  const gananciaBrutaReal = cotizacionesCompletadas.reduce(
-    (acc, item) => acc + Number(item.ganancia || 0),
+  const gananciaBruta = pedidosCerrados.reduce(
+    (acc, item) => acc + calculateOrderProfit(item, pedidoDetalles),
     0,
   );
 
@@ -240,34 +290,46 @@ export function calculateDashboardSummary({ filteredData, productos }) {
     0,
   );
 
-  const estados = filteredData.cotizaciones.reduce(
+  const cotizacionesPorEstado = filteredData.cotizaciones.reduce(
     (acc, item) => {
-      const estado = normalizeQuotationStatus(item.estado);
+      const estado = String(item.estado || "sin_estado").toLowerCase();
       acc[estado] = (acc[estado] || 0) + 1;
       return acc;
     },
-    {
-      pendiente: 0,
-      completada: 0,
-      cancelada: 0,
-      otro: 0,
-    },
+    {},
   );
 
+  const pedidosPorEstado = filteredData.pedidos.reduce((acc, item) => {
+    const estado = String(item.estado || "sin_estado").toLowerCase();
+    acc[estado] = (acc[estado] || 0) + 1;
+    return acc;
+  }, {});
+
   const productosActivos = productos.filter(
-    (item) => item.disponibilidad === true && item.habilitado === true,
+    (item) => item.habilitado === true && Number(item.stock || 0) > 0,
   ).length;
 
   return {
-    ventaTotalCompletada,
-    gananciaBrutaReal,
+    ventaTotalCompletada: ventaTotal,
+    gananciaBrutaReal: gananciaBruta,
     gastoTotal,
-    gananciaNetaReal: gananciaBrutaReal - gastoTotal,
+    gananciaNetaReal: gananciaBruta - gastoTotal,
+
     totalCotizaciones: filteredData.cotizaciones.length,
-    pendientes: estados.pendiente || 0,
-    completadas: estados.completada || 0,
-    canceladas: estados.cancelada || 0,
-    otros: estados.otro || 0,
+    cotizacionesBorrador: cotizacionesPorEstado.borrador || 0,
+    cotizacionesEnviadas: cotizacionesPorEstado.enviada || 0,
+    cotizacionesAceptadas: cotizacionesPorEstado.aceptada || 0,
+    cotizacionesRechazadas: cotizacionesPorEstado.rechazada || 0,
+    cotizacionesVencidas: cotizacionesPorEstado.vencida || 0,
+    cotizacionesConvertidas: cotizacionesPorEstado.convertida || 0,
+
+    totalPedidos: filteredData.pedidos.length,
+    pedidosCreados: pedidosPorEstado.creado || 0,
+    pedidosEnPreparacion: pedidosPorEstado.en_preparacion || 0,
+    pedidosParciales: pedidosPorEstado.parcialmente_entregado || 0,
+    pedidosEntregados: pedidosPorEstado.entregado || 0,
+    pedidosCancelados: pedidosPorEstado.cancelado || 0,
+
     productosActivos,
     totalProductos: productos.length,
     productosNuevos: filteredData.productos.length,

@@ -6,6 +6,7 @@ import {
   fetchQuotationById,
   deleteQuotation,
   getCurrentMonthValue,
+  convertQuotationToOrder,
 } from "../services/quotations.js";
 
 import { generateQuotationPDF } from "../../../utils/quotationPdf";
@@ -143,6 +144,30 @@ export function useQuotations() {
     setPage(1);
   }
 
+  async function convertToOrder(id) {
+    try {
+      const entrega_inicio = prompt(
+        "Fecha inicio entrega YYYY-MM-DD. Opcional:",
+      );
+      const entrega_fin = prompt("Fecha fin entrega YYYY-MM-DD. Opcional:");
+      const metodo_pago = prompt("Método de pago. Opcional:");
+
+      await convertQuotationToOrder(id, {
+        entrega_inicio: entrega_inicio
+          ? new Date(entrega_inicio).toISOString()
+          : null,
+        entrega_fin: entrega_fin ? new Date(entrega_fin).toISOString() : null,
+        metodo_pago: metodo_pago || null,
+      });
+
+      await loadData();
+      alert("Cotización convertida a pedido.");
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "No se pudo convertir a pedido.");
+    }
+  }
+
   return {
     rows,
     summary,
@@ -175,5 +200,7 @@ export function useQuotations() {
 
     loadData,
     downloadPdf,
+
+    convertToOrder,
   };
 }

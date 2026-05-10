@@ -3,12 +3,11 @@ import {
   CheckCircle2,
   XCircle,
   TimerReset,
+  Send,
+  FileCheck2,
 } from "lucide-react";
 
-import {
-  parseBusinessDate,
-  formatInputDate,
-} from "../../utils/dates";
+import { parseBusinessDate, formatInputDate } from "../../utils/dates";
 
 export function fromInputDate(value) {
   return value || null;
@@ -18,41 +17,63 @@ export function toBusinessInputDate(value) {
   return formatInputDate(parseBusinessDate(value));
 }
 
+export function addDaysInput(days = 14) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return formatInputDate(date);
+}
+
+export function addDaysISO(days = 14) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
 export function getStatusStyles(status) {
-  if (status === "pendiente") {
+  const value = String(status || "").toLowerCase();
+
+  if (value === "borrador") {
     return {
-      label: "Pendiente",
+      label: "Borrador",
       icon: Clock3,
       className: "border-warning-100 bg-warning-50 text-warning-700",
     };
   }
 
-  if (status === "en_proceso") {
+  if (value === "enviada") {
     return {
-      label: "En proceso",
-      icon: TimerReset,
+      label: "Enviada",
+      icon: Send,
       className: "border-info-100 bg-info-50 text-info-700",
     };
   }
 
-  if (status === "completado") {
+  if (value === "aceptada") {
     return {
-      label: "Completado",
+      label: "Aceptada",
       icon: CheckCircle2,
       className: "border-success-100 bg-success-50 text-success-700",
     };
   }
 
-  if (status === "vencido") {
+  if (value === "convertida") {
     return {
-      label: "Vencido",
-      icon: XCircle,
+      label: "Convertida",
+      icon: FileCheck2,
+      className: "border-success-100 bg-success-50 text-success-700",
+    };
+  }
+
+  if (value === "vencida") {
+    return {
+      label: "Vencida",
+      icon: TimerReset,
       className: "border-error-100 bg-error-50 text-error-700",
     };
   }
 
   return {
-    label: "Cancelado",
+    label: "Rechazada",
     icon: XCircle,
     className: "border-error-100 bg-error-50 text-error-700",
   };
@@ -77,35 +98,63 @@ export function buildLastMonthsOptions(total = 12) {
   return result;
 }
 
+export function calculateSalePriceFromUtility(cost, utilityPercent) {
+  const costo = Number(cost || 0);
+  const utilidad = Number(utilityPercent || 0);
+
+  return costo * (1 + utilidad / 100);
+}
+
+export function calculateUtilityPercent(cost, salePrice) {
+  const costo = Number(cost || 0);
+  const precio = Number(salePrice || 0);
+
+  if (costo <= 0) return 0;
+
+  return ((precio - costo) / costo) * 100;
+}
+
+export function calculateLine({ cantidad, precio_unitario, costo_unitario }) {
+  const qty = Number(cantidad || 0);
+  const price = Number(precio_unitario || 0);
+  const cost = Number(costo_unitario || 0);
+
+  return {
+    importe: qty * price,
+    ganancia_linea: qty * (price - cost),
+  };
+}
+
 export function buildQuotationItemsFromDetails(details = []) {
-  return details.map((item) => ({
-    producto_id: item.producto_id,
-    nombre_producto: item.nombre_producto,
-    codigo: item.codigo || "",
-    unidad: item.unidad || "",
-    cantidad: Number(item.cantidad ?? 1),
-    stock_disponible:
-      Number(item.producto?.cantidad || 0) + Number(item.cantidad || 0),
-    precio_unitario: Number(item.precio_unitario ?? 0),
-    costo_unitario: Number(item.costo_unitario ?? 0),
-    importe: Number(item.importe || 0),
-    ganancia_linea: Number(item.ganancia_linea || 0),
-  }));
+  return details.map((item) => {
+    const precio = Number(item.precio_unitario ?? 0);
+    const costo = Number(item.costo_unitario ?? 0);
+
+    return {
+      producto_id: item.producto_id,
+      nombre_producto: item.nombre_producto,
+      codigo: item.codigo || "",
+      unidad: item.unidad || "",
+      cantidad: Number(item.cantidad ?? 1),
+      stock_disponible:
+        Number(item.producto?.stock || item.stock_actual || 0) +
+        Number(item.cantidad || 0),
+      precio_unitario: precio,
+      costo_unitario: costo,
+      utilidad_porcentaje: calculateUtilityPercent(costo, precio),
+      importe: Number(item.importe || 0),
+      ganancia_linea: Number(item.ganancia_linea || 0),
+    };
+  });
 }
 
 export function calculateQuotationTotals(items = [], form = {}) {
   const rows = items.map((item) => {
-    const cantidad = Number(item.cantidad || 0);
-    const precio = Number(item.precio_unitario || 0);
-    const costo = Number(item.costo_unitario || 0);
-
-    const importe = cantidad * precio;
-    const gananciaLinea = cantidad * (precio - costo);
+    const line = calculateLine(item);
 
     return {
       ...item,
-      importe,
-      ganancia_linea: gananciaLinea,
+      ...line,
     };
   });
 
@@ -116,15 +165,9 @@ export function calculateQuotationTotals(items = [], form = {}) {
 
   const descuento = Number(form.descuento || 0);
   const base = Math.max(subtotal - descuento, 0);
-
-  const ivaMonto = base * (Number(form.iva_porcentaje || 0) / 100);
-  const isrMonto = base * (Number(form.isr_porcentaje || 0) / 100);
-  const retencionIvaMonto =
-    base * (Number(form.retencion_iva_porcentaje || 0) / 100);
-
-  const totalImpuestos = ivaMonto;
-  const totalRetenciones = isrMonto + retencionIvaMonto;
-  const total = base + totalImpuestos - totalRetenciones;
+  const ivaPorcentaje = Number(form.iva_porcentaje || 0);
+  const ivaMonto = base * (ivaPorcentaje / 100);
+  const total = base + ivaMonto;
 
   const ganancia = rows.reduce(
     (acc, item) => acc + Number(item.ganancia_linea || 0),
@@ -137,18 +180,16 @@ export function calculateQuotationTotals(items = [], form = {}) {
     descuento,
     base,
     ivaMonto,
-    isrMonto,
-    retencionIvaMonto,
-    totalImpuestos,
-    totalRetenciones,
-    ganancia,
     total,
+    ganancia,
   };
 }
 
 export function buildQuotationPayload({ form, totals }) {
   const cleanItems = totals.rows.map((item) => ({
     producto_id: item.producto_id,
+    nombre_producto: item.nombre_producto || null,
+    codigo: item.codigo || null,
     cantidad: Number(item.cantidad || 0),
     precio_unitario: Number(item.precio_unitario || 0),
     costo_unitario: Number(item.costo_unitario || 0),
@@ -158,27 +199,17 @@ export function buildQuotationPayload({ form, totals }) {
 
   return {
     header: {
-      ...form,
       cliente_id: form.cliente_id || null,
       cliente_nombre: form.cliente_nombre.trim(),
       cliente_telefono: form.cliente_telefono.trim() || null,
       cliente_email: form.cliente_email.trim() || null,
-      cliente_rfc: form.cliente_rfc.trim().toUpperCase() || null,
-      cliente_razon_social: form.cliente_razon_social.trim() || null,
-      descuento: Number(form.descuento || 0),
-      gastos: Number(form.gastos || 0),
+      estado: form.estado || "borrador",
+      subtotal: Number(totals.subtotal || 0),
+      descuento: Number(totals.descuento || 0),
       iva_porcentaje: Number(form.iva_porcentaje || 0),
-      iva_monto: totals.ivaMonto,
-      isr_porcentaje: Number(form.isr_porcentaje || 0),
-      isr_monto: totals.isrMonto,
-      retencion_iva_porcentaje: Number(form.retencion_iva_porcentaje || 0),
-      retencion_iva_monto: totals.retencionIvaMonto,
-      total_impuestos: totals.totalImpuestos,
-      total_retenciones: totals.totalRetenciones,
-      subtotal: totals.subtotal,
-      total: totals.total,
-      ganancia: totals.ganancia,
-      fecha_vencimiento: fromInputDate(form.fecha_vencimiento),
+      total: Number(totals.total || 0),
+      fecha_vencimiento: form.fecha_vencimiento || null,
+      notas: form.notas || null,
     },
     items: cleanItems,
   };

@@ -10,24 +10,12 @@ const QUOTATION_SELECT = `
   cliente_nombre,
   cliente_telefono,
   cliente_email,
-  cliente_rfc,
-  cliente_razon_social,
   estado,
   subtotal,
   descuento,
-  total,
-  gastos,
-  ganancia,
   iva_porcentaje,
-  iva_monto,
-  isr_porcentaje,
-  isr_monto,
-  retencion_iva_porcentaje,
-  retencion_iva_monto,
-  total_impuestos,
-  total_retenciones,
+  total,
   fecha_vencimiento,
-  fecha_completado,
   notas,
   created_at,
   updated_at
@@ -35,113 +23,6 @@ const QUOTATION_SELECT = `
 
 function escapeLike(value = "") {
   return String(value).replace(/[%_]/g, "");
-}
-
-function applyQuotationSearch(query, cleanSearch) {
-  if (!cleanSearch) return query;
-
-  return query.or(
-    `folio.ilike.%${cleanSearch}%,cliente_nombre.ilike.%${cleanSearch}%,cliente_rfc.ilike.%${cleanSearch}%,cliente_razon_social.ilike.%${cleanSearch}%`,
-  );
-}
-
-function sortQuotations(a, b) {
-  if (a.isCarryover && !b.isCarryover) return -1;
-  if (!a.isCarryover && b.isCarryover) return 1;
-
-  const statusOrder = {
-    pendiente: 1,
-    en_proceso: 2,
-    vencido: 3,
-    completado: 4,
-    cancelado: 5,
-  };
-
-  const aOrder = statusOrder[a.estado] || 99;
-  const bOrder = statusOrder[b.estado] || 99;
-
-  if (a.isCarryover && b.isCarryover && aOrder !== bOrder) {
-    return aOrder - bOrder;
-  }
-
-  return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-}
-
-function groupQuantitiesByProduct(items = []) {
-  return items.reduce((acc, item) => {
-    if (!item.producto_id) return acc;
-
-    acc[item.producto_id] =
-      (acc[item.producto_id] || 0) + Number(item.cantidad || 0);
-
-    return acc;
-  }, {});
-}
-
-function buildStockDeltas({ oldItems = [], newItems = [] }) {
-  const oldMap = groupQuantitiesByProduct(oldItems);
-  const newMap = groupQuantitiesByProduct(newItems);
-
-  const ids = new Set([...Object.keys(oldMap), ...Object.keys(newMap)]);
-
-  return Array.from(ids)
-    .map((productoId) => ({
-      producto_id: productoId,
-      oldQuantity: Number(oldMap[productoId] || 0),
-      newQuantity: Number(newMap[productoId] || 0),
-      delta: Number(newMap[productoId] || 0) - Number(oldMap[productoId] || 0),
-    }))
-    .filter((item) => item.delta !== 0);
-}
-
-async function getProductsForStock(productIds = []) {
-  if (!productIds.length) return {};
-
-  const { data, error } = await supabase
-    .from("productos")
-    .select("id, nombre, cantidad")
-    .in("id", productIds);
-
-  if (error) throw error;
-
-  return (data || []).reduce((acc, product) => {
-    acc[product.id] = product;
-    return acc;
-  }, {});
-}
-
-async function applyStockDeltas(deltas = []) {
-  if (!deltas.length) return;
-
-  const productIds = deltas.map((item) => item.producto_id);
-  const productsMap = await getProductsForStock(productIds);
-
-  for (const item of deltas) {
-    const product = productsMap[item.producto_id];
-
-    if (!product) {
-      throw new Error("Uno de los productos ya no existe.");
-    }
-
-    const currentStock = Number(product.cantidad || 0);
-    const nextStock = currentStock - item.delta;
-
-    if (nextStock < 0) {
-      throw new Error(
-        `Stock insuficiente para "${product.nombre}". Disponible: ${currentStock}, requerido extra: ${item.delta}.`,
-      );
-    }
-
-    const { error } = await supabase
-      .from("productos")
-      .update({
-        cantidad: nextStock,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", item.producto_id);
-
-    if (error) throw error;
-  }
 }
 
 export function getCurrentMonthValue() {
@@ -163,10 +44,22 @@ export function getMonthRange(monthValue) {
   };
 }
 
-export function addDaysISO(days = 7) {
+export function addDaysISO(days = 14) {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString();
+}
+
+export async function deleteExpiredQuotations() {
+  const now = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("cotizaciones")
+    .delete()
+    .in("estado", ["borrador", "enviada", "vencida"])
+    .lt("fecha_vencimiento", now);
+
+  if (error) throw error;
 }
 
 export async function expireQuotations() {
@@ -175,24 +68,71 @@ export async function expireQuotations() {
   const { error } = await supabase
     .from("cotizaciones")
     .update({
-      estado: "vencido",
+      estado: "vencida",
       updated_at: now,
     })
-    .eq("estado", "pendiente")
+    .in("estado", ["borrador", "enviada"])
     .lt("fecha_vencimiento", now);
 
   if (error) throw error;
+}
+
+function applyQuotationSearch(query, cleanSearch) {
+  if (!cleanSearch) return query;
+
+  return query.or(
+    `folio.ilike.%${cleanSearch}%,cliente_nombre.ilike.%${cleanSearch}%,cliente_email.ilike.%${cleanSearch}%,cliente_telefono.ilike.%${cleanSearch}%`,
+  );
+}
+
+function applyQuotationStatus(query, status) {
+  if (!status || status === "todas") return query;
+
+  return query.eq("estado", status);
+}
+
+function sortQuotations(a, b) {
+  const statusOrder = {
+    borrador: 1,
+    enviada: 2,
+    aceptada: 3,
+    vencida: 4,
+    convertida: 5,
+    rechazada: 6,
+  };
+
+  const aOrder = statusOrder[a.estado] || 99;
+  const bOrder = statusOrder[b.estado] || 99;
+
+  if (a.isCarryover && !b.isCarryover) return -1;
+  if (!a.isCarryover && b.isCarryover) return 1;
+
+  if (a.isCarryover && b.isCarryover && aOrder !== bOrder) {
+    return aOrder - bOrder;
+  }
+
+  return new Date(b.created_at || 0) - new Date(a.created_at || 0);
 }
 
 export async function searchProducts(term = "") {
   let query = supabase
     .from("productos")
     .select(
-      "id, nombre, descripcion, precio, precio_compra, precio_utilidad, codigo, categoria, unidad, disponibilidad, habilitado, cantidad",
+      `
+      id,
+      nombre,
+      descripcion,
+      precio,
+      precio_compra,
+      codigo,
+      categoria,
+      unidad,
+      habilitado,
+      stock
+    `,
     )
-    .eq("disponibilidad", true)
     .eq("habilitado", true)
-    .gt("cantidad", 0)
+    .gt("stock", 0)
     .order("nombre", { ascending: true })
     .limit(15);
 
@@ -211,7 +151,6 @@ export async function searchProducts(term = "") {
 
 export async function generateNextFolio(monthValue) {
   const { start, end } = getMonthRange(monthValue);
-
   const [year, month] = monthValue.split("-");
   const prefix = `WAL-${year}-${month}-`;
 
@@ -238,77 +177,36 @@ export async function generateNextFolio(monthValue) {
     }
   }
 
-  const next = String(max + 1).padStart(3, "0");
-
-  return `${prefix}${next}`;
+  return `${prefix}${String(max + 1).padStart(3, "0")}`;
 }
 
-export function buildDetailsPayload(items = []) {
-  return items.map((item) => {
+async function attachQuotationProfit(rows = []) {
+  const ids = rows.map((row) => row.id);
+
+  if (!ids.length) return rows;
+
+  const { data, error } = await supabase
+    .from("cotizacion_detalles")
+    .select("cotizacion_id,cantidad,precio_unitario,costo_unitario")
+    .in("cotizacion_id", ids);
+
+  if (error) throw error;
+
+  const profitMap = {};
+
+  for (const item of data || []) {
     const cantidad = Number(item.cantidad || 0);
     const precio = Number(item.precio_unitario || 0);
     const costo = Number(item.costo_unitario || 0);
 
-    const importe = cantidad * precio;
-    const gananciaLinea = cantidad * (precio - costo);
+    profitMap[item.cotizacion_id] =
+      (profitMap[item.cotizacion_id] || 0) + cantidad * (precio - costo);
+  }
 
-    return {
-      producto_id: item.producto_id,
-      cantidad,
-      precio_unitario: precio,
-      costo_unitario: costo,
-      importe,
-      ganancia_linea: gananciaLinea,
-    };
-  });
-}
-
-export function calculateTotals(detailsPayload = [], header = {}) {
-  const subtotal = detailsPayload.reduce(
-    (acc, item) => acc + Number(item.importe || 0),
-    0,
-  );
-
-  const descuento = Number(header.descuento || 0);
-  const gastos = Number(header.gastos || 0);
-
-  const ivaPorcentaje = Number(header.iva_porcentaje || 0);
-  const isrPorcentaje = Number(header.isr_porcentaje || 0);
-  const retencionIvaPorcentaje = Number(header.retencion_iva_porcentaje || 0);
-
-  const base = Math.max(subtotal - descuento, 0);
-
-  const ivaMonto = base * (ivaPorcentaje / 100);
-  const isrMonto = base * (isrPorcentaje / 100);
-  const retencionIvaMonto = base * (retencionIvaPorcentaje / 100);
-
-  const totalImpuestos = ivaMonto;
-  const totalRetenciones = isrMonto + retencionIvaMonto;
-  const total = base + totalImpuestos - totalRetenciones;
-
-  const gananciaBruta = detailsPayload.reduce(
-    (acc, item) => acc + Number(item.ganancia_linea || 0),
-    0,
-  );
-
-  const ganancia = gananciaBruta - gastos;
-
-  return {
-    subtotal,
-    descuento,
-    gastos,
-    base,
-    iva_porcentaje: ivaPorcentaje,
-    iva_monto: ivaMonto,
-    isr_porcentaje: isrPorcentaje,
-    isr_monto: isrMonto,
-    retencion_iva_porcentaje: retencionIvaPorcentaje,
-    retencion_iva_monto: retencionIvaMonto,
-    total_impuestos: totalImpuestos,
-    total_retenciones: totalRetenciones,
-    total,
-    ganancia,
-  };
+  return rows.map((row) => ({
+    ...row,
+    ganancia_estimada: profitMap[row.id] || 0,
+  }));
 }
 
 export async function fetchQuotations({
@@ -331,23 +229,20 @@ export async function fetchQuotations({
     .range(0, MAX_ROWS);
 
   monthQuery = applyQuotationSearch(monthQuery, cleanSearch);
+  monthQuery = applyQuotationStatus(monthQuery, status);
 
-  if (status !== "todas") {
-    monthQuery = monthQuery.eq("estado", status);
-  }
+  const { data: monthRowsData, error: monthError } = await monthQuery;
+
+  if (monthError) throw monthError;
 
   const carryoverStatuses = [];
 
   if (status === "todas") {
-    carryoverStatuses.push("pendiente", "en_proceso");
+    carryoverStatuses.push("borrador", "enviada", "aceptada");
   }
 
-  if (status === "pendiente") {
-    carryoverStatuses.push("pendiente");
-  }
-
-  if (status === "en_proceso") {
-    carryoverStatuses.push("en_proceso");
+  if (["borrador", "enviada", "aceptada"].includes(status)) {
+    carryoverStatuses.push(status);
   }
 
   let carryoverRows = [];
@@ -373,10 +268,6 @@ export async function fetchQuotations({
     }));
   }
 
-  const { data: monthRowsData, error: monthError } = await monthQuery;
-
-  if (monthError) throw monthError;
-
   const monthRows = (monthRowsData || []).map((row) => ({
     ...row,
     isCarryover: false,
@@ -388,11 +279,12 @@ export async function fetchQuotations({
     map.set(row.id, row);
   }
 
-  const mergedRows = Array.from(map.values()).sort(sortQuotations);
+  const mergedRows = await attachQuotationProfit(
+    Array.from(map.values()).sort(sortQuotations),
+  );
 
   const total = mergedRows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
   const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
   const from = (safePage - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE;
@@ -414,75 +306,31 @@ export async function fetchQuotationSummary({
   const { start, end } = getMonthRange(month);
   const cleanSearch = escapeLike(search.trim());
 
-  let monthQuery = supabase
+  let query = supabase
     .from("cotizaciones")
-    .select("id, estado, total, ganancia, created_at")
+    .select("id, estado, total, created_at")
     .gte("created_at", start)
     .lt("created_at", end)
     .range(0, MAX_ROWS);
 
-  monthQuery = applyQuotationSearch(monthQuery, cleanSearch);
+  query = applyQuotationSearch(query, cleanSearch);
+  query = applyQuotationStatus(query, status);
 
-  if (status !== "todas") {
-    monthQuery = monthQuery.eq("estado", status);
-  }
+  const { data, error } = await query;
 
-  const carryoverStatuses = [];
+  if (error) throw error;
 
-  if (status === "todas") {
-    carryoverStatuses.push("pendiente", "en_proceso");
-  }
-
-  if (status === "pendiente") {
-    carryoverStatuses.push("pendiente");
-  }
-
-  if (status === "en_proceso") {
-    carryoverStatuses.push("en_proceso");
-  }
-
-  let carryoverRows = [];
-
-  if (carryoverStatuses.length > 0) {
-    let carryoverQuery = supabase
-      .from("cotizaciones")
-      .select("id, estado, total, ganancia, created_at")
-      .in("estado", carryoverStatuses)
-      .lt("created_at", start)
-      .range(0, MAX_ROWS);
-
-    carryoverQuery = applyQuotationSearch(carryoverQuery, cleanSearch);
-
-    const { data, error } = await carryoverQuery;
-
-    if (error) throw error;
-
-    carryoverRows = data || [];
-  }
-
-  const { data: monthRowsData, error: monthError } = await monthQuery;
-
-  if (monthError) throw monthError;
-
-  const map = new Map();
-
-  for (const row of [...carryoverRows, ...(monthRowsData || [])]) {
-    map.set(row.id, row);
-  }
-
-  const rows = Array.from(map.values());
+  const rows = data || [];
 
   return {
     total: rows.length,
-    pendientes: rows.filter((x) => x.estado === "pendiente").length,
-    enProceso: rows.filter((x) => x.estado === "en_proceso").length,
-    completadas: rows.filter((x) => x.estado === "completado").length,
-    canceladas: rows.filter((x) => x.estado === "cancelado").length,
-    vencidas: rows.filter((x) => x.estado === "vencido").length,
-    totalVentas: rows.reduce((acc, x) => acc + Number(x.total || 0), 0),
-    totalGananciaReal: rows
-      .filter((x) => x.estado === "completado")
-      .reduce((acc, x) => acc + Number(x.ganancia || 0), 0),
+    borradores: rows.filter((x) => x.estado === "borrador").length,
+    enviadas: rows.filter((x) => x.estado === "enviada").length,
+    aceptadas: rows.filter((x) => x.estado === "aceptada").length,
+    rechazadas: rows.filter((x) => x.estado === "rechazada").length,
+    vencidas: rows.filter((x) => x.estado === "vencida").length,
+    convertidas: rows.filter((x) => x.estado === "convertida").length,
+    totalCotizado: rows.reduce((acc, x) => acc + Number(x.total || 0), 0),
   };
 }
 
@@ -498,15 +346,13 @@ export async function fetchQuotationById(id) {
   let cliente = null;
 
   if (quotation?.cliente_id) {
-    const { data: clientData, error: clientError } = await supabase
+    const { data: clientData } = await supabase
       .from("clientes")
       .select("*")
       .eq("id", quotation.cliente_id)
       .maybeSingle();
 
-    if (!clientError) {
-      cliente = clientData || null;
-    }
+    cliente = clientData || null;
   }
 
   const { data: details, error: dError } = await supabase
@@ -526,7 +372,9 @@ export async function fetchQuotationById(id) {
   if (productoIds.length > 0) {
     const { data: products, error: pError } = await supabase
       .from("productos")
-      .select("id, nombre, codigo, unidad, descripcion, precio, precio_compra, cantidad")
+      .select(
+        "id, nombre, codigo, unidad, descripcion, precio, precio_compra, stock",
+      )
       .in("id", productoIds);
 
     if (pError) throw pError;
@@ -542,10 +390,11 @@ export async function fetchQuotationById(id) {
 
     return {
       ...item,
-      nombre_producto: product?.nombre || "Producto no encontrado",
-      codigo: product?.codigo || "",
+      nombre_producto:
+        item.nombre_producto || product?.nombre || "Producto no encontrado",
+      codigo: item.codigo || product?.codigo || "",
       unidad: product?.unidad || "",
-      stock_actual: Number(product?.cantidad || 0),
+      stock_actual: Number(product?.stock || 0),
       producto: product,
     };
   });
@@ -553,14 +402,48 @@ export async function fetchQuotationById(id) {
   return {
     ...quotation,
     clientes: cliente,
-    cliente_rfc: quotation.cliente_rfc || cliente?.rfc || "",
-    cliente_razon_social:
-      quotation.cliente_razon_social || cliente?.razon_social || "",
     detalles: detallesConProducto,
   };
 }
 
-function buildQuotationPayload({ header, detailsPayload, folio = null }) {
+function buildDetailsPayload(items = []) {
+  return items.map((item) => {
+    const cantidad = Number(item.cantidad || 0);
+    const precio = Number(item.precio_unitario || 0);
+    const costo = Number(item.costo_unitario || 0);
+
+    return {
+      producto_id: item.producto_id,
+      nombre_producto: item.nombre_producto || null,
+      codigo: item.codigo || null,
+      cantidad,
+      precio_unitario: precio,
+      costo_unitario: costo,
+      importe: cantidad * precio,
+    };
+  });
+}
+
+function calculateTotals(detailsPayload = [], header = {}) {
+  const subtotal = detailsPayload.reduce(
+    (acc, item) => acc + Number(item.importe || 0),
+    0,
+  );
+
+  const descuento = Number(header.descuento || 0);
+  const ivaPorcentaje = Number(header.iva_porcentaje || 0);
+  const base = Math.max(subtotal - descuento, 0);
+  const total = base + base * (ivaPorcentaje / 100);
+
+  return {
+    subtotal,
+    descuento,
+    iva_porcentaje: ivaPorcentaje,
+    total,
+  };
+}
+
+function buildQuotationHeader({ header, detailsPayload, folio = null }) {
   const totals = calculateTotals(detailsPayload, header);
   const now = new Date().toISOString();
 
@@ -569,27 +452,14 @@ function buildQuotationPayload({ header, detailsPayload, folio = null }) {
     cliente_nombre: header.cliente_nombre,
     cliente_telefono: header.cliente_telefono || null,
     cliente_email: header.cliente_email || null,
-    cliente_rfc: header.cliente_rfc || null,
-    cliente_razon_social: header.cliente_razon_social || null,
 
-    estado: header.estado,
+    estado: header.estado || "borrador",
     subtotal: totals.subtotal,
     descuento: totals.descuento,
-    total: totals.total,
-    gastos: totals.gastos,
-    ganancia: totals.ganancia,
-
     iva_porcentaje: totals.iva_porcentaje,
-    iva_monto: totals.iva_monto,
-    isr_porcentaje: totals.isr_porcentaje,
-    isr_monto: totals.isr_monto,
-    retencion_iva_porcentaje: totals.retencion_iva_porcentaje,
-    retencion_iva_monto: totals.retencion_iva_monto,
-    total_impuestos: totals.total_impuestos,
-    total_retenciones: totals.total_retenciones,
+    total: totals.total,
 
-    fecha_vencimiento: header.fecha_vencimiento || addDaysISO(7),
-    fecha_completado: header.estado === "completado" ? now : null,
+    fecha_vencimiento: header.fecha_vencimiento || addDaysISO(14),
     notas: header.notas || null,
     updated_at: now,
   };
@@ -602,17 +472,10 @@ function buildQuotationPayload({ header, detailsPayload, folio = null }) {
 }
 
 export async function createQuotation({ header, items, month }) {
-  const folio = await generateNextFolio(month);
+  const folio = await generateNextFolio(month || getCurrentMonthValue());
   const detailsPayload = buildDetailsPayload(items);
 
-  const stockDeltas = buildStockDeltas({
-    oldItems: [],
-    newItems: detailsPayload,
-  });
-
-  await applyStockDeltas(stockDeltas);
-
-  const quotationPayload = buildQuotationPayload({
+  const quotationPayload = buildQuotationHeader({
     header,
     detailsPayload,
     folio,
@@ -621,157 +484,193 @@ export async function createQuotation({ header, items, month }) {
   const { data: created, error: qError } = await supabase
     .from("cotizaciones")
     .insert(quotationPayload)
-    .select()
+    .select(QUOTATION_SELECT)
     .single();
 
-  if (qError) {
-    await applyStockDeltas(
-      stockDeltas.map((item) => ({
-        ...item,
-        delta: -item.delta,
-      })),
-    );
-    throw qError;
-  }
+  if (qError) throw qError;
 
-  const payload = detailsPayload.map((item) => ({
-    ...item,
-    cotizacion_id: created.id,
-  }));
+  if (detailsPayload.length) {
+    const rows = detailsPayload.map((item) => ({
+      ...item,
+      cotizacion_id: created.id,
+    }));
 
-  if (payload.length > 0) {
     const { error: dError } = await supabase
       .from("cotizacion_detalles")
-      .insert(payload);
+      .insert(rows);
 
-    if (dError) {
-      await supabase.from("cotizaciones").delete().eq("id", created.id);
-      await applyStockDeltas(
-        stockDeltas.map((item) => ({
-          ...item,
-          delta: -item.delta,
-        })),
-      );
-      throw dError;
-    }
+    if (dError) throw dError;
   }
 
   return created;
 }
 
 export async function updateQuotation(id, { header, items }) {
-  const { data: oldDetails, error: oldDetailsError } = await supabase
-    .from("cotizacion_detalles")
-    .select("producto_id, cantidad")
-    .eq("cotizacion_id", id);
-
-  if (oldDetailsError) throw oldDetailsError;
-
   const detailsPayload = buildDetailsPayload(items);
 
-  const stockDeltas = buildStockDeltas({
-    oldItems: oldDetails || [],
-    newItems: detailsPayload,
-  });
-
-  await applyStockDeltas(stockDeltas);
-
-  const quotationPayload = buildQuotationPayload({
+  const quotationPayload = buildQuotationHeader({
     header,
     detailsPayload,
   });
 
-  const { error: qError } = await supabase
+  const { data: updated, error: qError } = await supabase
     .from("cotizaciones")
     .update(quotationPayload)
-    .eq("id", id);
+    .eq("id", id)
+    .select(QUOTATION_SELECT)
+    .single();
 
-  if (qError) {
-    await applyStockDeltas(
-      stockDeltas.map((item) => ({
-        ...item,
-        delta: -item.delta,
-      })),
-    );
-    throw qError;
-  }
+  if (qError) throw qError;
 
   const { error: deleteError } = await supabase
     .from("cotizacion_detalles")
     .delete()
     .eq("cotizacion_id", id);
 
-  if (deleteError) {
-    await applyStockDeltas(
-      stockDeltas.map((item) => ({
-        ...item,
-        delta: -item.delta,
-      })),
-    );
-    throw deleteError;
-  }
+  if (deleteError) throw deleteError;
 
-  const payload = detailsPayload.map((item) => ({
-    ...item,
-    cotizacion_id: id,
-  }));
+  if (detailsPayload.length) {
+    const rows = detailsPayload.map((item) => ({
+      ...item,
+      cotizacion_id: id,
+    }));
 
-  if (payload.length > 0) {
-    const { error: insertError } = await supabase
+    const { error: dError } = await supabase
       .from("cotizacion_detalles")
-      .insert(payload);
+      .insert(rows);
 
-    if (insertError) {
-      await applyStockDeltas(
-        stockDeltas.map((item) => ({
-          ...item,
-          delta: -item.delta,
-        })),
-      );
-      throw insertError;
-    }
+    if (dError) throw dError;
   }
+
+  return updated;
 }
 
 export async function deleteQuotation(id) {
-  const { data: oldDetails, error: oldDetailsError } = await supabase
-    .from("cotizacion_detalles")
-    .select("producto_id, cantidad")
-    .eq("cotizacion_id", id);
-
-  if (oldDetailsError) throw oldDetailsError;
-
-  const stockDeltas = buildStockDeltas({
-    oldItems: oldDetails || [],
-    newItems: [],
-  });
-
-  await applyStockDeltas(stockDeltas);
-
-  const { error: detailError } = await supabase
+  const { error: detailsError } = await supabase
     .from("cotizacion_detalles")
     .delete()
     .eq("cotizacion_id", id);
 
-  if (detailError) {
-    await applyStockDeltas(
-      stockDeltas.map((item) => ({
-        ...item,
-        delta: -item.delta,
-      })),
-    );
-    throw detailError;
-  }
+  if (detailsError) throw detailsError;
 
   const { error } = await supabase.from("cotizaciones").delete().eq("id", id);
 
-  if (error) {
-    await applyStockDeltas(
-      stockDeltas.map((item) => ({
-        ...item,
-        delta: -item.delta,
-      })),
-    );
-    throw error;
+  if (error) throw error;
+
+  return true;
+}
+
+export async function generateNextOrderFolio() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const prefix = `PED-${year}-${month}-`;
+
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("folio")
+    .ilike("folio", `${prefix}%`)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) throw error;
+
+  let max = 0;
+
+  for (const row of data || []) {
+    const folio = row.folio || "";
+    const numberPart = folio.split("-").pop();
+    const parsed = Number(numberPart);
+
+    if (!Number.isNaN(parsed) && parsed > max) {
+      max = parsed;
+    }
   }
+
+  return `${prefix}${String(max + 1).padStart(3, "0")}`;
+}
+
+export async function convertQuotationToOrder(quotationId, extra = {}) {
+  const quotation = await fetchQuotationById(quotationId);
+
+  if (quotation.estado === "convertida") {
+    throw new Error("Esta cotización ya fue convertida a pedido.");
+  }
+
+  if (!quotation.detalles?.length) {
+    throw new Error("La cotización no tiene productos.");
+  }
+
+  if (!quotation.cliente_nombre) {
+    throw new Error("Falta el nombre del cliente.");
+  }
+
+  const folio = await generateNextOrderFolio();
+
+  const orderPayload = {
+    folio,
+    cotizacion_id: quotation.id,
+    cliente_id: quotation.cliente_id || null,
+
+    cliente_nombre: quotation.cliente_nombre,
+    cliente_telefono: quotation.cliente_telefono || null,
+    cliente_email: quotation.cliente_email || null,
+
+    subtotal: Number(quotation.subtotal || 0),
+    descuento: Number(quotation.descuento || 0),
+    iva_porcentaje: Number(quotation.iva_porcentaje || 0),
+    total: Number(quotation.total || 0),
+
+    estado: "creado",
+    estado_pago: "pendiente",
+
+    metodo_pago: extra.metodo_pago || null,
+    entrega_inicio: extra.entrega_inicio || null,
+    entrega_fin: extra.entrega_fin || null,
+    notas: extra.notas || quotation.notas || null,
+  };
+
+  const { data: order, error: orderError } = await supabase
+    .from("pedidos")
+    .insert(orderPayload)
+    .select("*")
+    .single();
+
+  if (orderError) throw orderError;
+
+  const orderDetails = quotation.detalles.map((item) => {
+    const cantidad = Number(item.cantidad || 0);
+
+    return {
+      pedido_id: order.id,
+      producto_id: item.producto_id || null,
+      codigo: item.codigo || null,
+      nombre_producto: item.nombre_producto || "Producto",
+      cantidad_pedida: cantidad,
+      cantidad_entregada: 0,
+      cantidad_pendiente: cantidad,
+      precio_unitario: Number(item.precio_unitario || 0),
+      costo_unitario: Number(item.costo_unitario || 0),
+      importe: Number(item.importe || 0),
+      estado: "pendiente",
+    };
+  });
+
+  const { error: detailsError } = await supabase
+    .from("pedido_detalles")
+    .insert(orderDetails);
+
+  if (detailsError) throw detailsError;
+
+  const { error: quotationError } = await supabase
+    .from("cotizaciones")
+    .update({
+      estado: "convertida",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", quotation.id);
+
+  if (quotationError) throw quotationError;
+
+  return order;
 }

@@ -31,9 +31,9 @@ export function getCategoryLabel(value) {
 }
 
 export function getInventoryStatus(product) {
-  const stock = Number(product?.cantidad || 0);
+  const stock = Number(product?.stock || 0);
 
-  if (!product?.habilitado || !product?.disponibilidad) {
+  if (!product?.habilitado) {
     return {
       key: "oculto",
       label: "Oculto",
@@ -138,15 +138,19 @@ export function buildProductForm(product) {
     precio: product.precio ?? "",
     imagen: product.imagen || "",
     imagenFile: null,
-    disponibilidad: Boolean(product.disponibilidad),
-    cantidad: product.cantidad ?? "",
+
+    stock: product.stock ?? "",
     cantidad_caja: product.cantidad_caja ?? "",
     precio_compra: product.precio_compra ?? "",
-    precio_utilidad: product.precio_utilidad ?? "",
+
     habilitado: Boolean(product.habilitado),
     categoria: product.categoria || "",
     unidad: product.unidad || "",
     codigo: product.codigo || "",
+
+    clave_sat: product.clave_sat || "",
+    clave_unidad_sat: product.clave_unidad_sat || "",
+    iva_porcentaje: product.iva_porcentaje ?? "16",
   };
 }
 
@@ -156,9 +160,11 @@ export function validateProductForm(form) {
   if (!form.unidad) return "Selecciona una unidad.";
   if (form.precio === "" || Number(form.precio) < 0) return "El precio debe ser válido.";
   if (form.precio_compra === "" || Number(form.precio_compra) < 0) return "El precio de compra debe ser válido.";
-  if (form.precio_utilidad === "" || Number(form.precio_utilidad) < 0) return "La utilidad debe ser válida.";
-  if (form.cantidad === "" || Number(form.cantidad) < 0) return "La cantidad debe ser válida.";
+  if (form.stock === "" || Number(form.stock) < 0) return "El stock debe ser válido.";
   if (form.cantidad_caja === "" || Number(form.cantidad_caja) < 0) return "La cantidad por caja debe ser válida.";
+  if (!form.clave_sat?.trim()) return "La clave SAT es obligatoria.";
+  if (!form.clave_unidad_sat?.trim()) return "La clave de unidad SAT es obligatoria.";
+  if (form.iva_porcentaje === "" || Number(form.iva_porcentaje) < 0) return "El IVA debe ser válido.";
 
   return null;
 }

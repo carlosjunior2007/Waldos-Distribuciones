@@ -3,24 +3,23 @@ import jsPDF from "jspdf";
 
 import { getCategoryLabel } from "../product.helpers";
 
-export function exportProductsToExcel(filteredProducts = []) {
-  const dataToExport = filteredProducts
-    .filter((item) => Boolean(item.disponibilidad) && Boolean(item.habilitado))
-    .map((item) => ({
-      Nombre: item.nombre || "",
-      Código: item.codigo || "",
-      Descripción: item.descripcion || "",
-      Categoría: item.categoria || "",
-      Unidad: item.unidad || "",
-      Precio: Number(item.precio || 0),
-      Cantidad: Number(item.cantidad || 0),
-      "Cantidad por caja": Number(item.cantidad_caja || 0),
-    }));
-
-  if (!dataToExport.length) {
-    alert("No hay productos visibles en web y disponibles para exportar.");
-    return;
-  }
+export function exportProductsToExcel(products = []) {
+  const dataToExport = products.map((item) => ({
+    id: item.id || "",
+    codigo: item.codigo || "",
+    nombre: item.nombre || "",
+    descripcion: item.descripcion || "",
+    categoria: item.categoria || "",
+    unidad: item.unidad || "",
+    precio_compra: Number(item.precio_compra || 0),
+    precio: Number(item.precio || 0),
+    stock: Number(item.stock || 0),
+    cantidad_caja: Number(item.cantidad_caja || 0),
+    habilitado: Boolean(item.habilitado),
+    clave_sat: item.clave_sat || "",
+    clave_unidad_sat: item.clave_unidad_sat || "",
+    iva_porcentaje: Number(item.iva_porcentaje || 16),
+  }));
 
   const worksheet = XLSX.utils.json_to_sheet(dataToExport);
   const workbook = XLSX.utils.book_new();
@@ -29,17 +28,19 @@ export function exportProductsToExcel(filteredProducts = []) {
 
   XLSX.writeFile(
     workbook,
-    `productos_web_disponibles_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    `productos_edicion_masiva_${new Date().toISOString().slice(0, 10)}.xlsx`,
   );
 }
 
 export async function exportProductsToPDF(filteredProducts = []) {
-  const dataToExport = filteredProducts.filter(
-    (item) => Boolean(item.disponibilidad) && Boolean(item.habilitado),
+  const dataToExport = filteredProducts.filter((item) =>
+    Boolean(item.habilitado),
   );
 
   if (!dataToExport.length) {
-    alert("No hay productos visibles en web y disponibles para exportar en PDF.");
+    alert(
+      "No hay productos visibles en web y disponibles para exportar en PDF.",
+    );
     return;
   }
 
@@ -100,9 +101,14 @@ export async function exportProductsToPDF(filteredProducts = []) {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
     pdf.setTextColor(120, 120, 120);
-    pdf.text(`Página ${pageIndex + 1} de ${totalPages}`, pageWidth - marginX, 11, {
-      align: "right",
-    });
+    pdf.text(
+      `Página ${pageIndex + 1} de ${totalPages}`,
+      pageWidth - marginX,
+      11,
+      {
+        align: "right",
+      },
+    );
 
     pdf.setDrawColor(220, 220, 220);
     pdf.setLineWidth(0.4);
@@ -191,7 +197,10 @@ export async function exportProductsToPDF(filteredProducts = []) {
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(13);
 
-      const titleLines = pdf.splitTextToSize(safeText(item.nombre, "Sin nombre"), textW);
+      const titleLines = pdf.splitTextToSize(
+        safeText(item.nombre, "Sin nombre"),
+        textW,
+      );
       pdf.text(titleLines.slice(0, 2), textX, titleY);
 
       const titleLineCount = Math.min(titleLines.length, 2);
@@ -200,7 +209,11 @@ export async function exportProductsToPDF(filteredProducts = []) {
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9.5);
       pdf.setTextColor(...TEXT_MUTED);
-      pdf.text(`Código: ${safeText(item.codigo, "Sin código")}`, textX, afterTitleY);
+      pdf.text(
+        `Código: ${safeText(item.codigo, "Sin código")}`,
+        textX,
+        afterTitleY,
+      );
 
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9.5);
@@ -219,7 +232,12 @@ export async function exportProductsToPDF(filteredProducts = []) {
       pdf.text(finalDescLines, textX, afterTitleY + 8);
 
       pdf.setDrawColor(...BORDER);
-      pdf.line(textX, cardY + cardHeight - 12, cardX + cardWidth - innerPad, cardY + cardHeight - 12);
+      pdf.line(
+        textX,
+        cardY + cardHeight - 12,
+        cardX + cardWidth - innerPad,
+        cardY + cardHeight - 12,
+      );
 
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(8.5);
@@ -234,12 +252,72 @@ export async function exportProductsToPDF(filteredProducts = []) {
     pdf.setFontSize(8.5);
     pdf.setTextColor(...TEXT_MUTED);
     pdf.text("Catálogo generado automáticamente", marginX, pageHeight - 3.5);
-    pdf.text(new Date().toLocaleDateString("es-MX"), pageWidth - marginX, pageHeight - 3.5, {
-      align: "right",
-    });
+    pdf.text(
+      new Date().toLocaleDateString("es-MX"),
+      pageWidth - marginX,
+      pageHeight - 3.5,
+      {
+        align: "right",
+      },
+    );
   }
 
   pdf.save(`catalogo_productos_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+export async function importProductsFromExcel(file, { updateProduct }) {
+  if (!file) return { updated: 0, errors: [] };
+
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet);
+
+  const errors = [];
+  let updated = 0;
+
+  for (const [index, row] of rows.entries()) {
+    try {
+      if (!row.id) {
+        errors.push(`Fila ${index + 2}: falta id`);
+        continue;
+      }
+
+      const payload = {
+        codigo: String(row.codigo || "").trim(),
+        nombre: String(row.nombre || "").trim(),
+        descripcion: String(row.descripcion || "").trim(),
+        categoria: String(row.categoria || "").trim(),
+        unidad: String(row.unidad || "").trim(),
+        precio_compra: Number(row.precio_compra || 0),
+        precio: Number(row.precio || 0),
+        stock: Number(row.stock || 0),
+        cantidad_caja: Number(row.cantidad_caja || 0),
+        habilitado:
+          row.habilitado === true ||
+          String(row.habilitado).toLowerCase() === "true" ||
+          String(row.habilitado).toLowerCase() === "sí" ||
+          String(row.habilitado).toLowerCase() === "si",
+        clave_sat: String(row.clave_sat || "").trim(),
+        clave_unidad_sat: String(row.clave_unidad_sat || "").trim(),
+        iva_porcentaje: Number(row.iva_porcentaje || 16),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (!payload.nombre) {
+        errors.push(`Fila ${index + 2}: falta nombre`);
+        continue;
+      }
+
+      await updateProduct(row.id, payload);
+      updated += 1;
+    } catch (error) {
+      errors.push(`Fila ${index + 2}: ${error.message}`);
+    }
+  }
+
+  return { updated, errors };
 }
 
 async function loadImageAsDataUrl(url) {
@@ -323,4 +401,128 @@ function getImageFormat(dataUrl) {
   if (String(dataUrl).startsWith("data:image/png")) return "PNG";
   if (String(dataUrl).startsWith("data:image/webp")) return "WEBP";
   return "JPEG";
+}
+
+export async function previewProductsImportFromExcel(file, currentProducts = []) {
+  if (!file) return { changes: [], errors: [] };
+
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet);
+
+  const currentMap = new Map(currentProducts.map((p) => [String(p.id), p]));
+
+  const errors = [];
+  const changes = [];
+
+  const editableFields = [
+    "codigo",
+    "nombre",
+    "descripcion",
+    "categoria",
+    "unidad",
+    "precio_compra",
+    "precio",
+    "stock",
+    "cantidad_caja",
+    "habilitado",
+    "clave_sat",
+    "clave_unidad_sat",
+    "iva_porcentaje",
+  ];
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    const id = String(row.id || "").trim();
+
+    if (!id) {
+      errors.push(`Fila ${rowNumber}: falta id`);
+      return;
+    }
+
+    const original = currentMap.get(id);
+
+    if (!original) {
+      errors.push(`Fila ${rowNumber}: no existe producto con id ${id}`);
+      return;
+    }
+
+    const payload = {
+      codigo: String(row.codigo || "").trim(),
+      nombre: String(row.nombre || "").trim(),
+      descripcion: String(row.descripcion || "").trim(),
+      categoria: String(row.categoria || "").trim(),
+      unidad: String(row.unidad || "").trim(),
+      precio_compra: Number(row.precio_compra || 0),
+      precio: Number(row.precio || 0),
+      stock: Number(row.stock || 0),
+      cantidad_caja: Number(row.cantidad_caja || 0),
+      habilitado:
+        row.habilitado === true ||
+        String(row.habilitado).toLowerCase() === "true" ||
+        String(row.habilitado).toLowerCase() === "sí" ||
+        String(row.habilitado).toLowerCase() === "si",
+      clave_sat: String(row.clave_sat || "").trim(),
+      clave_unidad_sat: String(row.clave_unidad_sat || "").trim(),
+      iva_porcentaje: Number(row.iva_porcentaje || 16),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (!payload.nombre) {
+      errors.push(`Fila ${rowNumber}: falta nombre`);
+      return;
+    }
+
+    const fieldChanges = editableFields
+      .map((field) => {
+        const before = normalizeCompareValue(original[field]);
+        const after = normalizeCompareValue(payload[field]);
+
+        if (before === after) return null;
+
+        return {
+          field,
+          before: original[field],
+          after: payload[field],
+        };
+      })
+      .filter(Boolean);
+
+    if (fieldChanges.length) {
+      changes.push({
+        id,
+        rowNumber,
+        nombre: original.nombre || payload.nombre,
+        payload,
+        changes: fieldChanges,
+      });
+    }
+  });
+
+  return { changes, errors };
+}
+
+export async function applyProductsImportChanges(changes = [], { updateProduct }) {
+  const errors = [];
+  let updated = 0;
+
+  for (const item of changes) {
+    try {
+      await updateProduct(item.id, item.payload);
+      updated += 1;
+    } catch (error) {
+      errors.push(`Producto ${item.nombre}: ${error.message}`);
+    }
+  }
+
+  return { updated, errors };
+}
+
+function normalizeCompareValue(value) {
+  if (typeof value === "boolean") return String(value);
+  if (value === null || value === undefined) return "";
+  if (!Number.isNaN(Number(value)) && value !== "") return String(Number(value));
+  return String(value).trim();
 }

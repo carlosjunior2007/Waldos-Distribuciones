@@ -22,26 +22,30 @@ export default function DashboardSummaryPanel({ resumen, range }) {
 
       <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
         <SummaryBox
-          label="Pendientes"
-          value={resumen.pendientes}
-          note="Cotizaciones en espera de seguimiento."
+          label="Cotizaciones enviadas"
+          value={resumen.cotizacionesEnviadas || 0}
+          note="Cotizaciones esperando respuesta."
         />
 
         <SummaryBox
-          label="Completadas"
-          value={resumen.completadas}
-          note="Cotizaciones cerradas con compra confirmada."
+          label="Cotizaciones aceptadas"
+          value={resumen.cotizacionesAceptadas || 0}
+          note="Listas para convertirse en pedido."
         />
 
         <SummaryBox
-          label="Canceladas / vencidas"
-          value={resumen.canceladas}
-          note="Cotizaciones que no avanzaron."
+          label="Pedidos activos"
+          value={
+            (resumen.pedidosCreados || 0) +
+            (resumen.pedidosEnPreparacion || 0) +
+            (resumen.pedidosParciales || 0)
+          }
+          note="Pedidos creados, en preparación o parcialmente entregados."
         />
 
         <SummaryBox
           label="Productos nuevos"
-          value={resumen.productosNuevos}
+          value={resumen.productosNuevos || 0}
           note={
             range === "all"
               ? "Total de productos registrados."

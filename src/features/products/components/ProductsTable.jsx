@@ -5,7 +5,6 @@ import {
   Pencil,
   Tag,
   Trash2,
-  Warehouse,
 } from "lucide-react";
 
 import ActionIconButton from "../../../components/ui/ActionIconButton";
@@ -23,7 +22,6 @@ export default function ProductsTable({ products, onView, onEdit, onDelete }) {
                 "Producto",
                 "Código",
                 "Categoría",
-                "Stock",
                 "Compra",
                 "Venta",
                 "Estado",
@@ -74,10 +72,6 @@ function ProductTableRow({ item, onView, onEdit, onDelete }) {
 
       <td className="px-6 py-5">
         <Badge icon={Tag}>{getCategoryLabel(item.categoria)}</Badge>
-      </td>
-
-      <td className="px-6 py-5">
-        <Badge icon={Warehouse}>{item.cantidad} pzas</Badge>
       </td>
 
       <td className="px-6 py-5 text-sm font-medium text-text-primary">

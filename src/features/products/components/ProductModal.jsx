@@ -155,15 +155,6 @@ function ProductAuditHeader({
                 label="Visible en web"
                 value={selectedProduct.habilitado ? "Sí" : "No"}
               />
-
-              <MiniInfo
-                label="Disponibilidad"
-                value={
-                  selectedProduct.disponibilidad
-                    ? "Disponible"
-                    : "No disponible"
-                }
-              />
             </div>
           </div>
         </div>
@@ -333,24 +324,19 @@ function ProductFormFields({
         </Field>
       ))}
 
-      {[
-        ["Stock", "stock", "0"],
-        ["Cantidad por caja", "cantidad_caja", "0"],
-      ].map(([label, name, placeholder]) => (
-        <Field key={name} label={label}>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            name={name}
-            value={form[name]}
-            onChange={onChange}
-            disabled={isView}
-            placeholder={placeholder}
-            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none disabled:opacity-70"
-          />
-        </Field>
-      ))}
+      <Field label="Cantidad por caja">
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          name="cantidad_caja"
+          value={form.cantidad_caja}
+          onChange={onChange}
+          disabled={isView}
+          placeholder="0"
+          className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none disabled:opacity-70"
+        />
+      </Field>
 
       <ImageField
         form={form}
@@ -414,11 +400,9 @@ function ImageField({
                   onChange={onChange}
                   className="block w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm text-text-primary file:mr-3 file:rounded-xl file:border-0 file:bg-accent-500 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
                 />
-
                 <p className="text-xs text-text-secondary">
                   Sube una imagen del producto.
                 </p>
-
                 {form.imagen ? (
                   <button
                     type="button"
@@ -428,7 +412,6 @@ function ImageField({
                     Quitar imagen actual
                   </button>
                 ) : null}
-
                 {uploadingImage ? (
                   <p className="text-xs font-medium text-primary-600">
                     Subiendo imagen...

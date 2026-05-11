@@ -192,43 +192,27 @@ export default function QuotationFormModal({
   }
 
   function addProduct(product) {
-    const stockDisponible = Number(product.stock || 0);
-
-    if (stockDisponible <= 0) {
-      alert("Este producto no tiene stock disponible.");
-      return;
-    }
-
     const existingIndex = items.findIndex(
       (item) => item.producto_id === product.id,
     );
 
+    // Si el producto ya está en la lista, solo aumentamos la cantidad
     if (existingIndex >= 0) {
-      const next = [...items];
-      const current = next[existingIndex];
+      const newItems = [...items];
+      const currentQty = Number(newItems[existingIndex].cantidad || 0);
+      newItems[existingIndex].cantidad = String(currentQty + 1);
 
-      const newQty = Number(current.cantidad || 0) + 1;
-      const maxQty = Number(current.stock_disponible || stockDisponible);
-
-      if (newQty > maxQty) {
-        alert(`No puedes agregar más de ${maxQty} unidades disponibles.`);
-        return;
-      }
-
-      const updated = {
-        ...current,
-        cantidad: String(newQty),
+      // Recalculamos la línea
+      newItems[existingIndex] = {
+        ...newItems[existingIndex],
+        ...calculateLine(newItems[existingIndex]),
       };
 
-      next[existingIndex] = {
-        ...updated,
-        ...calculateLine(updated),
-      };
-
-      setItems(next);
+      setItems(newItems);
       return;
     }
 
+    // Si es un producto nuevo en la cotización
     const precio = Number(product.precio || 0);
     const costo = Number(product.precio_compra || 0);
     const utilidad = calculateUtilityPercent(costo, precio);
@@ -239,7 +223,6 @@ export default function QuotationFormModal({
       codigo: product.codigo || "",
       unidad: product.unidad || "",
       cantidad: "1",
-      stock_disponible: stockDisponible,
       precio_unitario: precio,
       costo_unitario: costo,
       utilidad_porcentaje: Number(utilidad.toFixed(2)),
@@ -302,15 +285,7 @@ export default function QuotationFormModal({
     const current = { ...next[index] };
 
     if (key === "cantidad") {
-      const maxQty = Number(current.stock_disponible || 0);
-      const requestedQty = Number(value || 0);
-
-      if (requestedQty > maxQty) {
-        alert(`Solo hay ${maxQty} unidades disponibles de este producto.`);
-        current.cantidad = String(maxQty);
-      } else {
-        current.cantidad = value;
-      }
+      current.cantidad = value;
     } else if (key === "utilidad_porcentaje") {
       const utilidad = Number(value || 0);
       const costo = Number(current.costo_unitario || 0);
@@ -767,16 +742,6 @@ function ProductSearchSection({
 
                 <p className="text-xs text-text-muted">
                   costo: {formatMoney(product.precio_compra || 0)}
-                </p>
-
-                <p
-                  className={`text-xs font-semibold ${
-                    Number(product.stock || 0) <= 5
-                      ? "text-error-700"
-                      : "text-success-700"
-                  }`}
-                >
-                  stock: {Number(product.stock || 0)} {product.unidad || "pzas"}
                 </p>
               </div>
             </button>

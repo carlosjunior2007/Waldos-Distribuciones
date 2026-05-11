@@ -123,7 +123,7 @@ export default function ProductsAdminPage() {
         <PageHeader
           eyebrow="Gestión comercial"
           title="Productos"
-          description="Administra el catálogo, revisa stock, controla visibilidad en web y edita todo desde modales."
+          description="Administra el catálogo, controla visibilidad en web y edita todo desde modales."
           actions={
             <button
               type="button"

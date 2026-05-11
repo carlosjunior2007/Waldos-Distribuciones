@@ -253,9 +253,8 @@ export function useProducts() {
         precio: Number(form.precio),
         imagen: imageUrl,
 
-        stock: Number(form.stock),
-        cantidad_caja: Number(form.cantidad_caja),
         precio_compra: Number(form.precio_compra),
+        cantidad_caja: Number(form.cantidad_caja),
 
         habilitado: Boolean(form.habilitado),
         categoria: form.categoria,
@@ -364,15 +363,11 @@ export function useProducts() {
   const stats = useMemo(() => {
     return {
       total: products.length,
+
       activos: products.filter(
         (item) => getInventoryStatus(item).key === "activo",
       ).length,
-      bajo: products.filter(
-        (item) => getInventoryStatus(item).key === "stock_bajo",
-      ).length,
-      agotados: products.filter(
-        (item) => getInventoryStatus(item).key === "agotado",
-      ).length,
+
       ocultos: products.filter(
         (item) => getInventoryStatus(item).key === "oculto",
       ).length,
@@ -391,16 +386,19 @@ export function useProducts() {
     const costo = Number(cost || 0);
     const utilidad = Number(utilityPercent || 0);
 
-    return costo * (1 + utilidad / 100);
+    if (costo <= 0) return 0;
+    if (utilidad >= 100) return 0;
+
+    return costo / (1 - utilidad / 100);
   }
 
   function calculateUtilityPercent(cost, salePrice) {
     const costo = Number(cost || 0);
     const precio = Number(salePrice || 0);
 
-    if (costo <= 0) return 0;
+    if (costo <= 0 || precio <= 0) return 0;
 
-    return ((precio - costo) / costo) * 100;
+    return ((precio - costo) / precio) * 100;
   }
 
   function onPriceBlur(fieldName) {

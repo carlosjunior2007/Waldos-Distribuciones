@@ -70,7 +70,6 @@ export const DASHBOARD_QUERIES = {
     descripcion,
     precio,
     precio_compra,
-    stock,
     cantidad_caja,
     habilitado,
     categoria,

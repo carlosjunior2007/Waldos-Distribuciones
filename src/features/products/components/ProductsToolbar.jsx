@@ -68,8 +68,6 @@ export default function ProductsToolbar({
         {[
           ["todos", "Todos"],
           ["activo", "Activos"],
-          ["stock_bajo", "Stock bajo"],
-          ["agotado", "Agotados"],
           ["oculto", "Ocultos"],
         ].map(([value, label]) => (
           <FilterPill

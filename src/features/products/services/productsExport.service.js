@@ -13,7 +13,6 @@ export function exportProductsToExcel(products = []) {
     unidad: item.unidad || "",
     precio_compra: Number(item.precio_compra || 0),
     precio: Number(item.precio || 0),
-    stock: Number(item.stock || 0),
     cantidad_caja: Number(item.cantidad_caja || 0),
     habilitado: Boolean(item.habilitado),
     clave_sat: item.clave_sat || "",
@@ -292,7 +291,6 @@ export async function importProductsFromExcel(file, { updateProduct }) {
         unidad: String(row.unidad || "").trim(),
         precio_compra: Number(row.precio_compra || 0),
         precio: Number(row.precio || 0),
-        stock: Number(row.stock || 0),
         cantidad_caja: Number(row.cantidad_caja || 0),
         habilitado:
           row.habilitado === true ||
@@ -425,7 +423,6 @@ export async function previewProductsImportFromExcel(file, currentProducts = [])
     "unidad",
     "precio_compra",
     "precio",
-    "stock",
     "cantidad_caja",
     "habilitado",
     "clave_sat",
@@ -457,7 +454,6 @@ export async function previewProductsImportFromExcel(file, currentProducts = [])
       unidad: String(row.unidad || "").trim(),
       precio_compra: Number(row.precio_compra || 0),
       precio: Number(row.precio || 0),
-      stock: Number(row.stock || 0),
       cantidad_caja: Number(row.cantidad_caja || 0),
       habilitado:
         row.habilitado === true ||

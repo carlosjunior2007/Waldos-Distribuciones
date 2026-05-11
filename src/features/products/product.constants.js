@@ -77,9 +77,6 @@ export const INITIAL_PRODUCT_FORM = {
 
   precio_compra: "",
   precio_utilidad: "",
-  precio: "",
-
-  stock: "",
   cantidad_caja: "",
 
   categoria: "",
@@ -88,5 +85,5 @@ export const INITIAL_PRODUCT_FORM = {
 
   clave_sat: "",
   clave_unidad_sat: "",
-  iva_porcentaje: "16",
+  iva_porcentaje: "8",
 };

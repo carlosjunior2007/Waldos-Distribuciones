@@ -31,11 +31,9 @@ export async function fetchClientQuotations(clientId) {
       folio,
       cliente_nombre,
       total,
-      ganancia,
       estado,
       created_at,
-      fecha_vencimiento,
-      fecha_completado
+      fecha_vencimiento
     `,
     )
     .eq("cliente_id", clientId)

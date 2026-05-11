@@ -129,7 +129,7 @@ export function useDashboard() {
       {
         title: "Productos",
         value: String(resumen.totalProductos),
-        note: `${resumen.productosActivos} activos con stock`,
+        note: `${resumen.productosActivos} activos`,
         icon: Package,
         tone: "primary",
       },

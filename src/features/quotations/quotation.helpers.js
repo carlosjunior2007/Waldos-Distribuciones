@@ -102,16 +102,19 @@ export function calculateSalePriceFromUtility(cost, utilityPercent) {
   const costo = Number(cost || 0);
   const utilidad = Number(utilityPercent || 0);
 
-  return costo * (1 + utilidad / 100);
+  if (costo <= 0) return 0;
+  if (utilidad >= 100) return 0;
+
+  return costo / (1 - utilidad / 100);
 }
 
 export function calculateUtilityPercent(cost, salePrice) {
   const costo = Number(cost || 0);
   const precio = Number(salePrice || 0);
 
-  if (costo <= 0) return 0;
+  if (costo <= 0 || precio <= 0) return 0;
 
-  return ((precio - costo) / costo) * 100;
+  return ((precio - costo) / precio) * 100;
 }
 
 export function calculateLine({ cantidad, precio_unitario, costo_unitario }) {
@@ -136,9 +139,6 @@ export function buildQuotationItemsFromDetails(details = []) {
       codigo: item.codigo || "",
       unidad: item.unidad || "",
       cantidad: Number(item.cantidad ?? 1),
-      stock_disponible:
-        Number(item.producto?.stock || item.stock_actual || 0) +
-        Number(item.cantidad || 0),
       precio_unitario: precio,
       costo_unitario: costo,
       utilidad_porcentaje: calculateUtilityPercent(costo, precio),

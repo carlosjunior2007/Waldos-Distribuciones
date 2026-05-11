@@ -12,7 +12,8 @@ import {
   Tag,
   ShieldCheck,
   UserRound,
-  CheckCheck 
+  CheckCheck,
+  Van,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import supabase from "../../utils/supabase.js";
@@ -60,6 +61,12 @@ const NAV_ITEMS = [
     icon: UserRound,
     end: true,
   },
+  {
+    label: "Pedidos",
+    to: "/dashboard/pedidos",
+    icon: Van,
+    end: true,
+  },
 ];
 
 function SidebarLink({ item, onClick }) {
@@ -72,7 +79,7 @@ function SidebarLink({ item, onClick }) {
       onClick={onClick}
       className={({ isActive }) =>
         [
-          "group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200",
+          "group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
           isActive
             ? "bg-accent-500 text-text-on-dark shadow-[var(--shadow-soft)]"
             : "text-text-on-dark-secondary hover:bg-primary-700 hover:text-text-on-dark",
@@ -83,13 +90,13 @@ function SidebarLink({ item, onClick }) {
         <>
           <div
             className={[
-              "flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200",
+              "flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200",
               isActive
                 ? "bg-white/12 text-text-on-dark"
                 : "bg-primary-800 text-text-on-dark-secondary group-hover:bg-primary-600 group-hover:text-text-on-dark",
             ].join(" ")}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4" />
           </div>
 
           <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
@@ -183,7 +190,7 @@ export default function DashboardLayout() {
   return (
     <div className="min-h-screen bg-background text-text-primary">
       {/* Sidebar desktop */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:flex lg:w-[290px] lg:flex-col border-r border-primary-800 bg-primary-900 text-text-on-dark">
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:flex lg:w-[270px] lg:flex-col overflow-hidden border-r border-primary-800 bg-primary-900 text-text-on-dark">
         {/* Brand */}
         <div className="border-b border-primary-800 px-6 py-6">
           <div className="flex items-center gap-4">
@@ -203,14 +210,14 @@ export default function DashboardLayout() {
         </div>
 
         {/* Nav */}
-        <div className="flex-1 px-4 py-5">
+        <div className="flex-1 overflow-y-auto px-3 py-4">
           <div className="mb-4 px-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-on-dark-muted">
               Navegación
             </p>
           </div>
 
-          <nav className="space-y-2">
+          <nav className="space-y-1.5">
             {NAV_ITEMS.map((item) => (
               <SidebarLink key={item.to} item={item} />
             ))}
@@ -218,7 +225,7 @@ export default function DashboardLayout() {
         </div>
 
         {/* Footer card */}
-        <div className="border-t border-primary-800 p-4">
+        <div className="border-t border-primary-800 p-3">
           <div className="rounded-2xl border border-primary-700 bg-primary-800/70 p-4">
             <div className="flex items-start gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-700 text-text-on-dark">
@@ -315,7 +322,7 @@ export default function DashboardLayout() {
               </div>
             </div>
 
-            <nav className="space-y-2">
+            <nav className="space-y-1.5">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
 
@@ -369,8 +376,8 @@ export default function DashboardLayout() {
       </header>
 
       {/* Content area */}
-      <div className="lg:pl-[290px]">
-        <main className="px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8">
+      <div className="lg:pl-[270px]">
+        <main className="px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8 w-full">
           <section className="mb-6 rounded-[28px] border border-border bg-surface px-5 py-5 shadow-[var(--shadow-soft)] md:px-6 md:py-6">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
               <div className="max-w-2xl">

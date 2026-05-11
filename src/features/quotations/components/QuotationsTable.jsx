@@ -79,19 +79,19 @@ function QuotationRow({
 
   return (
     <tr className="border-t border-border transition hover:bg-surface-soft/70">
-      <td className="px-6 py-5">
+      <td className="w-[180px] min-w-[180px] px-6 py-5">
         <p className="text-sm font-semibold text-text-primary">{item.folio}</p>
         <p className="mt-1 text-xs text-text-muted">Cotización registrada</p>
       </td>
 
-      <td className="px-6 py-5">
+      <td className="w-[280px] min-w-[280px] px-6 py-5">
         <p className="text-sm font-medium text-text-primary">
           {item.cliente_nombre}
         </p>
       </td>
 
       <td className="px-6 py-5">
-        <div className="flex items-start gap-4">
+        <div className="space-y-2">
           <DateBadge
             icon={CalendarDays}
             label={`Creada: ${formatDateTimeTijuana(item.created_at)}`}
@@ -111,8 +111,8 @@ function QuotationRow({
         </StatusBadge>
       </td>
 
-      <td className="px-6 py-5">
-        <div>
+      <td className="w-[200px] min-w-[200px] px-6 py-5">
+        <div className="space-y-1">
           <p className="text-sm font-semibold text-text-primary">
             {formatMoney(item.total)}
           </p>

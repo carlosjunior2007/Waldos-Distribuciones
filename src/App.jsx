@@ -16,6 +16,7 @@ import ExpensesPage from "./features/expenses/pages/ExpensesPage.jsx";
 import ClientsPage from "./features/clients/pages/ClientsPage.jsx";
 import ReceiptsPage from "./features/receipts/pages/ReceiptsPage.jsx";
 import TagsPage from "./features/labels/pages/LabelsPage.jsx";
+import Pedidos from "./features/Pedidos/pages/PedidosPage.jsx";
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="etiquetas" element={<TagsPage />} />
         <Route path="clientes" element={<ClientsPage />} />
         <Route path="contrarecibo" element={<ReceiptsPage />} />
+        <Route path="pedidos" element={<Pedidos />} />
       </Route>
 
       {/* CATALOGO */}

@@ -1,4 +1,4 @@
-import { Archive, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff} from "lucide-react";
 import { CATEGORY_OPTIONS } from "./product.constants";
 
 export function generateUUID() {
@@ -31,39 +31,19 @@ export function getCategoryLabel(value) {
 }
 
 export function getInventoryStatus(product) {
-  const stock = Number(product?.stock || 0);
-
   if (!product?.habilitado) {
     return {
       key: "oculto",
       label: "Oculto",
-      icon: Archive,
+      icon: EyeOff,
       className: "border-slate-200 bg-slate-50 text-slate-700",
-    };
-  }
-
-  if (stock <= 0) {
-    return {
-      key: "agotado",
-      label: "Agotado",
-      icon: Archive,
-      className: "border-error-100 bg-error-50 text-error-700",
-    };
-  }
-
-  if (stock <= 10) {
-    return {
-      key: "stock_bajo",
-      label: "Stock bajo",
-      icon: AlertTriangle,
-      className: "border-warning-100 bg-warning-50 text-warning-700",
     };
   }
 
   return {
     key: "activo",
     label: "Activo",
-    icon: CheckCircle2,
+    icon: Eye,
     className: "border-success-100 bg-success-50 text-success-700",
   };
 }
@@ -139,9 +119,8 @@ export function buildProductForm(product) {
     imagen: product.imagen || "",
     imagenFile: null,
 
-    stock: product.stock ?? "",
-    cantidad_caja: product.cantidad_caja ?? "",
     precio_compra: product.precio_compra ?? "",
+    cantidad_caja: product.cantidad_caja ?? "",
 
     habilitado: Boolean(product.habilitado),
     categoria: product.categoria || "",
@@ -150,7 +129,7 @@ export function buildProductForm(product) {
 
     clave_sat: product.clave_sat || "",
     clave_unidad_sat: product.clave_unidad_sat || "",
-    iva_porcentaje: product.iva_porcentaje ?? "16",
+    iva_porcentaje: product.iva_porcentaje ?? "8",
   };
 }
 
@@ -160,7 +139,6 @@ export function validateProductForm(form) {
   if (!form.unidad) return "Selecciona una unidad.";
   if (form.precio === "" || Number(form.precio) < 0) return "El precio debe ser válido.";
   if (form.precio_compra === "" || Number(form.precio_compra) < 0) return "El precio de compra debe ser válido.";
-  if (form.stock === "" || Number(form.stock) < 0) return "El stock debe ser válido.";
   if (form.cantidad_caja === "" || Number(form.cantidad_caja) < 0) return "La cantidad por caja debe ser válida.";
   if (!form.clave_sat?.trim()) return "La clave SAT es obligatoria.";
   if (!form.clave_unidad_sat?.trim()) return "La clave de unidad SAT es obligatoria.";

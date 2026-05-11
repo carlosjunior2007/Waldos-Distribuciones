@@ -19,20 +19,20 @@ export function getStoragePathFromUrl(url, bucket = LOGOS_BUCKET) {
 export function buildClientPayload(form) {
   return {
     ...form,
-    nombre: form.nombre.trim(),
-    razon_social: form.razon_social.trim() || null,
-    rfc: form.rfc.trim().toUpperCase() || null,
-    regimen_fiscal: form.regimen_fiscal.trim() || null,
-    uso_cfdi: form.uso_cfdi.trim() || null,
-    numero: form.numero.trim() || null,
-    correo: form.correo.trim() || null,
-    direccion: form.direccion.trim() || null,
-    ciudad: form.ciudad.trim() || null,
-    estado: form.estado.trim() || null,
-    codigo_postal: form.codigo_postal.trim() || null,
-    pais: form.pais.trim() || null,
+    nombre: (form.nombre || "").trim(),
+    razon_social: (form.razon_social || "").trim() || null,
+    rfc: (form.rfc || "").trim().toUpperCase() || null,
+    regimen_fiscal: (form.regimen_fiscal || "").trim() || null,
+    uso_cfdi: (form.uso_cfdi || "").trim() || null,
+    numero: (form.numero || "").trim() || null,
+    correo: (form.correo || "").trim() || null,
+    direccion: (form.direccion || "").trim() || null,
+    ciudad: (form.ciudad || "").trim() || null,
+    estado: (form.estado || "").trim() || null,
+    codigo_postal: (form.codigo_postal || "").trim() || null,
+    pais: (form.pais || "").trim() || null,
     logo: form.logo || null,
-    notas: form.notas.trim() || null,
+    notas: (form.notas || "").trim() || null,
   };
 }
 

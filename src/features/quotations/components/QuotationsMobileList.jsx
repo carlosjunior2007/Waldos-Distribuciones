@@ -48,21 +48,29 @@ function QuotationMobileCard({ item, onDownloadPdf, onEdit, onDelete }) {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <MiniInfo label="Fecha" value={formatDateTimeTijuana(item.created_at)} />
+        <MiniInfo
+          label="Fecha"
+          value={formatDateTimeTijuana(item.created_at)}
+        />
         <MiniInfo
           label="Vence"
           value={formatDateTimeTijuana(item.fecha_vencimiento)}
         />
         <MiniInfo label="Subtotal" value={formatMoney(item.subtotal || 0)} />
-        <MiniInfo label="IVA" value={formatMoney(item.iva_monto || 0)} />
         <MiniInfo
-          label="Retenciones"
-          value={`-${formatMoney(item.total_retenciones || 0)}`}
+          label={`IVA ${Number(item.iva_porcentaje || 0)}%`}
+          value={formatMoney(
+            Math.max(
+              Number(item.subtotal || 0) - Number(item.descuento || 0),
+              0,
+            ) *
+              (Number(item.iva_porcentaje || 0) / 100),
+          )}
         />
         <MiniInfo label="Total" value={formatMoney(item.total)} strong />
         <MiniInfo
           label="Ganancia"
-          value={formatMoney(item.ganancia || 0)}
+          value={formatMoney(item.ganancia_estimada || 0)}
           valueClass="text-success-700"
           strong
         />

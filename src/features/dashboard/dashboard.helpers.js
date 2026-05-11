@@ -306,7 +306,7 @@ export function calculateDashboardSummary({
   }, {});
 
   const productosActivos = productos.filter(
-    (item) => item.habilitado === true && Number(item.stock || 0) > 0,
+    (item) => item.habilitado === true
   ).length;
 
   return {

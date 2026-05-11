@@ -229,8 +229,8 @@ export default function ProductPage() {
 
         {meta?.disponible ? (
           <span className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 text-sm font-semibold text-[#081f3a] sm:w-auto sm:border-0 sm:bg-transparent sm:px-0">
+            Disponible
             <CheckCircle2 className="h-5 w-5 shrink-0" />
-            Disponible <span className="text-slate-500">({meta.stock})</span>
           </span>
         ) : (
           <span className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 text-sm font-semibold text-red-700 sm:w-auto sm:border-0 sm:bg-transparent sm:px-0">
@@ -273,13 +273,6 @@ export default function ProductPage() {
                   {meta.caja ? ` · Caja: ${meta.caja}` : ""}
                 </span>
               ) : null}
-            </div>
-
-            <div className="mt-5 text-sm">
-              <span className="text-slate-500">Existencia: </span>
-              <span className="font-semibold text-slate-900">
-                {meta.stock} piezas
-              </span>
             </div>
 
             <div className="mt-5">

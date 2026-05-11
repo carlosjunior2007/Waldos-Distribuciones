@@ -127,12 +127,10 @@ export async function searchProducts(term = "") {
       codigo,
       categoria,
       unidad,
-      habilitado,
-      stock
+      habilitado
     `,
     )
     .eq("habilitado", true)
-    .gt("stock", 0)
     .order("nombre", { ascending: true })
     .limit(15);
 
@@ -373,7 +371,7 @@ export async function fetchQuotationById(id) {
     const { data: products, error: pError } = await supabase
       .from("productos")
       .select(
-        "id, nombre, codigo, unidad, descripcion, precio, precio_compra, stock",
+        "id, nombre, codigo, unidad, descripcion, precio, precio_compra",
       )
       .in("id", productoIds);
 
@@ -394,7 +392,6 @@ export async function fetchQuotationById(id) {
         item.nombre_producto || product?.nombre || "Producto no encontrado",
       codigo: item.codigo || product?.codigo || "",
       unidad: product?.unidad || "",
-      stock_actual: Number(product?.stock || 0),
       producto: product,
     };
   });
@@ -543,6 +540,17 @@ export async function updateQuotation(id, { header, items }) {
   }
 
   return updated;
+}
+
+// En quotations.js
+export function getMonthYearRange(month, year) {
+  const start = new Date(year, month, 1, 0, 0, 0, 0);
+  const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
+
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
 }
 
 export async function deleteQuotation(id) {

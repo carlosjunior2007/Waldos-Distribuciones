@@ -59,18 +59,11 @@ export default function ProductCard({ producto, from }) {
             {nombre}
           </h3>
 
-          <div className="mt-4 space-y-1.5 text-sm">
+          <div className="mt-4 space-y-1.5 text-sm mb-2">
             <p className="flex justify-between gap-3 text-slate-500">
               <span>Código</span>
               <span className="truncate font-semibold text-slate-800">
                 {codigo}
-              </span>
-            </p>
-
-            <p className="flex justify-between gap-3 text-slate-500">
-              <span>Existencia</span>
-              <span className="font-semibold text-slate-800">
-                {Number.isFinite(stock) ? stock : "—"}
               </span>
             </p>
           </div>

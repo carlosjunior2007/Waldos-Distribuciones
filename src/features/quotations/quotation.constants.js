@@ -6,7 +6,7 @@ export const INITIAL_QUOTATION_FORM = {
   estado: "borrador",
   descuento: "",
   fecha_vencimiento: "",
-  iva_porcentaje: "16",
+  iva_porcentaje: "8",
   notas: "",
 };
 

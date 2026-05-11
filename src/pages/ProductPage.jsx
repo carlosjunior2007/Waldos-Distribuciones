@@ -43,7 +43,6 @@ export default function ProductPage() {
   descripcion,
   precio,
   imagen,
-  stock,
   categoria,
   codigo,
   unidad,
@@ -115,7 +114,6 @@ export default function ProductPage() {
     descripcion,
     precio,
     imagen,
-    stock,
     categoria,
     codigo,
     unidad,
@@ -175,13 +173,8 @@ export default function ProductPage() {
   const meta = useMemo(() => {
     if (!producto) return null;
 
-    const stock = Number(producto.stock ?? 0);
-    const disponible = producto.habilitado === true && stock > 0;
-
     return {
       precio: formatMXN(producto.precio),
-      stock,
-      disponible,
       codigo: String(producto.codigo || "—").trim(),
       categoria: String(producto.categoria || ""),
       unidad: String(producto.unidad || ""),
@@ -227,17 +220,10 @@ export default function ProductPage() {
           <span>Volver al catálogo</span>
         </button>
 
-        {meta?.disponible ? (
-          <span className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 text-sm font-semibold text-[#081f3a] sm:w-auto sm:border-0 sm:bg-transparent sm:px-0">
-            Disponible
-            <CheckCircle2 className="h-5 w-5 shrink-0" />
-          </span>
-        ) : (
-          <span className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 text-sm font-semibold text-red-700 sm:w-auto sm:border-0 sm:bg-transparent sm:px-0">
-            <XCircle className="h-5 w-5 shrink-0" />
-            Agotado
-          </span>
-        )}
+        <span className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 text-sm font-semibold text-[#081f3a] sm:w-auto sm:border-0 sm:bg-transparent sm:px-0">
+          Disponible
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+        </span>
       </div>
 
       <div className="grid grid-cols-12 items-start gap-6">

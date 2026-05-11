@@ -21,12 +21,9 @@ const CATEGORIAS_UI = [
 const DEFAULT_PAGE_SIZE = 21;
 
 function normalizeProduct(producto) {
-  const stock = Number(producto.stock ?? 0);
-
   return {
     ...producto,
-    cantidad: stock,
-    disponibilidad: producto.habilitado === true && stock > 0,
+    disponibilidad: producto.habilitado === true,
   };
 }
 
@@ -62,7 +59,6 @@ export default function Catalogo() {
           descripcion,
           precio,
           imagen,
-          stock,
           categoria,
           codigo,
           unidad,

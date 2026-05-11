@@ -5,9 +5,6 @@ export default function ProductCard({ producto, from }) {
   const nombre = producto?.nombre || "Producto";
   const codigo = String(producto?.codigo || "—").trim();
 
-  const stock = Number(producto?.cantidad ?? 0);
-  const disponible = Boolean(producto?.disponibilidad ?? true) && stock > 0;
-
   const img = String(producto?.imagen || "").trim();
   const tieneImagen = img.length > 0;
 
@@ -35,19 +32,11 @@ export default function ProductCard({ producto, from }) {
           </div>
 
           <div className="absolute right-7 top-7">
-            {disponible ? (
               <StatusBadge
                 icon={CheckCircle2}
                 label="Disponible"
                 className="border-[#081f3a]/15 bg-white text-[#081f3a]"
               />
-            ) : (
-              <StatusBadge
-                icon={XCircle}
-                label="Agotado"
-                className="border-red-100 bg-white text-red-700"
-              />
-            )}
           </div>
         </div>
 

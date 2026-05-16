@@ -26,9 +26,15 @@ const BASE_ORDER = {
   fecha_emision: addDays(-2),
   entrega_inicio: addDays(1),
   entrega_fin: addDays(5),
-  notas: "Cliente solicita entregas por dirección.",
+  notas: "Cliente solicita entregas parciales.",
   tracking_token: "TRK-WAL-26-0001",
-  addresses: [
+  recurrence: {
+    type: "monthly",
+    generation_day: "same_day",
+    auto_schedule_delivery: true,
+    next_order_at: addDays(30),
+  },
+  cliente_direcciones: [
     {
       id: "addr-001",
       nombre: "Sucursal Centro",
@@ -54,6 +60,45 @@ const BASE_ORDER = {
       contacto_telefono: "664 555 0102",
       principal: false,
       notas: "Recibe almacén.",
+    },
+    {
+      id: "addr-003",
+      nombre: "Sucursal Playas",
+      direccion: "Paseo Playas 88",
+      ciudad: "Tijuana",
+      estado: "Baja California",
+      codigo_postal: "22500",
+      pais: "México",
+      contacto_nombre: "Ana Torres",
+      contacto_telefono: "664 555 0103",
+      principal: false,
+      notas: "Entregar antes de mediodía.",
+    },
+    {
+      id: "addr-004",
+      nombre: "Sucursal Rosarito",
+      direccion: "Blvd. Benito Juárez 210",
+      ciudad: "Playas de Rosarito",
+      estado: "Baja California",
+      codigo_postal: "22710",
+      pais: "México",
+      contacto_nombre: "Luis Rivera",
+      contacto_telefono: "661 555 0104",
+      principal: false,
+      notas: "Confirmar acceso con recepción.",
+    },
+    {
+      id: "addr-005",
+      nombre: "Sucursal La Mesa",
+      direccion: "Blvd. Díaz Ordaz 990",
+      ciudad: "Tijuana",
+      estado: "Baja California",
+      codigo_postal: "22105",
+      pais: "México",
+      contacto_nombre: "Karla Núñez",
+      contacto_telefono: "664 555 0105",
+      principal: false,
+      notas: "Recibe encargado de turno.",
     },
   ],
   details: [
@@ -106,7 +151,7 @@ const BASE_ORDER = {
       fecha_entrega: addDays(-1),
       recibido_por: "María López",
       notas: "Primera entrega parcial.",
-      direccion_entrega_id: "addr-001",
+      cliente_direccion_id: "addr-001",
       details: [
         {
           pedido_detalle_id: "detail-001",
@@ -133,6 +178,48 @@ const BASE_ORDER = {
 const MOCK_ORDERS = Array.from({ length: 19 }).map((_, index) => {
   const n = index + 1;
   const status = ["creado", "parcial", "entregado"][index % 3];
+  const finalStatus = index === 0 ? "parcial" : status;
+
+  const details = BASE_ORDER.details.map((item) => {
+    const ordered = Number(item.cantidad_pedida || 0);
+    let delivered = 0;
+
+    if (finalStatus === "entregado") delivered = ordered;
+    if (finalStatus === "parcial") delivered = Math.floor(ordered * 0.4);
+
+    return {
+      ...item,
+      cantidad_entregada: delivered,
+      cantidad_pendiente: Math.max(ordered - delivered, 0),
+      estado:
+        delivered <= 0
+          ? "pendiente"
+          : delivered >= ordered
+            ? "entregado"
+            : "parcial",
+    };
+  });
+
+  const deliveries =
+    finalStatus === "creado"
+      ? []
+      : [
+          {
+            ...BASE_ORDER.deliveries[0],
+            id: `delivery-${String(n).padStart(3, "0")}`,
+            folio: `ENT-2026-05-${String(n).padStart(3, "0")}`,
+            pedido_id: `order-${String(n).padStart(3, "0")}`,
+            estado: finalStatus === "entregado" ? "entregada" : "parcial",
+            details: details
+              .filter((item) => Number(item.cantidad_entregada || 0) > 0)
+              .map((item) => ({
+                pedido_detalle_id: item.id,
+                producto_id: item.producto_id,
+                nombre_producto: item.nombre_producto,
+                cantidad_entregada: item.cantidad_entregada,
+              })),
+          },
+        ];
 
   return {
     ...BASE_ORDER,
@@ -150,11 +237,13 @@ const MOCK_ORDERS = Array.from({ length: 19 }).map((_, index) => {
       index === 0
         ? BASE_ORDER.cliente_telefono
         : `664 555 ${String(1000 + n)}`,
-    estado: index === 0 ? "parcial" : status,
+    estado: finalStatus,
     estado_pago: index % 4 === 0 ? "pagado" : "pendiente",
     tracking_token: `TRK-WAL-26-${String(n).padStart(4, "0")}`,
     entrega_inicio: addDays(index + 1),
     entrega_fin: addDays(index + 4),
+    details,
+    deliveries,
   };
 });
 

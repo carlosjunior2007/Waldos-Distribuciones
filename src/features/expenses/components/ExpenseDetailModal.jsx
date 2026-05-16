@@ -17,9 +17,9 @@ export default function ExpenseDetailModal({
       open={open}
       onClose={onClose}
       title={
-        item.rowType === "ganancia" ? "Detalle de ganancia" : "Detalle de gasto"
+        item.rowType === "ganancia" ? "Detalle del pedido" : "Detalle de gasto"
       }
-      subtitle="Detalle del movimiento seleccionado."
+      subtitle="Resumen financiero del movimiento seleccionado."
       width="max-w-2xl"
       zIndex="z-[80]"
     >
@@ -31,6 +31,7 @@ export default function ExpenseDetailModal({
             ["Cliente", item.cliente],
             ["Fecha", item.fecha],
             ["Gastos", formatMoney(item.gastos)],
+            ["Utilidad realizada", item.rowType === "ganancia" ? (item.realizada ? formatMoney(item.utilidadBruta) : "Pendiente") : "-"],
             ["Neto", formatMoney(item.ganancia)],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl bg-surface-soft p-4">
@@ -48,7 +49,7 @@ export default function ExpenseDetailModal({
         {item.expenses?.length ? (
           <div className="rounded-2xl border border-border bg-surface-soft p-4">
             <p className="text-sm font-semibold text-text-primary">
-              Gastos relacionados
+              Gastos asociados
             </p>
 
             <div className="mt-3 space-y-3">

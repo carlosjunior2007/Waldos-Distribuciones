@@ -30,6 +30,15 @@ export function formatMoney(value) {
 export function getOrderStatusMeta(status) {
   const value = String(status || "").toLowerCase();
 
+  if (value === "borrador") {
+    return {
+      key: "borrador",
+      label: "Borrador",
+      icon: FileCheck2,
+      className: "border-slate-200 bg-slate-50 text-slate-700",
+    };
+  }
+
   if (value === "creado") {
     return {
       key: "creado",
@@ -136,7 +145,7 @@ export function getDeliveryStatusMeta(status) {
   }
 
   return {
-    label: "Programada",
+    label: "Pendiente",
     icon: Clock3,
     className: "border-slate-200 bg-slate-50 text-slate-700",
   };
@@ -198,8 +207,12 @@ export function getPendingProducts(details = []) {
 
 
 export function calculateDerivedOrderStatus(order = {}) {
-  if (String(order.estado || "").toLowerCase() === "cancelado") {
+  const rawStatus = String(order.estado || "").toLowerCase();
+  if (rawStatus === "cancelado") {
     return "cancelado";
+  }
+  if (rawStatus === "borrador") {
+    return "borrador";
   }
 
   const progress = calculateOrderProgress(order.details || []);
@@ -209,4 +222,45 @@ export function calculateDerivedOrderStatus(order = {}) {
   if (progress.pending <= 0) return "entregado";
 
   return "parcial";
+}
+
+export function isOrderProfitRealized(order = {}) {
+  const status = calculateDerivedOrderStatus(order);
+  const paymentStatus = String(order.estado_pago || "").toLowerCase();
+
+  return status === "entregado" && paymentStatus === "pagado";
+}
+
+export function calculateOrderProfit(details = []) {
+  const subtotal = details.reduce((sum, item) => {
+    return sum + Number(item.cantidad_pedida || 0) * Number(item.precio_unitario || 0);
+  }, 0);
+
+  const cost = details.reduce((sum, item) => {
+    return sum + Number(item.cantidad_pedida || 0) * Number(item.costo_unitario || 0);
+  }, 0);
+
+  const profit = subtotal - cost;
+  const margin = subtotal > 0 ? (profit / subtotal) * 100 : 0;
+  const markup = cost > 0 ? (profit / cost) * 100 : 0;
+
+  return {
+    subtotal,
+    cost,
+    profit,
+    margin,
+    markup,
+  };
+}
+
+export function calculateLineProfit(item = {}) {
+  const quantity = Number(item.cantidad_pedida || 0);
+  const price = Number(item.precio_unitario || 0);
+  const costUnit = Number(item.costo_unitario || 0);
+  const sale = quantity * price;
+  const cost = quantity * costUnit;
+  const profit = sale - cost;
+  const margin = sale > 0 ? (profit / sale) * 100 : 0;
+
+  return { sale, cost, profit, margin };
 }

@@ -37,7 +37,7 @@ export default function ExpensesTable({
                 "Cliente",
                 "Fecha",
                 "Gastos",
-                "Ganancia",
+                "Neto",
                 "Acciones",
               ].map((header, index) => (
                 <th
@@ -159,7 +159,7 @@ function ExpenseTableRow({
         <div className="flex items-center justify-end gap-2">
           <ActionIconButton
             icon={Eye}
-            label="Ver gastos"
+            label="Ver detalle"
             tone="default"
             onClick={() => onDetail(item)}
           />

@@ -3,8 +3,9 @@ import {
   useNavigate,
   useSearchParams,
   useLocation,
+  Link,
 } from "react-router-dom";
-import { Search, X } from "lucide-react";
+import { Search, X, PackageSearch } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 export default function CatalogLayout() {
@@ -52,51 +53,68 @@ export default function CatalogLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="flex min-h-screen flex-col bg-background">
       <header className="w-full border-b border-slate-200 bg-[#081f3a] px-4 py-4 md:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <a href="/catalogo">
-              <img
-                src="/camion.png"
-                alt="Waldo Distribuciones"
-                className="h-14 w-14 object-contain md:h-16 md:w-16"
-              />
-            </a>
+        <div className="mx-auto flex max-w-7xl flex-col gap-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <Link to="/catalogo">
+                <img
+                  src="/camion.png"
+                  alt="Waldo Distribuciones"
+                  className="h-14 w-14 object-contain md:h-16 md:w-16"
+                />
+              </Link>
 
-            <div>
-              <h1 className="text-base font-bold text-white md:text-lg">
-                Waldo Distribuciones
-              </h1>
-              <p className="text-sm text-slate-300">Catálogo</p>
+              <div>
+                <h1 className="text-base font-bold text-white md:text-lg">
+                  Waldo Distribuciones
+                </h1>
+                <p className="text-sm text-slate-300">Catálogo</p>
+              </div>
             </div>
-          </div>
 
-          <div className="w-full md:max-w-xl">
-            <form
-              onSubmit={handleSubmit}
-              className="flex h-12 items-center gap-3 rounded-xl bg-white px-4 shadow-sm"
-            >
-              <Search className="h-5 w-5 shrink-0 text-slate-400" />
+            <div className="flex w-full flex-col gap-3 md:max-w-3xl md:flex-row md:items-center">
+              <form
+                onSubmit={handleSubmit}
+                className="flex h-12 flex-1 items-center gap-3 rounded-xl bg-white px-4 shadow-sm"
+              >
+                <Search className="h-5 w-5 shrink-0 text-slate-400" />
 
-              <input
-                ref={inputRef}
-                type="text"
-                defaultValue={currentQ}
-                placeholder="Busca por código, nombre o descripción"
-                className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-              />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  defaultValue={currentQ}
+                  placeholder="Busca por código, nombre o descripción"
+                  className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                />
 
-              {currentQ ? (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="shrink-0 text-slate-400 transition hover:text-slate-700"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              ) : null}
-            </form>
+                {currentQ ? (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    className="shrink-0 text-slate-400 transition hover:text-slate-700"
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                ) : null}
+              </form>
+
+              <Link
+                to="/tracking"
+                className="
+                  inline-flex h-12 shrink-0 items-center justify-center gap-2
+                  rounded-xl bg-red-600 px-5 text-sm font-bold text-white
+                  shadow-sm transition
+                  hover:bg-red-700 hover:shadow-md
+                  active:scale-[0.98]
+                "
+              >
+                <PackageSearch className="h-5 w-5" />
+                Rastrear pedido
+              </Link>
+            </div>
           </div>
         </div>
       </header>

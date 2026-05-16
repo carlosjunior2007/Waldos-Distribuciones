@@ -6,16 +6,62 @@ import EmptyState from "../../../components/ui/EmptyState";
 import ConfirmDeleteModal from "../../../components/ui/ConfirmDeleteModal";
 
 import { useClients } from "../hooks/useClients";
+import { useClientLabels } from "../hooks/useClientLabels";
 
 import ClientModal from "../components/ClientModal";
 import ClientListCard from "../components/ClientListCard";
 import ClientDetail from "../components/ClientDetail";
+import LabelModal from "../components/LabelModal";
+import { LabelPreviewContent } from "../components/LabelPreview";
 
 export default function ClientsPage() {
   const clients = useClients();
+  const labels = useClientLabels(clients.selectedClient);
 
   return (
     <section className="space-y-6">
+
+      {labels.printPayload ? (
+        <div
+          style={{
+            position: "fixed",
+            left: "-99999px",
+            top: 0,
+            opacity: 0,
+            pointerEvents: "none",
+          }}
+        >
+          <LabelPreviewContent
+            form={labels.printPayload.form}
+            client={labels.printPayload.client}
+            product={labels.printPayload.product}
+            companyOptions={labels.printPayload.companyOptions}
+            elementId="quick-label-print"
+          />
+        </div>
+      ) : null}
+
+      <LabelModal
+        open={labels.labelModalOpen}
+        onClose={labels.closeModal}
+        onSaved={() => labels.loadLabels(clients.selectedClient?.id)}
+        selectedClient={clients.selectedClient}
+        editingLabel={labels.editingLabel}
+        products={labels.products}
+        companyOptions={labels.companyOptions}
+        setCompanyOptions={labels.setCompanyOptions}
+      />
+
+      <ConfirmDeleteModal
+        open={Boolean(labels.labelToDelete)}
+        title="Eliminar etiqueta"
+        message="¿Seguro que quieres eliminar esta etiqueta?"
+        itemName={labels.labelToDelete?.productos?.nombre || "Etiqueta"}
+        loading={labels.deletingLabel}
+        onClose={() => labels.setLabelToDelete(null)}
+        onConfirm={labels.removeLabel}
+        confirmText="Eliminar etiqueta"
+      />
       <ClientModal
         open={clients.modalOpen}
         onClose={() => clients.setModalOpen(false)}
@@ -39,7 +85,7 @@ export default function ClientsPage() {
         <PageHeader
           eyebrow="Clientes"
           title="Gestión de clientes"
-          description="Administra datos fiscales, contacto, dirección, logo y cotizaciones asociadas."
+          description="Administra datos fiscales, contacto, direcciones de entrega y etiquetas desde un solo lugar."
           actions={
             <button
               type="button"
@@ -73,7 +119,7 @@ export default function ClientsPage() {
               ) : !clients.clients.length ? (
                 <EmptyState
                   title="No hay clientes"
-                  description="Crea tu primer cliente para asociar etiquetas y cotizaciones."
+                  description="Crea tu primer cliente para guardar datos, direcciones, etiquetas y pedidos."
                   className="rounded-2xl border border-dashed border-border py-8"
                 />
               ) : (
@@ -98,19 +144,20 @@ export default function ClientsPage() {
             {!clients.selectedClient ? (
               <EmptyState
                 title="Selecciona un cliente"
-                description="Elige un cliente para ver su información completa."
+                description="Elige un cliente para ver datos, direcciones, etiquetas y pedidos."
                 className="rounded-2xl border border-dashed border-border"
               />
             ) : (
               <ClientDetail
                 client={clients.selectedClient}
-                quotations={clients.quotations}
+                orders={clients.orders}
                 totals={clients.totals}
-                loadingQuotations={clients.loadingQuotations}
+                loadingOrders={clients.loadingOrders}
                 onEdit={() => clients.setModalOpen(true)}
                 onDelete={() =>
                   clients.setClientToDelete(clients.selectedClient)
                 }
+                labels={labels}
               />
             )}
           </main>

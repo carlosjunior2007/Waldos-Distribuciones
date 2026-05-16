@@ -1,4 +1,5 @@
 import { CalendarDays } from "lucide-react";
+import { formatMoney } from "../../../utils/formatters";
 import SummaryBox from "./SummaryBox";
 
 export default function DashboardSummaryPanel({ resumen, range }) {
@@ -11,7 +12,7 @@ export default function DashboardSummaryPanel({ resumen, range }) {
           </p>
 
           <h3 className="mt-1 text-xl font-bold text-text-primary">
-            Operación general
+            Pendientes y operación
           </h3>
         </div>
 
@@ -20,7 +21,43 @@ export default function DashboardSummaryPanel({ resumen, range }) {
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <SummaryBox
+          label="Pedidos pendientes"
+          value={resumen.pedidosPendientes || 0}
+          note="Pedidos activos que todavía no están entregados."
+        />
+
+        <SummaryBox
+          label="Entregas pendientes"
+          value={resumen.entregasPendientes || 0}
+          note="Entregas programadas, pendientes o en ruta."
+        />
+
+        <SummaryBox
+          label="Pagos pendientes"
+          value={resumen.pagosPendientes || 0}
+          note={`${formatMoney(resumen.valorPendienteCobro)} por cobrar.`}
+        />
+
+        <SummaryBox
+          label="Unidades pendientes"
+          value={resumen.unidadesPendientes || 0}
+          note="Unidades que faltan por entregar en pedidos activos."
+        />
+
+        <SummaryBox
+          label="Pedidos entregados"
+          value={resumen.pedidosEntregados || 0}
+          note="Pedidos cerrados en entrega."
+        />
+
+        <SummaryBox
+          label="Entregas realizadas"
+          value={resumen.entregasEntregadas || 0}
+          note="Entregas marcadas como entregadas."
+        />
+
         <SummaryBox
           label="Cotizaciones enviadas"
           value={resumen.cotizacionesEnviadas || 0}
@@ -31,16 +68,6 @@ export default function DashboardSummaryPanel({ resumen, range }) {
           label="Cotizaciones aceptadas"
           value={resumen.cotizacionesAceptadas || 0}
           note="Listas para convertirse en pedido."
-        />
-
-        <SummaryBox
-          label="Pedidos activos"
-          value={
-            (resumen.pedidosCreados || 0) +
-            (resumen.pedidosEnPreparacion || 0) +
-            (resumen.pedidosParciales || 0)
-          }
-          note="Pedidos creados, en preparación o parcialmente entregados."
         />
 
         <SummaryBox

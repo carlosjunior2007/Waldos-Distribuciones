@@ -43,6 +43,10 @@ export function useQuotations() {
   const [quotationToDelete, setQuotationToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  const [quotationToConvert, setQuotationToConvert] = useState(null);
+  const [convertModalOpen, setConvertModalOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
+
   const monthOptions = useMemo(() => buildLastMonthsOptions(18), []);
 
   useEffect(() => {
@@ -144,27 +148,42 @@ export function useQuotations() {
     setPage(1);
   }
 
-  async function convertToOrder(id) {
+  async function openConvertModal(id) {
     try {
-      const entrega_inicio = prompt(
-        "Fecha inicio entrega YYYY-MM-DD. Opcional:",
-      );
-      const entrega_fin = prompt("Fecha fin entrega YYYY-MM-DD. Opcional:");
-      const metodo_pago = prompt("Método de pago. Opcional:");
+      setConverting(false);
+      const quotation = await fetchQuotationById(id);
+      setQuotationToConvert(quotation);
+      setConvertModalOpen(true);
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "No se pudo cargar la cotización.");
+    }
+  }
 
-      await convertQuotationToOrder(id, {
-        entrega_inicio: entrega_inicio
-          ? new Date(entrega_inicio).toISOString()
-          : null,
-        entrega_fin: entrega_fin ? new Date(entrega_fin).toISOString() : null,
-        metodo_pago: metodo_pago || null,
-      });
+  function closeConvertModal() {
+    if (converting) return;
 
+    setConvertModalOpen(false);
+    setQuotationToConvert(null);
+  }
+
+  async function confirmConvertToOrder(extra = {}) {
+    if (!quotationToConvert?.id) return;
+
+    try {
+      setConverting(true);
+
+      await convertQuotationToOrder(quotationToConvert.id, extra);
+
+      setConvertModalOpen(false);
+      setQuotationToConvert(null);
       await loadData();
       alert("Cotización convertida a pedido.");
     } catch (error) {
       console.error(error);
       alert(error.message || "No se pudo convertir a pedido.");
+    } finally {
+      setConverting(false);
     }
   }
 
@@ -201,6 +220,11 @@ export function useQuotations() {
     loadData,
     downloadPdf,
 
-    convertToOrder,
+    quotationToConvert,
+    convertModalOpen,
+    converting,
+    openConvertModal,
+    closeConvertModal,
+    confirmConvertToOrder,
   };
 }

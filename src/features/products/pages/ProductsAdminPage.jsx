@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, Plus } from "lucide-react";
+import { Download, Image as ImageIcon, Loader2, Package, Plus, Tag } from "lucide-react";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -25,6 +25,7 @@ import { updateProduct } from "../services/products.service";
 
 export default function ProductsAdminPage() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [catalogModalOpen, setCatalogModalOpen] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
   const [importing, setImporting] = useState(false);
 
@@ -69,10 +70,16 @@ export default function ProductsAdminPage() {
     exportProductsToExcel(products.products);
   }
 
-  async function handleExportPDF() {
+  function handleOpenCatalogModal() {
+    if (products.filteredProducts.length === 0) return;
+    setCatalogModalOpen(true);
+  }
+
+  async function handleExportPDF(options) {
     try {
       setIsExportingPDF(true);
-      await exportProductsToPDF(products.filteredProducts);
+      await exportProductsToPDF(products.filteredProducts, options);
+      setCatalogModalOpen(false);
     } finally {
       setIsExportingPDF(false);
     }
@@ -107,6 +114,16 @@ export default function ProductsAdminPage() {
         onConfirm={products.removeProduct}
         confirmText="Eliminar producto"
       />
+
+      <CatalogExportModal
+        open={catalogModalOpen}
+        loading={isExportingPDF}
+        totalProducts={products.filteredProducts.length}
+        onClose={() => setCatalogModalOpen(false)}
+        onConfirm={handleExportPDF}
+      />
+
+      {isExportingPDF ? <CatalogLoadingOverlay /> : null}
 
       {importPreview ? (
         <BulkImportPreviewModal
@@ -144,7 +161,7 @@ export default function ProductsAdminPage() {
           filteredProducts={products.filteredProducts}
           isExportingPDF={isExportingPDF}
           onExportExcel={handleExportExcel}
-          onExportPDF={handleExportPDF}
+          onExportPDF={handleOpenCatalogModal}
           onImportExcel={handleImportExcel}
         />
 
@@ -190,6 +207,174 @@ export default function ProductsAdminPage() {
         )}
       </section>
     </section>
+  );
+}
+
+function CatalogExportModal({ open, loading, totalProducts, onClose, onConfirm }) {
+  const [options, setOptions] = useState({
+    includePrices: true,
+    includeImages: true,
+  });
+
+  if (!open) return null;
+
+  function updateOption(field, value) {
+    setOptions((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
+
+  const previewTitle = options.includePrices
+    ? "Catálogo con precios"
+    : "Catálogo sin precios";
+
+  const previewDescription = options.includeImages
+    ? "Incluye imagen, descripción y datos comerciales."
+    : "Formato más compacto, sin imágenes.";
+
+  return (
+    <div className="fixed inset-0 z-[95] flex min-h-[100dvh] items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-border bg-surface shadow-2xl">
+        <div className="border-b border-border p-6">
+          <p className="text-xs font-black uppercase tracking-[0.28em] text-accent-600">
+            Descargar catálogo
+          </p>
+
+          <h3 className="mt-2 text-2xl font-black text-text-primary">
+            Elige cómo quieres generarlo
+          </h3>
+
+          <p className="mt-2 text-sm text-text-secondary">
+            Se exportarán {totalProducts} productos según tu búsqueda y filtros actuales.
+          </p>
+        </div>
+
+        <div className="space-y-5 p-6">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <OptionCard
+              icon={Tag}
+              title="Con precios"
+              description="Muestra precio de venta."
+              active={options.includePrices}
+              onClick={() => updateOption("includePrices", true)}
+            />
+
+            <OptionCard
+              icon={Tag}
+              title="Sin precios"
+              description="Solo información del producto."
+              active={!options.includePrices}
+              onClick={() => updateOption("includePrices", false)}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <OptionCard
+              icon={ImageIcon}
+              title="Con imágenes"
+              description="Más visual para clientes."
+              active={options.includeImages}
+              onClick={() => updateOption("includeImages", true)}
+            />
+
+            <OptionCard
+              icon={ImageIcon}
+              title="Sin imágenes"
+              description="Más ligero y directo."
+              active={!options.includeImages}
+              onClick={() => updateOption("includeImages", false)}
+            />
+          </div>
+
+          <div className="rounded-3xl border border-border bg-surface-soft p-4">
+            <p className="text-sm font-black text-text-primary">Vista de descarga</p>
+            <p className="mt-1 text-sm text-text-secondary">
+              {previewTitle} · {previewDescription}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-border p-5 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="h-11 rounded-2xl border border-border px-4 text-sm font-semibold text-text-primary transition hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onConfirm(options)}
+            disabled={loading || totalProducts === 0}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-primary-600 px-5 text-sm font-bold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Generando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                Descargar catálogo
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OptionCard({ icon: Icon, title, description, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-[108px] items-start gap-3 rounded-3xl border p-4 text-left transition ${
+        active
+          ? "border-primary-500 bg-primary-50 shadow-[0_12px_32px_rgba(37,99,235,0.12)]"
+          : "border-border bg-surface hover:border-border-strong hover:bg-surface-soft"
+      }`}
+    >
+      <span
+        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+          active ? "bg-primary-600 text-white" : "bg-surface-soft text-text-secondary"
+        }`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+
+      <span>
+        <span className="block text-sm font-black text-text-primary">{title}</span>
+        <span className="mt-1 block text-sm leading-5 text-text-secondary">
+          {description}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function CatalogLoadingOverlay() {
+  return (
+    <div className="fixed inset-0 z-[120] flex min-h-[100dvh] items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-sm flex-col items-center rounded-[28px] border border-border bg-surface p-7 text-center shadow-2xl">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-700">
+          <Loader2 className="h-7 w-7 animate-spin" />
+        </div>
+
+        <h3 className="mt-4 text-lg font-black text-text-primary">
+          Generando catálogo
+        </h3>
+
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          Preparando productos, imágenes y archivo PDF. Esto puede tardar unos segundos.
+        </p>
+      </div>
+    </div>
   );
 }
 

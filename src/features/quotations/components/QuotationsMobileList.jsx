@@ -1,4 +1,4 @@
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, FileCheck2, Pencil, Trash2 } from "lucide-react";
 
 import { formatMoney } from "../../../utils/formatters";
 import { formatDateTimeTijuana } from "../../../utils/dates";
@@ -9,6 +9,7 @@ export default function QuotationsMobileList({
   onDownloadPdf,
   onEdit,
   onDelete,
+  onConvertToOrder,
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 p-4 md:p-5 xl:hidden">
@@ -19,15 +20,17 @@ export default function QuotationsMobileList({
           onDownloadPdf={onDownloadPdf}
           onEdit={onEdit}
           onDelete={onDelete}
+          onConvertToOrder={onConvertToOrder}
         />
       ))}
     </div>
   );
 }
 
-function QuotationMobileCard({ item, onDownloadPdf, onEdit, onDelete }) {
+function QuotationMobileCard({ item, onDownloadPdf, onEdit, onDelete, onConvertToOrder }) {
   const statusMeta = getStatusStyles(item.estado);
   const StatusIcon = statusMeta.icon;
+  const canConvert = ["aceptada", "enviada", "borrador"].includes(item.estado);
 
   return (
     <article className="rounded-[24px] border border-border bg-surface p-4 shadow-[var(--shadow-soft)]">
@@ -88,6 +91,14 @@ function QuotationMobileCard({ item, onDownloadPdf, onEdit, onDelete }) {
           label="Editar"
           onClick={() => onEdit(item.id)}
         />
+
+        {canConvert ? (
+          <MobileAction
+            icon={FileCheck2}
+            label="Pedido"
+            onClick={() => onConvertToOrder(item.id)}
+          />
+        ) : null}
 
         <MobileAction
           icon={Trash2}

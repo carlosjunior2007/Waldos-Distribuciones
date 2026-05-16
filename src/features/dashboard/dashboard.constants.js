@@ -31,6 +31,8 @@ export const DASHBOARD_QUERIES = {
     metodo_pago,
     entrega_inicio,
     entrega_fin,
+    fecha_inicio,
+    fecha_fin,
     notas,
     created_at,
     updated_at
@@ -53,6 +55,19 @@ export const DASHBOARD_QUERIES = {
     updated_at
   `,
 
+  entregas: `
+    id,
+    folio,
+    pedido_id,
+    estado,
+    fecha_entrega,
+    recibido_por,
+    notas,
+    cliente_direccion_id,
+    created_at,
+    updated_at
+  `,
+
   gastos: `
     id,
     concepto,
@@ -61,7 +76,8 @@ export const DASHBOARD_QUERIES = {
     tipo,
     fecha,
     created_at,
-    cotizacion_id
+    cotizacion_id,
+    pedido_id
   `,
 
   productos: `

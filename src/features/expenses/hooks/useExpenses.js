@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 
-import { parseTimestampDate } from "../../../utils/dates";
+import { parseBusinessDate, parseTimestampDate } from "../../../utils/dates";
 import { parseNumberish } from "../../../utils/formatters";
 import {
   getCurrentMonthRange,
@@ -23,6 +23,16 @@ import {
 
 import { PAGE_SIZE } from "../expense.constants";
 
+function getRowDate(row) {
+  if (!row?.fechaISO) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO))) {
+    return parseBusinessDate(row.fechaISO);
+  }
+
+  return parseTimestampDate(row.fechaISO);
+}
+
 export function useExpenses() {
   const defaultRange = useMemo(() => getCurrentMonthRange(), []);
 
@@ -35,13 +45,11 @@ export function useExpenses() {
   const [dateTo, setDateTo] = useState(defaultRange.end);
   const [page, setPage] = useState(1);
 
-  const [quoteRows, setQuoteRows] = useState([]);
+  const [orderRows, setOrderRows] = useState([]);
   const [expenseRows, setExpenseRows] = useState([]);
-  const [detailRows, setDetailRows] = useState([]);
-  const [productRows, setProductRows] = useState([]);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [selectedQuoteId, setSelectedQuoteId] = useState("");
+  const [selectedOrderId, setSelectedOrderId] = useState("");
   const [editingExpense, setEditingExpense] = useState(null);
 
   const [selectedDetail, setSelectedDetail] = useState(null);
@@ -55,38 +63,35 @@ export function useExpenses() {
 
       const data = await fetchExpensesData();
 
-      setQuoteRows(data.quoteRows);
+      setOrderRows(data.orderRows);
       setExpenseRows(data.expenseRows);
-      setDetailRows(data.detailRows);
-      setProductRows(data.productRows);
     } catch (err) {
-      console.error("Error cargando ganancias:", err);
-      setQuoteRows([]);
+      console.error("Error cargando ganancias y gastos:", err);
+      setOrderRows([]);
       setExpenseRows([]);
-      setDetailRows([]);
-      setProductRows([]);
+      alert(err.message || "No se pudieron cargar los datos financieros.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }
 
-  function openNewExpense(quoteId = "") {
+  function openNewExpense(orderId = "") {
     setEditingExpense(null);
-    setSelectedQuoteId(quoteId);
+    setSelectedOrderId(orderId);
     setModalOpen(true);
   }
 
   function openEditExpense(expense) {
     setEditingExpense(expense);
-    setSelectedQuoteId(expense?.cotizacion_id || "");
+    setSelectedOrderId(expense?.pedido_id || "");
     setModalOpen(true);
   }
 
   function closeExpenseModal() {
     setModalOpen(false);
     setEditingExpense(null);
-    setSelectedQuoteId("");
+    setSelectedOrderId("");
   }
 
   async function removeExpense(expenseId) {
@@ -111,12 +116,10 @@ export function useExpenses() {
 
   const preparedRows = useMemo(() => {
     return buildPreparedRows({
-      quoteRows,
+      orderRows,
       expenseRows,
-      detailRows,
-      productRows,
     });
-  }, [quoteRows, expenseRows, detailRows, productRows]);
+  }, [orderRows, expenseRows]);
 
   const filteredRows = useMemo(() => {
     const from = dateFrom ? startOfLocalDay(dateFrom) : null;
@@ -124,13 +127,14 @@ export function useExpenses() {
     const term = search.trim().toLowerCase();
 
     return preparedRows.filter((item) => {
-      const itemDate = item.fechaISO ? parseTimestampDate(item.fechaISO) : null;
+      const itemDate = getRowDate(item);
 
       if (from && itemDate && itemDate < from) return false;
       if (to && itemDate && itemDate > to) return false;
 
-      if (quickFilter === "ganancias" && item.naturaleza !== "ganancia") return false;
-      if (quickFilter === "gastos" && item.naturaleza !== "gasto") return false;
+      if (quickFilter === "ganancias" && !item.realizada) return false;
+      if (quickFilter === "gastos" && item.gastos <= 0) return false;
+      if (quickFilter === "pendientes" && item.realizada) return false;
 
       if (!term) return true;
 
@@ -155,7 +159,7 @@ export function useExpenses() {
     const term = search.trim().toLowerCase();
 
     return expenseRows.filter((expense) => {
-      if (expense.cotizacion_id) return false;
+      if (expense.pedido_id) return false;
 
       const expenseDate = expense.fecha
         ? startOfLocalDay(expense.fecha)
@@ -164,7 +168,7 @@ export function useExpenses() {
       if (from && expenseDate && expenseDate < from) return false;
       if (to && expenseDate && expenseDate > to) return false;
 
-      if (quickFilter === "ganancias") return false;
+      if (quickFilter === "ganancias" || quickFilter === "pendientes") return false;
 
       if (!term) return true;
 
@@ -176,8 +180,8 @@ export function useExpenses() {
   }, [expenseRows, dateFrom, dateTo, search, quickFilter]);
 
   const unifiedRows = useMemo(() => {
-    const profitRows = filteredRows.map((item) => ({
-      id: `profit-${item.id}`,
+    const orderProfitRows = filteredRows.map((item) => ({
+      id: `order-${item.id}`,
       rawId: item.id,
       rowType: "ganancia",
       ...item,
@@ -192,30 +196,34 @@ export function useExpenses() {
         rawId: expense.id,
         rowType: "gasto",
         concepto: expense.concepto || "Gasto independiente",
-        referencia: "Sin cotización",
+        referencia: "Sin pedido",
         tipo: normalizeExpenseType(expense.tipo),
         naturaleza: "gasto",
-        cliente: "Sin cotización asociada",
+        cliente: "Sin pedido asociado",
         fecha: expense.fecha
           ? formatExpenseDate(expense.fecha)
           : formatExpenseDate(expense.created_at, { isTimestamp: true }),
         fechaISO: expenseDateValue,
         gastos: monto,
         ganancia: -monto,
-        totalCotizacion: 0,
+        totalPedido: 0,
+        utilidadBruta: 0,
         expenseCount: 1,
         expenses: [expense],
         notas: expense.descripcion || "",
+        realizada: false,
       };
     });
 
-    return [...profitRows, ...standaloneExpenseRows].sort(
+    return [...orderProfitRows, ...standaloneExpenseRows].sort(
       (a, b) => resolveRowDateMs(b) - resolveRowDateMs(a),
     );
   }, [filteredRows, filteredStandaloneExpenses]);
 
   const summary = useMemo(() => {
-    const grossProfitTotal = filteredRows.reduce(
+    const realizedOrderRows = filteredRows.filter((item) => item.realizada);
+
+    const realizedGrossProfit = realizedOrderRows.reduce(
       (acc, item) => acc + parseNumberish(item.utilidadBruta),
       0,
     );
@@ -233,10 +241,12 @@ export function useExpenses() {
     const expensesTotal = linkedExpensesTotal + standaloneExpensesTotal;
 
     return {
-      quoteTotal: grossProfitTotal,
+      orderTotal: realizedGrossProfit,
       expensesTotal,
-      netTotal: grossProfitTotal - expensesTotal,
+      netTotal: realizedGrossProfit - expensesTotal,
       withExpenses: filteredRows.filter((item) => item.gastos > 0).length,
+      realizedOrders: realizedOrderRows.length,
+      pendingOrders: filteredRows.filter((item) => !item.realizada).length,
     };
   }, [filteredRows, filteredStandaloneExpenses]);
 
@@ -244,7 +254,7 @@ export function useExpenses() {
     const map = new Map();
 
     for (const item of filteredRows) {
-      const key = getTijuanaDayKeyFromTimestamp(item.fechaISO);
+      const key = getTijuanaDayKeyFromTimestamp(item.fechaISO) || String(item.fechaISO || "").slice(0, 10);
       if (!key) continue;
 
       if (!map.has(key)) {
@@ -327,15 +337,18 @@ export function useExpenses() {
   }
 
   function exportToExcel() {
-    const quoteRowsExcel = filteredRows.map((item) => ({
-      Tipo: "Cotización completada",
+    const orderRowsExcel = filteredRows.map((item) => ({
+      Tipo: item.realizada ? "Pedido entregado y pagado" : "Pedido pendiente",
       Folio: item.folio,
       Cliente: item.cliente,
       Fecha: item.fecha,
-      "Venta total": parseNumberish(item.totalCotizacion),
-      "Utilidad bruta real": parseNumberish(item.utilidadBruta),
+      "Venta total": parseNumberish(item.totalPedido),
+      "Costo total": parseNumberish(item.costoPedido),
+      "Utilidad bruta realizada": parseNumberish(item.utilidadBruta),
       "Gastos asociados": parseNumberish(item.gastos),
       "Ganancia neta": parseNumberish(item.ganancia),
+      "Pagado": item.pagado ? "Sí" : "No",
+      "Entregado": item.entregado ? "Sí" : "No",
       "Cantidad de gastos": item.expenseCount,
       Email: item.cliente_email,
       Teléfono: item.cliente_telefono,
@@ -350,9 +363,12 @@ export function useExpenses() {
         ? formatExpenseDate(item.fecha)
         : formatExpenseDate(item.created_at, { isTimestamp: true }),
       "Venta total": 0,
-      "Utilidad bruta real": 0,
+      "Costo total": 0,
+      "Utilidad bruta realizada": 0,
       "Gastos asociados": parseNumberish(item.monto),
       "Ganancia neta": -parseNumberish(item.monto),
+      "Pagado": "",
+      "Entregado": "",
       "Cantidad de gastos": 1,
       Email: "",
       Teléfono: "",
@@ -360,7 +376,7 @@ export function useExpenses() {
     }));
 
     const worksheet = XLSX.utils.json_to_sheet([
-      ...quoteRowsExcel,
+      ...orderRowsExcel,
       ...standaloneExpensesExcel,
     ]);
 
@@ -369,7 +385,7 @@ export function useExpenses() {
 
     XLSX.writeFile(
       workbook,
-      `ganancias_${dateFrom || "inicio"}_a_${dateTo || "hoy"}.xlsx`,
+      `ganancias_pedidos_${dateFrom || "inicio"}_a_${dateTo || "hoy"}.xlsx`,
     );
   }
 
@@ -391,7 +407,7 @@ export function useExpenses() {
     totalPages,
     pageSize: PAGE_SIZE,
 
-    quoteRows,
+    orderRows,
     summary,
     chartData,
     chartStrokeColor,
@@ -399,7 +415,7 @@ export function useExpenses() {
     unifiedRows,
 
     modalOpen,
-    selectedQuoteId,
+    selectedOrderId,
     editingExpense,
     selectedDetail,
     selectedDeleteExpense,

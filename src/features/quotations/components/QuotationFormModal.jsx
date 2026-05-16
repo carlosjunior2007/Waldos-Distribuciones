@@ -196,23 +196,27 @@ export default function QuotationFormModal({
       (item) => item.producto_id === product.id,
     );
 
-    // Si el producto ya está en la lista, solo aumentamos la cantidad
+    // Si el producto ya está en la lista, aumentamos la cantidad
+    // y lo subimos al inicio para que sea obvio qué se acaba de tocar.
     if (existingIndex >= 0) {
       const newItems = [...items];
-      const currentQty = Number(newItems[existingIndex].cantidad || 0);
-      newItems[existingIndex].cantidad = String(currentQty + 1);
+      const currentItem = { ...newItems[existingIndex] };
+      const currentQty = Number(currentItem.cantidad || 0);
 
-      // Recalculamos la línea
-      newItems[existingIndex] = {
-        ...newItems[existingIndex],
-        ...calculateLine(newItems[existingIndex]),
+      currentItem.cantidad = String(currentQty + 1);
+
+      const recalculatedItem = {
+        ...currentItem,
+        ...calculateLine(currentItem),
       };
 
-      setItems(newItems);
+      newItems.splice(existingIndex, 1);
+      setItems([recalculatedItem, ...newItems]);
       return;
     }
 
-    // Si es un producto nuevo en la cotización
+    // Si es un producto nuevo, se agrega arriba, no abajo.
+    // Así el usuario ve inmediatamente lo que acaba de agregar.
     const precio = Number(product.precio || 0);
     const costo = Number(product.precio_compra || 0);
     const utilidad = calculateUtilityPercent(costo, precio);
@@ -229,11 +233,11 @@ export default function QuotationFormModal({
     };
 
     setItems((prev) => [
-      ...prev,
       {
         ...newItem,
         ...calculateLine(newItem),
       },
+      ...prev,
     ]);
   }
 
@@ -765,9 +769,17 @@ function AddedProductsSection({
 }) {
   return (
     <div className="min-w-0 rounded-[20px] border border-border bg-background p-4 sm:rounded-[24px]">
-      <h4 className="text-sm font-bold text-text-primary">
-        Productos agregados
-      </h4>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-bold text-text-primary">
+          Productos agregados
+        </h4>
+
+        {rows.length ? (
+          <span className="rounded-full bg-surface px-3 py-1 text-xs font-semibold text-text-muted">
+            Más recientes arriba
+          </span>
+        ) : null}
+      </div>
 
       {!rows.length ? (
         <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">

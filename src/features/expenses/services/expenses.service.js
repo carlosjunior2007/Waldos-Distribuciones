@@ -1,72 +1,83 @@
 import supabase from "../../../utils/supabase";
 
+const ORDER_SELECT = `
+  id,
+  folio,
+  cliente_nombre,
+  cliente_telefono,
+  cliente_email,
+  subtotal,
+  descuento,
+  total,
+  iva_porcentaje,
+  estado,
+  estado_pago,
+  metodo_pago,
+  fecha_emision,
+  fecha_inicio,
+  fecha_fin,
+  notas,
+  created_at,
+  pedido_detalles (
+    id,
+    pedido_id,
+    producto_id,
+    codigo,
+    nombre_producto,
+    cantidad_pedida,
+    cantidad_entregada,
+    cantidad_pendiente,
+    precio_unitario,
+    costo_unitario,
+    importe,
+    estado
+  ),
+  entregas (
+    id,
+    pedido_id,
+    estado,
+    fecha_entrega,
+    entrega_detalles (
+      id,
+      entrega_id,
+      pedido_detalle_id,
+      producto_id,
+      cantidad_entregada
+    )
+  )
+`;
+
 export async function fetchExpensesData() {
-  const [quoteResult, expenseResult, detailResult, productResult] =
-    await Promise.all([
-      supabase
-        .from("cotizaciones")
-        .select(
-          `
-          id,
-          folio,
-          cliente_nombre,
-          cliente_telefono,
-          cliente_email,
-          subtotal,
-          descuento,
-          total,
-          gastos,
-          ganancia,
-          fecha_vencimiento,
-          fecha_completado,
-          notas,
-          created_at
-        `,
-        )
-        .not("fecha_completado", "is", null)
-        .order("fecha_completado", { ascending: false }),
+  const [orderResult, expenseResult] = await Promise.all([
+    supabase
+      .from("pedidos")
+      .select(ORDER_SELECT)
+      .order("created_at", { ascending: false }),
 
-      supabase
-        .from("gastos")
-        .select(
-          `
-          id,
-          concepto,
-          descripcion,
-          monto,
-          fecha,
-          cotizacion_id,
-          created_at,
-          tipo
-        `,
-        )
-        .order("fecha", { ascending: false }),
-
-      supabase.from("cotizacion_detalles").select(`
+    supabase
+      .from("gastos")
+      .select(
+        `
         id,
+        concepto,
+        descripcion,
+        monto,
+        fecha,
         cotizacion_id,
-        producto_id,
-        cantidad
-      `),
+        pedido_id,
+        created_at,
+        tipo
+      `,
+      )
+      .order("fecha", { ascending: false }),
+  ]);
 
-      supabase.from("productos").select(`
-        id,
-        nombre,
-        precio_compra,
-        precio_utilidad
-      `),
-    ]);
-
-  if (quoteResult.error) throw quoteResult.error;
+  if (orderResult.error) throw orderResult.error;
   if (expenseResult.error) throw expenseResult.error;
-  if (detailResult.error) throw detailResult.error;
-  if (productResult.error) throw productResult.error;
 
   return {
-    quoteRows: Array.isArray(quoteResult.data) ? quoteResult.data : [],
+    orderRows: Array.isArray(orderResult.data) ? orderResult.data : [],
     expenseRows: Array.isArray(expenseResult.data) ? expenseResult.data : [],
-    detailRows: Array.isArray(detailResult.data) ? detailResult.data : [],
-    productRows: Array.isArray(productResult.data) ? productResult.data : [],
   };
 }
 

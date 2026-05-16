@@ -73,7 +73,7 @@ function ExpenseMobileCard({
           valueClass="text-error-700"
         />
         <MiniInfo
-          label="Ganancia"
+          label="Neto"
           value={formatMoney(item.ganancia)}
           valueClass={item.ganancia >= 0 ? "text-success-700" : "text-error-700"}
         />

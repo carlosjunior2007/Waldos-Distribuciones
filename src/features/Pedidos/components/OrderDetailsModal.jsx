@@ -1,6 +1,6 @@
-import { Download, FileText, MapPin, Package, Truck } from "lucide-react";
+import { Download, FileText, Package, Truck } from "lucide-react";
 import Modal from "../../../components/ui/Modal";
-import { formatDate, formatMoney, getAddressLabel, getOrderStatusMeta, getPaymentStatusMeta } from "../order.helpers";
+import { calculateDerivedOrderStatus, calculateLineProfit, calculateOrderProfit, formatDate, formatMoney, getAddressLabel, getOrderStatusMeta, getPaymentStatusMeta, isOrderProfitRealized } from "../order.helpers";
 import OrderStatusBadge from "./OrderStatusBadge";
 import OrderProgressBar from "./OrderProgressBar";
 
@@ -15,15 +15,17 @@ export default function OrderDetailsModal({
 }) {
   if (!order) return null;
 
-  const status = getOrderStatusMeta(order.estado);
+  const status = getOrderStatusMeta(calculateDerivedOrderStatus(order));
   const payment = getPaymentStatusMeta(order.estado_pago);
+  const profit = calculateOrderProfit(order.details);
+  const showProfit = isOrderProfitRealized(order);
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={`Pedido ${order.folio}`}
-      subtitle="Vista general del pedido, entregas parciales y direcciones."
+      subtitle="Vista general del pedido, productos, entregas parciales y seguimiento."
       width="max-w-6xl"
     >
       <div className="space-y-5 p-5 md:p-6">
@@ -59,7 +61,9 @@ export default function OrderDetailsModal({
 
             <div className="mt-4 space-y-2 text-sm">
               <SummaryLine label="Subtotal" value={formatMoney(order.subtotal)} />
-              <SummaryLine label="Descuento" value={formatMoney(order.descuento)} />
+              <SummaryLine label="Costo" value={formatMoney(profit.cost)} />
+              <SummaryLine label="Ganancia" value={formatMoney(profit.profit)} highlight={profit.profit >= 0 ? "success" : "error"} note={showProfit ? "Realizada" : "Estimada, no realizada"} />
+              <SummaryLine label="Margen" value={`${profit.margin.toFixed(1)}%`} />
               <SummaryLine label={`IVA ${order.iva_porcentaje}%`} value={formatMoney(order.total - order.subtotal + Number(order.descuento || 0))} />
               <SummaryLine label="Total" value={formatMoney(order.total)} bold />
             </div>
@@ -67,9 +71,9 @@ export default function OrderDetailsModal({
         </section>
 
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <InfoCard label="Fecha emisión" value={formatDate(order.fecha_emision)} />
-          <InfoCard label="Entrega inicio" value={formatDate(order.entrega_inicio)} />
-          <InfoCard label="Entrega fin" value={formatDate(order.entrega_fin)} />
+          <InfoCard label="Fecha inicio" value={formatDate(order.entrega_inicio)} />
+          <InfoCard label="Fecha fin" value={formatDate(order.entrega_fin)} />
+          <InfoCard label="Tracking" value={order.tracking_token || "Sin tracking"} />
         </section>
 
         <section className="rounded-[24px] border border-border bg-background p-4">
@@ -87,63 +91,58 @@ export default function OrderDetailsModal({
                   <th className="py-3 pr-4">Entregada</th>
                   <th className="py-3 pr-4">Pendiente</th>
                   <th className="py-3 pr-4">Precio</th>
+                  <th className="py-3 pr-4">Costo</th>
+                  <th className="py-3 pr-4">Ganancia</th>
                   <th className="py-3 pr-4">Importe</th>
                 </tr>
               </thead>
 
               <tbody>
-                {order.details.map((item) => (
-                  <tr key={item.id} className="border-b border-border">
-                    <td className="py-3 pr-4">
-                      <p className="font-semibold text-text-primary">{item.nombre_producto}</p>
-                      <p className="text-xs text-text-muted">{item.codigo}</p>
-                    </td>
-                    <td className="py-3 pr-4">{item.cantidad_pedida}</td>
-                    <td className="py-3 pr-4">{item.cantidad_entregada}</td>
-                    <td className="py-3 pr-4">{item.cantidad_pendiente}</td>
-                    <td className="py-3 pr-4">{formatMoney(item.precio_unitario)}</td>
-                    <td className="py-3 pr-4 font-bold text-text-primary">{formatMoney(item.importe)}</td>
-                  </tr>
-                ))}
+                {order.details.map((item) => {
+                  const lineProfit = calculateLineProfit(item);
+
+                  return (
+                    <tr key={item.id} className="border-b border-border">
+                      <td className="py-3 pr-4">
+                        <p className="font-semibold text-text-primary">{item.nombre_producto}</p>
+                        <p className="text-xs text-text-muted">{item.codigo}</p>
+                      </td>
+                      <td className="py-3 pr-4">{item.cantidad_pedida}</td>
+                      <td className="py-3 pr-4">{item.cantidad_entregada}</td>
+                      <td className="py-3 pr-4">{item.cantidad_pendiente}</td>
+                      <td className="py-3 pr-4">{formatMoney(item.precio_unitario)}</td>
+                      <td className="py-3 pr-4">{formatMoney(item.costo_unitario)}</td>
+                      <td className={`py-3 pr-4 font-bold ${lineProfit.profit >= 0 ? "text-success-700" : "text-error-700"}`}>
+                        {formatMoney(lineProfit.profit)}
+                        <span className="mt-1 block text-xs font-medium text-text-muted">{lineProfit.margin.toFixed(1)}%</span>
+                      </td>
+                      <td className="py-3 pr-4 font-bold text-text-primary">{formatMoney(item.importe)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-[24px] border border-border bg-background p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-text-primary">Direcciones</h4>
-              <MapPin className="h-5 w-5 text-text-muted" />
-            </div>
-
-            <div className="space-y-3">
-              {order.addresses.map((address) => (
-                <div key={address.id} className="rounded-2xl border border-border bg-surface-soft p-3">
-                  <p className="font-semibold text-text-primary">{address.nombre}</p>
-                  <p className="mt-1 text-sm text-text-secondary">{getAddressLabel(address)}</p>
-                  <p className="mt-1 text-xs text-text-muted">
-                    Contacto: {address.contacto_nombre || "Sin contacto"} · {address.contacto_telefono || "Sin teléfono"}
-                  </p>
-                </div>
-              ))}
-            </div>
+        <section className="rounded-[24px] border border-border bg-background p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <h4 className="text-sm font-bold text-text-primary">Entregas</h4>
+            <Truck className="h-5 w-5 text-text-muted" />
           </div>
 
-          <div className="rounded-[24px] border border-border bg-background p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-text-primary">Entregas</h4>
-              <Truck className="h-5 w-5 text-text-muted" />
-            </div>
+          <div className="space-y-3">
+            {order.deliveries.length ? (
+              order.deliveries.map((delivery) => {
+                const address = (order.cliente_direcciones || []).find((item) => item.id === delivery.cliente_direccion_id);
 
-            <div className="space-y-3">
-              {order.deliveries.length ? (
-                order.deliveries.map((delivery) => (
+                return (
                   <div key={delivery.id} className="rounded-2xl border border-border bg-surface-soft p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-text-primary">{delivery.folio}</p>
                         <p className="mt-1 text-sm text-text-secondary">{formatDate(delivery.fecha_entrega)}</p>
+                        <p className="mt-1 text-xs text-text-muted">Destino: {getAddressLabel(address)}</p>
                         <p className="mt-1 text-xs text-text-muted">
                           {delivery.details.length} productos incluidos
                         </p>
@@ -159,13 +158,13 @@ export default function OrderDetailsModal({
                       </button>
                     </div>
                   </div>
-                ))
-              ) : (
-                <p className="rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">
-                  Todavía no hay entregas registradas.
-                </p>
-              )}
-            </div>
+                );
+              })
+            ) : (
+              <p className="rounded-2xl border border-dashed border-border p-4 text-sm text-text-muted">
+                Todavía no hay entregas registradas.
+              </p>
+            )}
           </div>
         </section>
 
@@ -199,13 +198,16 @@ function InfoCard({ label, value }) {
   );
 }
 
-function SummaryLine({ label, value, bold = false }) {
+function SummaryLine({ label, value, bold = false, highlight = null, note = "" }) {
+  const colorClass = highlight === "success" ? "text-success-700" : highlight === "error" ? "text-error-700" : "text-text-primary";
+
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
       <span className="text-text-secondary">{label}</span>
-      <span className={`${bold ? "text-lg font-bold" : "font-semibold"} text-text-primary`}>
+      <span className={`${bold ? "text-lg font-bold" : "font-semibold"} ${colorClass}`}>
         {value}
       </span>
+      {note ? <span className="col-span-2 text-xs text-text-muted">{note}</span> : null}
     </div>
   );
 }

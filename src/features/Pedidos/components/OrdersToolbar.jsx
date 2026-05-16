@@ -16,7 +16,7 @@ export default function OrdersToolbar({
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Buscar por folio, cliente, teléfono o correo..."
+          placeholder="Buscar pedido o cliente..."
           className="w-full xl:max-w-md"
         />
 
@@ -26,7 +26,7 @@ export default function OrdersToolbar({
           className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white transition hover:bg-accent-600"
         >
           <Plus className="h-4 w-4" />
-          Pedido manual
+          Nuevo pedido
         </button>
       </div>
 

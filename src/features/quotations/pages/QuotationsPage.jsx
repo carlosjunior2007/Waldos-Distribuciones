@@ -12,6 +12,7 @@ import QuotationFormModal from "../components/QuotationFormModal";
 import QuotationsTable from "../components/QuotationsTable";
 import QuotationsMobileList from "../components/QuotationsMobileList";
 import QuotationsPagination from "../components/QuotationsPagination";
+import ConvertToOrderModal from "../components/ConvertToOrderModal";
 
 export default function QuotationsPage() {
   const quotations = useQuotations();
@@ -24,6 +25,14 @@ export default function QuotationsPage() {
         onSaved={quotations.loadData}
         editingQuotation={quotations.editingQuotation}
         currentMonth={quotations.month}
+      />
+
+      <ConvertToOrderModal
+        open={quotations.convertModalOpen}
+        quotation={quotations.quotationToConvert}
+        loading={quotations.converting}
+        onClose={quotations.closeConvertModal}
+        onConfirm={quotations.confirmConvertToOrder}
       />
 
       <ConfirmDeleteModal
@@ -79,7 +88,7 @@ export default function QuotationsPage() {
               onDownloadPdf={quotations.downloadPdf}
               onEdit={quotations.openEditModal}
               onDelete={quotations.setQuotationToDelete}
-              onConvertToOrder={quotations.convertToOrder}
+              onConvertToOrder={quotations.openConvertModal}
             />
 
             <QuotationsMobileList
@@ -87,6 +96,7 @@ export default function QuotationsPage() {
               onDownloadPdf={quotations.downloadPdf}
               onEdit={quotations.openEditModal}
               onDelete={quotations.setQuotationToDelete}
+              onConvertToOrder={quotations.openConvertModal}
             />
 
             {!quotations.rows.length ? (

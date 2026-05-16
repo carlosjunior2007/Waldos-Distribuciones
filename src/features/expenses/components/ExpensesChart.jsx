@@ -17,7 +17,7 @@ export default function ExpensesChart({ chartData, chartStrokeColor }) {
         <p className="text-sm font-semibold text-text-primary">Evolución neta</p>
 
         <p className="text-sm text-text-secondary">
-          Tendencia acumulada de ganancias y gastos dentro del rango seleccionado.
+          Tendencia acumulada de utilidad realizada y gastos dentro del rango seleccionado.
         </p>
       </div>
 

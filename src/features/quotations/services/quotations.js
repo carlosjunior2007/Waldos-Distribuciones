@@ -598,6 +598,30 @@ export async function generateNextOrderFolio() {
   return `${prefix}${String(max + 1).padStart(3, "0")}`;
 }
 
+function generateTrackingToken() {
+  const random = Math.random().toString(16).slice(2, 10).toUpperCase();
+  return `TRK-${random}`;
+}
+
+async function createOrderTracking(orderId) {
+  if (!orderId) return null;
+
+  const token = generateTrackingToken();
+
+  const { error } = await supabase.from("pedido_tracking").insert({
+    pedido_id: orderId,
+    token,
+    activo: true,
+  });
+
+  if (error) {
+    console.warn("No se pudo crear tracking del pedido:", error);
+    return null;
+  }
+
+  return token;
+}
+
 export async function convertQuotationToOrder(quotationId, extra = {}) {
   const quotation = await fetchQuotationById(quotationId);
 
@@ -614,6 +638,8 @@ export async function convertQuotationToOrder(quotationId, extra = {}) {
   }
 
   const folio = await generateNextOrderFolio();
+  const fechaInicio = extra.fecha_inicio || extra.entrega_inicio || null;
+  const fechaFin = extra.fecha_fin || extra.entrega_fin || null;
 
   const orderPayload = {
     folio,
@@ -629,12 +655,14 @@ export async function convertQuotationToOrder(quotationId, extra = {}) {
     iva_porcentaje: Number(quotation.iva_porcentaje || 0),
     total: Number(quotation.total || 0),
 
-    estado: "creado",
-    estado_pago: "pendiente",
+    estado: fechaInicio || fechaFin ? "creado" : "borrador",
+    estado_pago: extra.estado_pago || "pendiente",
 
     metodo_pago: extra.metodo_pago || null,
-    entrega_inicio: extra.entrega_inicio || null,
-    entrega_fin: extra.entrega_fin || null,
+    fecha_inicio: fechaInicio,
+    fecha_fin: fechaFin,
+    entrega_inicio: fechaInicio,
+    entrega_fin: fechaFin,
     notas: extra.notas || quotation.notas || null,
   };
 
@@ -648,6 +676,7 @@ export async function convertQuotationToOrder(quotationId, extra = {}) {
 
   const orderDetails = quotation.detalles.map((item) => {
     const cantidad = Number(item.cantidad || 0);
+    const precio = Number(item.precio_unitario || 0);
 
     return {
       pedido_id: order.id,
@@ -657,9 +686,9 @@ export async function convertQuotationToOrder(quotationId, extra = {}) {
       cantidad_pedida: cantidad,
       cantidad_entregada: 0,
       cantidad_pendiente: cantidad,
-      precio_unitario: Number(item.precio_unitario || 0),
+      precio_unitario: precio,
       costo_unitario: Number(item.costo_unitario || 0),
-      importe: Number(item.importe || 0),
+      importe: Number(item.importe || cantidad * precio),
       estado: "pendiente",
     };
   });
@@ -669,6 +698,8 @@ export async function convertQuotationToOrder(quotationId, extra = {}) {
     .insert(orderDetails);
 
   if (detailsError) throw detailsError;
+
+  await createOrderTracking(order.id);
 
   const { error: quotationError } = await supabase
     .from("cotizaciones")

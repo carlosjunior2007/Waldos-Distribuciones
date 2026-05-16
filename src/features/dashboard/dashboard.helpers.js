@@ -96,10 +96,50 @@ export function getWeekKey(value) {
   return `${date.getFullYear()}-S${String(week).padStart(2, "0")}`;
 }
 
-export function isClosedOrder(estado) {
-  return ["entregado", "parcialmente_entregado"].includes(
-    String(estado || "").toLowerCase(),
-  );
+export function normalizeStatus(value) {
+  return String(value || "sin_estado").trim().toLowerCase();
+}
+
+export function isCanceledOrder(order) {
+  return normalizeStatus(order?.estado) === "cancelado";
+}
+
+export function isDeliveredOrder(order) {
+  return normalizeStatus(order?.estado) === "entregado";
+}
+
+export function isPaidOrder(order) {
+  return normalizeStatus(order?.estado_pago) === "pagado";
+}
+
+export function isRealizedOrder(order) {
+  return isDeliveredOrder(order) && isPaidOrder(order) && !isCanceledOrder(order);
+}
+
+export function isPendingOrder(order) {
+  const estado = normalizeStatus(order?.estado);
+
+  return !["entregado", "cancelado"].includes(estado);
+}
+
+export function isPendingPayment(order) {
+  const estadoPago = normalizeStatus(order?.estado_pago);
+
+  return !isCanceledOrder(order) && !["pagado", "cancelado"].includes(estadoPago);
+}
+
+export function isPendingDelivery(delivery) {
+  const estado = normalizeStatus(delivery?.estado);
+
+  return ["pendiente", "programada", "en_ruta", "creada", "creado"].includes(estado);
+}
+
+export function isDeliveredDelivery(delivery) {
+  return normalizeStatus(delivery?.estado) === "entregada";
+}
+
+export function isCanceledDelivery(delivery) {
+  return normalizeStatus(delivery?.estado) === "cancelada";
 }
 
 export function calculateOrderProfit(order, pedidoDetalles) {
@@ -112,6 +152,20 @@ export function calculateOrderProfit(order, pedidoDetalles) {
 
     return acc + (precio - costo) * cantidad;
   }, 0);
+}
+
+export function calculateOrderUnits(order, pedidoDetalles) {
+  const detalles = pedidoDetalles.filter((item) => item.pedido_id === order.id);
+
+  return detalles.reduce(
+    (acc, item) => {
+      acc.pedidas += Number(item.cantidad_pedida || 0);
+      acc.entregadas += Number(item.cantidad_entregada || 0);
+      acc.pendientes += Number(item.cantidad_pendiente || 0);
+      return acc;
+    },
+    { pedidas: 0, entregadas: 0, pendientes: 0 },
+  );
 }
 
 export function getMovementMeta(type) {
@@ -149,7 +203,7 @@ export function buildOrderMovement(item) {
     title: `Pedido ${item.folio || item.id?.slice(0, 8) || "sin folio"}`,
     description: `${item.cliente_nombre || "Cliente sin nombre"} • Estado: ${
       item.estado || "sin estado"
-    } • Total: ${formatMoney(item.total)}`,
+    } • Pago: ${item.estado_pago || "sin pago"} • Total: ${formatMoney(item.total)}`,
     date: item.updated_at || item.created_at,
     type: "pedido",
     ...item,
@@ -247,7 +301,7 @@ export function groupByPeriod({
 
     bucket.pedidos += 1;
 
-    if (isClosedOrder(item.estado)) {
+    if (isRealizedOrder(item)) {
       bucket.ganancias += calculateOrderProfit(item, pedidoDetalles);
     }
   });
@@ -271,16 +325,14 @@ export function calculateDashboardSummary({
   productos,
   pedidoDetalles,
 }) {
-  const pedidosCerrados = filteredData.pedidos.filter((item) =>
-    isClosedOrder(item.estado),
-  );
+  const pedidosRealizados = filteredData.pedidos.filter(isRealizedOrder);
 
-  const ventaTotal = pedidosCerrados.reduce(
+  const ventaTotal = pedidosRealizados.reduce(
     (acc, item) => acc + Number(item.total || 0),
     0,
   );
 
-  const gananciaBruta = pedidosCerrados.reduce(
+  const gananciaBruta = pedidosRealizados.reduce(
     (acc, item) => acc + calculateOrderProfit(item, pedidoDetalles),
     0,
   );
@@ -292,7 +344,7 @@ export function calculateDashboardSummary({
 
   const cotizacionesPorEstado = filteredData.cotizaciones.reduce(
     (acc, item) => {
-      const estado = String(item.estado || "sin_estado").toLowerCase();
+      const estado = normalizeStatus(item.estado);
       acc[estado] = (acc[estado] || 0) + 1;
       return acc;
     },
@@ -300,13 +352,35 @@ export function calculateDashboardSummary({
   );
 
   const pedidosPorEstado = filteredData.pedidos.reduce((acc, item) => {
-    const estado = String(item.estado || "sin_estado").toLowerCase();
+    const estado = normalizeStatus(item.estado);
     acc[estado] = (acc[estado] || 0) + 1;
     return acc;
   }, {});
 
+  const entregasPorEstado = filteredData.entregas.reduce((acc, item) => {
+    const estado = normalizeStatus(item.estado);
+    acc[estado] = (acc[estado] || 0) + 1;
+    return acc;
+  }, {});
+
+  const pedidosPendientes = filteredData.pedidos.filter(isPendingOrder).length;
+  const pagosPendientes = filteredData.pedidos.filter(isPendingPayment).length;
+  const entregasPendientes = filteredData.entregas.filter(isPendingDelivery).length;
+  const entregasEntregadas = filteredData.entregas.filter(isDeliveredDelivery).length;
+  const entregasCanceladas = filteredData.entregas.filter(isCanceledDelivery).length;
+
+  const unidadesPendientes = filteredData.pedidos.reduce((acc, order) => {
+    if (isCanceledOrder(order) || isDeliveredOrder(order)) return acc;
+    return acc + calculateOrderUnits(order, pedidoDetalles).pendientes;
+  }, 0);
+
+  const valorPendienteCobro = filteredData.pedidos.reduce((acc, order) => {
+    if (!isPendingPayment(order)) return acc;
+    return acc + Number(order.total || 0);
+  }, 0);
+
   const productosActivos = productos.filter(
-    (item) => item.habilitado === true
+    (item) => item.habilitado === true,
   ).length;
 
   return {
@@ -324,11 +398,24 @@ export function calculateDashboardSummary({
     cotizacionesConvertidas: cotizacionesPorEstado.convertida || 0,
 
     totalPedidos: filteredData.pedidos.length,
+    pedidosPendientes,
+    pedidosBorrador: pedidosPorEstado.borrador || 0,
     pedidosCreados: pedidosPorEstado.creado || 0,
     pedidosEnPreparacion: pedidosPorEstado.en_preparacion || 0,
-    pedidosParciales: pedidosPorEstado.parcialmente_entregado || 0,
+    pedidosParciales:
+      pedidosPorEstado.parcial || pedidosPorEstado.parcialmente_entregado || 0,
     pedidosEntregados: pedidosPorEstado.entregado || 0,
     pedidosCancelados: pedidosPorEstado.cancelado || 0,
+    pagosPendientes,
+    valorPendienteCobro,
+    unidadesPendientes,
+
+    totalEntregas: filteredData.entregas.length,
+    entregasPendientes,
+    entregasProgramadas: entregasPorEstado.programada || 0,
+    entregasEnRuta: entregasPorEstado.en_ruta || 0,
+    entregasEntregadas,
+    entregasCanceladas,
 
     productosActivos,
     totalProductos: productos.length,

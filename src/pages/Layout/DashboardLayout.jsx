@@ -14,6 +14,7 @@ import {
   UserRound,
   CheckCheck,
   Van,
+  BugPlay ,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import supabase from "../../utils/supabase.js";
@@ -50,12 +51,6 @@ const NAV_ITEMS = [
     end: true,
   },
   {
-    label: "Etiquetas",
-    to: "/dashboard/etiquetas",
-    icon: Tag,
-    end: true,
-  },
-  {
     label: "Clientes",
     to: "/dashboard/clientes",
     icon: UserRound,
@@ -65,6 +60,12 @@ const NAV_ITEMS = [
     label: "Pedidos",
     to: "/dashboard/pedidos",
     icon: Van,
+    end: true,
+  },
+  {
+    label: "Playground",
+    to: "/dashboard/playground",
+    icon: BugPlay ,
     end: true,
   },
 ];

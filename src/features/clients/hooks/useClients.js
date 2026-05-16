@@ -6,23 +6,25 @@ import {
   createClient,
   deleteClient,
   deleteClientLogo,
-  fetchClientQuotations,
+  fetchClientById,
+  fetchClientOrders,
   fetchClients,
+  saveClientAddresses,
   updateClient,
   uploadClientLogo,
 } from "../services/clients.service";
 
 import {
-  getClientTotals,
+  getClientOrderTotals,
   getStoragePathFromUrl,
 } from "../client.helpers";
 
 export function useClients() {
   const [clients, setClients] = useState([]);
-  const [quotations, setQuotations] = useState([]);
+  const [orders, setOrders] = useState([]);
 
   const [loading, setLoading] = useState(true);
-  const [loadingQuotations, setLoadingQuotations] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -57,25 +59,25 @@ export function useClients() {
     }
   }
 
-  async function loadClientQuotations(clientId) {
+  async function loadClientOrders(clientId) {
     if (!clientId) {
-      setQuotations([]);
+      setOrders([]);
       return;
     }
 
     try {
-      setLoadingQuotations(true);
-      const data = await fetchClientQuotations(clientId);
-      setQuotations(data);
+      setLoadingOrders(true);
+      const data = await fetchClientOrders(clientId);
+      setOrders(data);
     } catch (error) {
       console.error(error);
-      setQuotations([]);
+      setOrders([]);
     } finally {
-      setLoadingQuotations(false);
+      setLoadingOrders(false);
     }
   }
 
-  async function saveClient(payload, logoFile) {
+  async function saveClient(payload, logoFile, addresses = []) {
     try {
       setSaving(true);
 
@@ -109,9 +111,14 @@ export function useClients() {
         }
       }
 
-      setSelectedClient(savedClient);
+      await saveClientAddresses(savedClient.id, addresses);
+
+      const hydratedClient = await fetchClientById(savedClient.id);
+      setSelectedClient(hydratedClient);
       setModalOpen(false);
-      await loadClients();
+
+      const updatedClients = await fetchClients(search);
+      setClients(updatedClients);
     } catch (error) {
       console.error(error);
       alert(error.message || "No se pudo guardar el cliente.");
@@ -142,7 +149,7 @@ export function useClients() {
 
       if (selectedClient?.id === client.id) {
         setSelectedClient(null);
-        setQuotations([]);
+        setOrders([]);
       }
 
       await loadClients();
@@ -151,7 +158,7 @@ export function useClients() {
 
       if (String(error.message || "").toLowerCase().includes("foreign key")) {
         alert(
-          "No puedes borrar este cliente porque tiene etiquetas o cotizaciones asociadas.",
+          "No puedes borrar este cliente porque tiene etiquetas o pedidos asociados.",
         );
         return;
       }
@@ -167,18 +174,18 @@ export function useClients() {
   }, [search]);
 
   useEffect(() => {
-    loadClientQuotations(selectedClient?.id || null);
+    loadClientOrders(selectedClient?.id || null);
   }, [selectedClient?.id]);
 
-  const totals = useMemo(() => getClientTotals(quotations), [quotations]);
+  const totals = useMemo(() => getClientOrderTotals(orders), [orders]);
 
   return {
     clients,
-    quotations,
+    orders,
     totals,
 
     loading,
-    loadingQuotations,
+    loadingOrders,
     saving,
     deleting,
 

@@ -16,3 +16,17 @@ export const INITIAL_CLIENT = {
   logo: "",
   notas: "",
 };
+
+export const EMPTY_CLIENT_ADDRESS = {
+  nombre: "",
+  direccion: "",
+  ciudad: "",
+  estado: "",
+  codigo_postal: "",
+  pais: "México",
+  contacto_nombre: "",
+  contacto_telefono: "",
+  notas: "",
+  es_principal: false,
+  activo: true,
+};

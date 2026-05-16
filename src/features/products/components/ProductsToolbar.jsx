@@ -52,12 +52,12 @@ export default function ProductsToolbar({
             {isExportingPDF ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Generando PDF...
+                Generando catálogo...
               </>
             ) : (
               <>
                 <Download className="h-4 w-4" />
-                Descargar PDF
+                Descargar catálogo
               </>
             )}
           </button>

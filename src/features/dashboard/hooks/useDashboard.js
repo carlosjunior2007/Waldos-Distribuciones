@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { CircleDollarSign, ReceiptText, Package, Wallet } from "lucide-react";
+import {
+  AlertCircle,
+  CircleDollarSign,
+  Clock3,
+  ReceiptText,
+  Truck,
+  Wallet,
+} from "lucide-react";
 
 import { formatMoney } from "../../../utils/formatters";
 
@@ -25,6 +32,7 @@ export function useDashboard() {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [pedidoDetalles, setPedidoDetalles] = useState([]);
+  const [entregas, setEntregas] = useState([]);
   const [gastos, setGastos] = useState([]);
   const [productos, setProductos] = useState([]);
 
@@ -45,6 +53,7 @@ export function useDashboard() {
         setCotizaciones(data.cotizaciones);
         setPedidos(data.pedidos);
         setPedidoDetalles(data.pedidoDetalles);
+        setEntregas(data.entregas);
         setGastos(data.gastos);
         setProductos(data.productos);
       } catch (err) {
@@ -78,6 +87,10 @@ export function useDashboard() {
       isBetween(item.created_at, start, end),
     );
 
+    const filteredEntregas = entregas.filter((item) =>
+      isBetween(item.fecha_entrega || item.created_at, start, end),
+    );
+
     const filteredGastos = gastos.filter((item) =>
       isBetween(item.fecha || item.created_at, start, end),
     );
@@ -90,10 +103,11 @@ export function useDashboard() {
     return {
       cotizaciones: filteredCotizaciones,
       pedidos: filteredPedidos,
+      entregas: filteredEntregas,
       gastos: filteredGastos,
       productos: filteredProductos,
     };
-  }, [cotizaciones, pedidos, gastos, productos, range, rangeDates]);
+  }, [cotizaciones, pedidos, entregas, gastos, productos, range, rangeDates]);
 
   const resumen = useMemo(() => {
     return calculateDashboardSummary({
@@ -108,29 +122,43 @@ export function useDashboard() {
       {
         title: "Ganancia neta",
         value: formatMoney(resumen.gananciaNetaReal),
-        note: "Ganancia de pedidos cerrados menos gastos del rango",
+        note: "Solo pedidos entregados y pagados, menos gastos",
         icon: CircleDollarSign,
         tone: resumen.gananciaNetaReal >= 0 ? "success" : "error",
       },
       {
-        title: "Ventas",
+        title: "Ventas realizadas",
         value: formatMoney(resumen.ventaTotalCompletada),
-        note: "Total vendido en pedidos entregados o parciales",
+        note: "Pedidos entregados y pagados",
         icon: ReceiptText,
         tone: "info",
+      },
+      {
+        title: "Pedidos pendientes",
+        value: String(resumen.pedidosPendientes),
+        note: `${resumen.unidadesPendientes} unidades por entregar`,
+        icon: Clock3,
+        tone: "warning",
+      },
+      {
+        title: "Entregas pendientes",
+        value: String(resumen.entregasPendientes),
+        note: "Programadas, pendientes o en ruta",
+        icon: Truck,
+        tone: "warning",
+      },
+      {
+        title: "Pagos pendientes",
+        value: String(resumen.pagosPendientes),
+        note: `${formatMoney(resumen.valorPendienteCobro)} por cobrar`,
+        icon: AlertCircle,
+        tone: "error",
       },
       {
         title: "Gastos",
         value: formatMoney(resumen.gastoTotal),
         note: "Gastos registrados dentro del rango",
         icon: Wallet,
-        tone: "warning",
-      },
-      {
-        title: "Productos",
-        value: String(resumen.totalProductos),
-        note: `${resumen.productosActivos} activos`,
-        icon: Package,
         tone: "primary",
       },
     ],

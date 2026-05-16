@@ -17,6 +17,10 @@ import ClientsPage from "./features/clients/pages/ClientsPage.jsx";
 import ReceiptsPage from "./features/receipts/pages/ReceiptsPage.jsx";
 import TagsPage from "./features/labels/pages/LabelsPage.jsx";
 import Pedidos from "./features/Pedidos/pages/PedidosPage.jsx";
+import TrackingPage from "./features/tracking/pages/TrackingPage.jsx";
+import PlaygroundPage from "./features/playground/pages/PlaygroundPage.jsx";
+import PlaygroundListPage from "./features/playground/pages/PlaygroundListPage.jsx";
+import PublicPlaygroundPage from "./features/playground/pages/PublicPlaygroundPage.jsx";
 
 export default function App() {
   return (
@@ -26,6 +30,8 @@ export default function App() {
 
       {/* LOGIN */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/tracking" element={<TrackingPage />} />
+      <Route path="/playground/public/:shareToken" element={<PublicPlaygroundPage />} />
 
       {/* DASHBOARD PROTEGIDO */}
       <Route
@@ -40,10 +46,11 @@ export default function App() {
         <Route path="cotizaciones" element={<QuotationsPage />} />
         <Route path="productos" element={<ProductsAdminPage />} />
         <Route path="gastos" element={<ExpensesPage />} />
-        <Route path="etiquetas" element={<TagsPage />} />
         <Route path="clientes" element={<ClientsPage />} />
         <Route path="contrarecibo" element={<ReceiptsPage />} />
         <Route path="pedidos" element={<Pedidos />} />
+        <Route path="playground" element={<PlaygroundListPage  />} />
+        <Route path="playground/:playgroundId" element={<PlaygroundPage  />} />
       </Route>
 
       {/* CATALOGO */}

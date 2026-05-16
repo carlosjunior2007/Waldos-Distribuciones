@@ -10,7 +10,7 @@ export default function DeliveryAddressModal({ open, order, onClose }) {
       open={open}
       onClose={onClose}
       title={`Direcciones de entrega · ${order.folio}`}
-      subtitle="Permite manejar varias direcciones por pedido."
+      subtitle="Direcciones guardadas por cliente para usarlas en pedidos y entregas futuras."
       width="max-w-5xl"
     >
       <div className="space-y-5 p-5 md:p-6">
@@ -39,7 +39,7 @@ export default function DeliveryAddressModal({ open, order, onClose }) {
         <section className="rounded-[24px] border border-border bg-surface-soft p-4">
           <div className="mb-4 flex items-center gap-2">
             <MapPin className="h-5 w-5 text-accent-500" />
-            <h4 className="text-sm font-bold text-text-primary">Nueva dirección</h4>
+            <h4 className="text-sm font-bold text-text-primary">Nueva dirección del cliente</h4>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -60,7 +60,7 @@ export default function DeliveryAddressModal({ open, order, onClose }) {
           </button>
           <button type="button" className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white">
             <Save className="h-4 w-4" />
-            Guardar dirección
+            Guardar en cliente
           </button>
         </div>
       </div>

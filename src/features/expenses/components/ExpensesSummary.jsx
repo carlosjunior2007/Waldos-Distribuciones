@@ -13,17 +13,17 @@ export default function ExpensesSummary({ summary }) {
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
       <SummaryCard
         icon={TrendingDown}
-        title="Gastos descontados"
+        title="Gastos"
         value={formatMoney(summary.expensesTotal)}
-        note="Suma de los gastos asociados a las cotizaciones filtradas."
+        note="Gastos asociados a pedidos y gastos independientes del filtro."
         tone="error"
       />
 
       <SummaryCard
         icon={TrendingUp}
-        title="Ventas completadas"
-        value={formatMoney(summary.quoteTotal)}
-        note="Total de cotizaciones completadas dentro del filtro actual."
+        title="Utilidad realizada"
+        value={formatMoney(summary.orderTotal)}
+        note="Solo pedidos entregados y pagados. Sin fantasías contables."
         tone="success"
       />
 
@@ -31,15 +31,15 @@ export default function ExpensesSummary({ summary }) {
         icon={CircleDollarSign}
         title="Ganancia neta"
         value={formatMoney(summary.netTotal)}
-        note="Cotizaciones completadas menos gastos registrados."
+        note="Utilidad realizada menos gastos registrados."
         tone="primary"
       />
 
       <SummaryCard
         icon={AlertTriangle}
-        title="Cotizaciones con gastos"
+        title="Pedidos con gastos"
         value={summary.withExpenses}
-        note="Cantidad de cotizaciones a las que ya se les cargaron gastos."
+        note={`${summary.realizedOrders} realizados · ${summary.pendingOrders} pendientes`}
         tone="warning"
       />
     </div>

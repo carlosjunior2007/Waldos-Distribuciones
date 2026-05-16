@@ -23,8 +23,8 @@ export default function ExpensesPage() {
         open={expenses.modalOpen}
         onClose={expenses.closeExpenseModal}
         onSaved={() => expenses.loadData(true)}
-        options={expenses.quoteRows}
-        selectedQuoteId={expenses.selectedQuoteId}
+        options={expenses.orderRows}
+        selectedOrderId={expenses.selectedOrderId}
         editingExpense={expenses.editingExpense}
       />
 
@@ -52,8 +52,8 @@ export default function ExpensesPage() {
       <section className="rounded-[28px] border border-border bg-surface shadow-[var(--shadow-soft)]">
         <PageHeader
           eyebrow="Gestión financiera"
-          title="Ganancias por cotización"
-          description="Aquí solo ves lo que ganaste realmente: cotizaciones completadas menos gastos asociados."
+          title="Ganancias por pedido"
+          description="Aquí ves ganancias realizadas por pedidos entregados y pagados, menos gastos asociados."
           actions={
             <div className="flex flex-col gap-3 sm:flex-row">
               <button

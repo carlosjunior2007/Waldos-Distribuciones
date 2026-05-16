@@ -40,6 +40,10 @@ export default function ClientListCard({
                 RFC: {client.rfc}
               </p>
             ) : null}
+
+            <p className="mt-2 text-xs text-text-muted">
+              {(client.cliente_direcciones || []).length} direcciones de entrega
+            </p>
           </div>
         </button>
 

@@ -6,6 +6,7 @@ import {
   TrendingUp,
   BanknoteArrowUp,
   BanknoteArrowDown,
+  Clock3,
 } from "lucide-react";
 
 import { formatInputDate, parseBusinessDate, parseTimestampDate } from "../../utils/dates";
@@ -84,9 +85,9 @@ export function getMovementType(type) {
     };
   }
 
-  if (type === "ganancia_cotizacion") {
+  if (type === "ganancia_pedido") {
     return {
-      label: "Ganancia de cotización",
+      label: "Ganancia de pedido",
       icon: TrendingUp,
       className: "border-success-100 bg-success-50 text-success-700",
     };
@@ -102,10 +103,19 @@ export function getMovementType(type) {
 export function getNatureStyles(nature) {
   if (nature === "ganancia") {
     return {
-      label: "Ganancia",
+      label: "Realizada",
       icon: BanknoteArrowUp,
       className: "border-success-100 bg-success-50 text-success-700",
       amountClass: "border-success-100 bg-success-50 text-success-700",
+    };
+  }
+
+  if (nature === "pendiente") {
+    return {
+      label: "Pendiente",
+      icon: Clock3,
+      className: "border-slate-200 bg-slate-50 text-slate-700",
+      amountClass: "border-slate-200 bg-slate-50 text-slate-700",
     };
   }
 
@@ -117,75 +127,134 @@ export function getNatureStyles(nature) {
   };
 }
 
-export function buildPreparedRows({ quoteRows, expenseRows, detailRows, productRows }) {
+export function deliveryCountsAsDelivered(status) {
+  return String(status || "").toLowerCase() === "entregada";
+}
+
+export function getRealDeliveredQuantityByDetail(order = {}) {
+  const deliveredByDetail = new Map();
+
+  for (const delivery of order.entregas || []) {
+    if (!deliveryCountsAsDelivered(delivery.estado)) continue;
+
+    for (const row of delivery.entrega_detalles || []) {
+      const key = row.pedido_detalle_id;
+      deliveredByDetail.set(
+        key,
+        (deliveredByDetail.get(key) || 0) + parseNumberish(row.cantidad_entregada),
+      );
+    }
+  }
+
+  return deliveredByDetail;
+}
+
+export function getRealOrderProgress(order = {}) {
+  const deliveredByDetail = getRealDeliveredQuantityByDetail(order);
+  const details = order.pedido_detalles || [];
+
+  const total = details.reduce(
+    (sum, item) => sum + parseNumberish(item.cantidad_pedida),
+    0,
+  );
+
+  const delivered = details.reduce((sum, item) => {
+    return sum + Math.min(
+      parseNumberish(item.cantidad_pedida),
+      parseNumberish(deliveredByDetail.get(item.id)),
+    );
+  }, 0);
+
+  return {
+    total,
+    delivered,
+    pending: Math.max(total - delivered, 0),
+    complete: total > 0 && delivered >= total,
+  };
+}
+
+export function isOrderPaid(order = {}) {
+  return String(order.estado_pago || "").toLowerCase() === "pagado";
+}
+
+export function isOrderRealized(order = {}) {
+  const estado = String(order.estado || "").toLowerCase();
+  if (estado === "cancelado" || estado === "borrador") return false;
+  return getRealOrderProgress(order).complete && isOrderPaid(order);
+}
+
+export function calculateOrderGrossProfit(order = {}) {
+  return (order.pedido_detalles || []).reduce((sum, item) => {
+    const quantity = parseNumberish(item.cantidad_pedida);
+    const price = parseNumberish(item.precio_unitario);
+    const cost = parseNumberish(item.costo_unitario);
+    return sum + quantity * (price - cost);
+  }, 0);
+}
+
+export function calculateOrderCost(order = {}) {
+  return (order.pedido_detalles || []).reduce((sum, item) => {
+    return sum + parseNumberish(item.cantidad_pedida) * parseNumberish(item.costo_unitario);
+  }, 0);
+}
+
+export function buildPreparedRows({ orderRows, expenseRows }) {
   const expenseMap = new Map();
-  const detailMap = new Map();
-  const productMap = new Map();
 
   for (const expense of expenseRows) {
-    const key = expense.cotizacion_id;
+    const key = expense.pedido_id;
+    if (!key) continue;
     if (!expenseMap.has(key)) expenseMap.set(key, []);
     expenseMap.get(key).push(expense);
   }
 
-  for (const detail of detailRows) {
-    const key = detail.cotizacion_id;
-    if (!detailMap.has(key)) detailMap.set(key, []);
-    detailMap.get(key).push(detail);
-  }
-
-  for (const product of productRows) {
-    productMap.set(product.id, product);
-  }
-
-  return quoteRows.map((quote) => {
-    const relatedExpenses = expenseMap.get(quote.id) || [];
-    const relatedDetails = detailMap.get(quote.id) || [];
-
+  return orderRows.map((order) => {
+    const relatedExpenses = expenseMap.get(order.id) || [];
     const totalExpenses = relatedExpenses.reduce(
       (acc, item) => acc + parseNumberish(item.monto),
       0,
     );
 
-    const utilidadBruta = relatedDetails.reduce((acc, detail) => {
-      const product = productMap.get(detail.producto_id);
-      const utilidadUnidad = parseNumberish(product?.precio_utilidad);
-      const cantidad = parseNumberish(detail.cantidad || 0);
-      return acc + utilidadUnidad * cantidad;
-    }, 0);
-
-    const netProfit = utilidadBruta - totalExpenses;
-    const quoteDateValue = quote.fecha_completado || quote.created_at;
+    const realized = isOrderRealized(order);
+    const grossProfit = realized ? calculateOrderGrossProfit(order) : 0;
+    const cost = calculateOrderCost(order);
+    const netProfit = realized ? grossProfit - totalExpenses : -totalExpenses;
+    const dateValue = order.fecha_fin || order.fecha_inicio || order.fecha_emision || order.created_at;
+    const progress = getRealOrderProgress(order);
 
     return {
-      id: quote.id,
-      folio: quote.folio || "Sin folio",
-      referencia: quote.folio || "Sin folio",
-      cliente: quote.cliente_nombre || "Cliente sin nombre",
-      cliente_email: quote.cliente_email || "",
-      cliente_telefono: quote.cliente_telefono || "",
-      fechaISO: quoteDateValue,
-      fecha: formatExpenseDate(quoteDateValue, { isTimestamp: true }),
-      totalCotizacion: parseNumberish(quote.total),
-      utilidadBruta,
+      id: order.id,
+      folio: order.folio || "Sin folio",
+      referencia: order.folio || "Sin folio",
+      cliente: order.cliente_nombre || "Cliente sin nombre",
+      cliente_email: order.cliente_email || "",
+      cliente_telefono: order.cliente_telefono || "",
+      fechaISO: dateValue,
+      fecha: formatExpenseDate(dateValue, { isTimestamp: !/^\d{4}-\d{2}-\d{2}$/.test(String(dateValue || "")) }),
+      totalPedido: parseNumberish(order.total),
+      costoPedido: cost,
+      utilidadBruta: grossProfit,
       gastos: totalExpenses,
       ganancia: netProfit,
-      naturaleza: netProfit >= 0 ? "ganancia" : "gasto",
-      tipo: "ganancia_cotizacion",
-      concepto: `Ganancia por cotización ${quote.folio || ""}`.trim(),
-      notas: quote.notas || "",
+      realizada: realized,
+      pagado: isOrderPaid(order),
+      entregado: progress.complete,
+      progreso: progress,
+      naturaleza: realized ? "ganancia" : totalExpenses > 0 ? "gasto" : "pendiente",
+      tipo: "ganancia_pedido",
+      concepto: realized
+        ? `Ganancia realizada por pedido ${order.folio || ""}`.trim()
+        : `Pedido pendiente ${order.folio || ""}`.trim(),
+      notas: order.notas || "",
       expenseCount: relatedExpenses.length,
       expenses: relatedExpenses,
+      order,
     };
   });
 }
 
 export function resolveRowDateMs(row) {
   if (!row?.fechaISO) return 0;
-
-  if (row.rowType === "ganancia") {
-    return parseTimestampDate(row.fechaISO)?.getTime() || 0;
-  }
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO))) {
     return startOfLocalDay(row.fechaISO)?.getTime() || 0;

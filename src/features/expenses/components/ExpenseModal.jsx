@@ -11,11 +11,11 @@ export default function ExpenseModal({
   onClose,
   onSaved,
   options = [],
-  selectedQuoteId = "",
+  selectedOrderId = "",
   editingExpense = null,
 }) {
   const [form, setForm] = useState({
-    cotizacion_id: "",
+    pedido_id: "",
     concepto: "",
     descripcion: "",
     monto: "",
@@ -31,7 +31,7 @@ export default function ExpenseModal({
 
     if (editingExpense) {
       setForm({
-        cotizacion_id: editingExpense.cotizacion_id || "",
+        pedido_id: editingExpense.pedido_id || "",
         concepto: editingExpense.concepto || "",
         descripcion: editingExpense.descripcion || "",
         monto: editingExpense.monto ?? "",
@@ -40,7 +40,7 @@ export default function ExpenseModal({
       });
     } else {
       setForm({
-        cotizacion_id: selectedQuoteId || "",
+        pedido_id: selectedOrderId || "",
         concepto: "",
         descripcion: "",
         monto: "",
@@ -50,7 +50,7 @@ export default function ExpenseModal({
     }
 
     setError("");
-  }, [open, selectedQuoteId, editingExpense]);
+  }, [open, selectedOrderId, editingExpense]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -70,7 +70,8 @@ export default function ExpenseModal({
       setSaving(true);
 
       const payload = {
-        cotizacion_id: form.cotizacion_id || null,
+        pedido_id: form.pedido_id || null,
+        cotizacion_id: null,
         concepto: form.concepto.trim(),
         descripcion: form.descripcion.trim() || null,
         monto: parseNumberish(form.monto),
@@ -98,24 +99,24 @@ export default function ExpenseModal({
       open={open}
       onClose={onClose}
       title={editingExpense ? "Modificar gasto" : "Registrar gasto"}
-      subtitle="Puedes ligarlo a una cotización o dejarlo independiente."
+      subtitle="Puedes ligarlo a un pedido o dejarlo independiente."
       width="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="p-5 md:p-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <label className="space-y-2 md:col-span-2">
             <span className="text-sm font-semibold text-text-primary">
-              Cotización <span className="text-text-muted">(opcional)</span>
+              Pedido <span className="text-text-muted">(opcional)</span>
             </span>
 
             <select
-              value={form.cotizacion_id}
+              value={form.pedido_id}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, cotizacion_id: e.target.value }))
+                setForm((prev) => ({ ...prev, pedido_id: e.target.value }))
               }
               className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none"
             >
-              <option value="">Sin cotización asociada</option>
+              <option value="">Sin pedido asociado</option>
 
               {options.map((item) => (
                 <option key={item.id} value={item.id}>

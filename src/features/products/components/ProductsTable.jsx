@@ -1,5 +1,6 @@
 import {
   Barcode,
+  Download,
   Eye,
   Package,
   Pencil,
@@ -9,9 +10,15 @@ import {
 
 import ActionIconButton from "../../../components/ui/ActionIconButton";
 import { formatMoney } from "../../../utils/formatters";
-import { getCategoryLabel, getInventoryStatus } from "../product.helpers";
+import { formatUtilityPercent, getCategoryLabel, getInventoryStatus } from "../product.helpers";
 
-export default function ProductsTable({ products, onView, onEdit, onDelete }) {
+export default function ProductsTable({
+  products,
+  onView,
+  onEdit,
+  onDelete,
+  onDownloadLabel,
+}) {
   return (
     <div className="hidden xl:block">
       <div className="overflow-x-auto">
@@ -23,6 +30,7 @@ export default function ProductsTable({ products, onView, onEdit, onDelete }) {
                 "Código",
                 "Categoría",
                 "Compra",
+                "Utilidad",
                 "Venta",
                 "Estado",
                 "Acciones",
@@ -47,6 +55,7 @@ export default function ProductsTable({ products, onView, onEdit, onDelete }) {
                 onView={onView}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onDownloadLabel={onDownloadLabel}
               />
             ))}
           </tbody>
@@ -56,7 +65,7 @@ export default function ProductsTable({ products, onView, onEdit, onDelete }) {
   );
 }
 
-function ProductTableRow({ item, onView, onEdit, onDelete }) {
+function ProductTableRow({ item, onView, onEdit, onDelete, onDownloadLabel }) {
   const status = getInventoryStatus(item);
   const StatusIcon = status.icon;
 
@@ -76,6 +85,10 @@ function ProductTableRow({ item, onView, onEdit, onDelete }) {
 
       <td className="px-6 py-5 text-sm font-medium text-text-primary">
         {formatMoney(item.precio_compra)}
+      </td>
+
+      <td className="px-6 py-5 text-sm font-semibold text-text-primary">
+        {formatUtilityPercent(item)}
       </td>
 
       <td className="px-6 py-5 text-sm font-bold text-text-primary">
@@ -102,6 +115,13 @@ function ProductTableRow({ item, onView, onEdit, onDelete }) {
             label="Editar producto"
             tone="default"
             onClick={() => onEdit(item)}
+          />
+
+          <ActionIconButton
+            icon={Download}
+            label="Descargar etiqueta"
+            tone="default"
+            onClick={() => onDownloadLabel(item)}
           />
 
           <ActionIconButton

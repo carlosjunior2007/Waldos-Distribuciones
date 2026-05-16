@@ -68,19 +68,19 @@ export function LabelPreviewContent({
             </div>
           ) : null}
 
-          {client?.nombre ? (
+          {companyOptions.showClientName && client?.nombre ? (
             <div style={{ marginTop: "1mm", fontSize: "3.5mm", fontWeight: 700 }}>
               Cliente: {client.nombre}
             </div>
           ) : null}
 
-          {client?.numero ? (
+          {companyOptions.showClientPhone && client?.numero ? (
             <div style={{ marginTop: "1mm", fontSize: "3.5mm", fontWeight: 700 }}>
               Tel: {client.numero}
             </div>
           ) : null}
 
-          {client?.correo ? (
+          {companyOptions.showClientEmail && client?.correo ? (
             <div
               style={{
                 marginTop: "1mm",
@@ -94,7 +94,7 @@ export function LabelPreviewContent({
           ) : null}
         </div>
 
-        {client?.logo ? (
+        {companyOptions.showClientLogo && client?.logo ? (
           <div style={{ width: "22mm", textAlign: "right", flexShrink: 0 }}>
             <img
               src={client.logo}
@@ -110,13 +110,19 @@ export function LabelPreviewContent({
         ) : null}
       </div>
 
-      <div style={{ marginTop: "auto", paddingTop: "2mm" }}>
+      <div
+        style={{
+          marginTop: "3mm",
+          paddingTop: "0",
+          paddingBottom: "0",
+        }}
+      >
         {form.codigo_barras ? (
           <div
             style={{
-              margin: "3mm auto",
+              margin: "2mm auto 0",
               width: "80%",
-              minHeight: "26mm",
+              minHeight: "23mm",
               display: "flex",
               alignItems: "flex-start",
             }}
@@ -125,37 +131,27 @@ export function LabelPreviewContent({
           </div>
         ) : null}
 
-        {(companyOptions.showCompanyLogo || companyOptions.showCompanyName) && (
+        {companyOptions.showCompanyLogo ? (
           <div
             style={{
-              marginTop: "3mm",
+              marginTop: "0.8mm",
+              marginLeft: "0mm",
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              gap: "3mm",
+              justifyContent: "flex-start",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "2mm" }}>
-              {companyOptions.showCompanyLogo && companyOptions.companyLogo ? (
-                <img
-                  src={companyOptions.companyLogo}
-                  alt="Logo empresa"
-                  style={{
-                    width: "10mm",
-                    height: "10mm",
-                    objectFit: "contain",
-                  }}
-                />
-              ) : null}
-
-              {companyOptions.showCompanyName ? (
-                <span style={{ fontSize: "2.8mm", fontWeight: 700 }}>
-                  {companyOptions.companyName}
-                </span>
-              ) : null}
-            </div>
+            <img
+              src={companyOptions.companyLogo || "/Logo.png"}
+              alt="Logo"
+              style={{
+                maxWidth: "25mm",
+                maxHeight: "9mm",
+                objectFit: "contain",
+              }}
+            />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

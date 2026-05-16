@@ -1,13 +1,14 @@
-import { Eye, Package, Pencil, Trash2 } from "lucide-react";
+import { Download, Eye, Package, Pencil, Trash2 } from "lucide-react";
 
 import { formatMoney } from "../../../utils/formatters";
-import { getCategoryLabel, getInventoryStatus } from "../product.helpers";
+import { formatUtilityPercent, getCategoryLabel, getInventoryStatus } from "../product.helpers";
 
 export default function ProductsMobileList({
   products,
   onView,
   onEdit,
   onDelete,
+  onDownloadLabel,
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 p-4 md:p-5 xl:hidden">
@@ -18,13 +19,14 @@ export default function ProductsMobileList({
           onView={onView}
           onEdit={onEdit}
           onDelete={onDelete}
+          onDownloadLabel={onDownloadLabel}
         />
       ))}
     </div>
   );
 }
 
-function ProductMobileCard({ item, onView, onEdit, onDelete }) {
+function ProductMobileCard({ item, onView, onEdit, onDelete, onDownloadLabel }) {
   const status = getInventoryStatus(item);
   const StatusIcon = status.icon;
 
@@ -41,12 +43,18 @@ function ProductMobileCard({ item, onView, onEdit, onDelete }) {
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <MiniInfo label="Categoría" value={getCategoryLabel(item.categoria)} />
         <MiniInfo label="Compra" value={formatMoney(item.precio_compra)} />
+        <MiniInfo label="Utilidad" value={formatUtilityPercent(item)} />
         <MiniInfo label="Precio" value={formatMoney(item.precio)} strong />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <MobileAction icon={Eye} label="Ver" onClick={() => onView(item)} />
         <MobileAction icon={Pencil} label="Editar" onClick={() => onEdit(item)} />
+        <MobileAction
+          icon={Download}
+          label="Etiqueta"
+          onClick={() => onDownloadLabel(item)}
+        />
         <MobileAction
           icon={Trash2}
           label="Eliminar"

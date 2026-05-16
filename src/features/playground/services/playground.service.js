@@ -91,16 +91,55 @@ function normalizeWorkbook(data) {
   };
 }
 
-export async function getCurrentPlaygroundUser() {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) throw error;
-  return data?.user || null;
+let cachedPlaygroundUser = undefined;
+let cachedPlaygroundUserAt = 0;
+let pendingPlaygroundUserPromise = null;
+const PLAYGROUND_USER_CACHE_MS = 5 * 60 * 1000;
+
+export function clearPlaygroundUserCache() {
+  cachedPlaygroundUser = undefined;
+  cachedPlaygroundUserAt = 0;
+  pendingPlaygroundUserPromise = null;
+}
+
+export async function getCurrentPlaygroundUser({ force = false } = {}) {
+  const now = Date.now();
+
+  if (
+    !force &&
+    cachedPlaygroundUser !== undefined &&
+    now - cachedPlaygroundUserAt < PLAYGROUND_USER_CACHE_MS
+  ) {
+    return cachedPlaygroundUser;
+  }
+
+  if (!force && pendingPlaygroundUserPromise) {
+    return pendingPlaygroundUserPromise;
+  }
+
+  pendingPlaygroundUserPromise = (async () => {
+    // Importante: getSession() lee la sesión local. getUser() valida contra
+    // Supabase y pega a /auth/v1/user; si se llama desde renders/effects del
+    // playground puede generar cientos de requests mientras se edita o scrollea.
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+
+    cachedPlaygroundUser = data?.session?.user || null;
+    cachedPlaygroundUserAt = Date.now();
+    return cachedPlaygroundUser;
+  })();
+
+  try {
+    return await pendingPlaygroundUserPromise;
+  } finally {
+    pendingPlaygroundUserPromise = null;
+  }
 }
 
 function creatorLabelFromWorkbook(workbook, currentUser) {
   if (!workbook) return 'Sin creador';
-  if (workbook.created_by && currentUser?.id && workbook.created_by === currentUser.id) return 'Tú';
   if (workbook.created_by_email) return workbook.created_by_email;
+  if (workbook.created_by && currentUser?.id && workbook.created_by === currentUser.id && currentUser?.email) return currentUser.email;
   if (workbook.created_by) return `Usuario ${String(workbook.created_by).slice(0, 8)}`;
   return 'Sin creador';
 }
@@ -344,32 +383,115 @@ export async function renameSheet(sheetId, name) {
   return data;
 }
 
+
+const PLAYGROUND_CELL_CHUNK_SIZE = 450;
+
+function chunkArray(items = [], size = PLAYGROUND_CELL_CHUNK_SIZE) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function insertCellsInChunks(cells = []) {
+  const inserted = [];
+  for (const chunk of chunkArray(cells)) {
+    let response = await supabase
+      .from('playground_cells')
+      .insert(chunk)
+      .select('*');
+
+    if (response.error && isMissingStyleColumnError(response.error)) {
+      response = await supabase
+        .from('playground_cells')
+        .insert(cellsWithoutStyle(chunk))
+        .select('*');
+    }
+
+    if (response.error) throw response.error;
+    inserted.push(...(response.data || []));
+  }
+  return inserted;
+}
+
+async function upsertCellsInChunks(cells = []) {
+  const upserted = [];
+  for (const chunk of chunkArray(cells)) {
+    let response = await supabase
+      .from('playground_cells')
+      .upsert(chunk, { onConflict: 'sheet_id,row_index,col_index' })
+      .select('*');
+
+    if (response.error && isMissingStyleColumnError(response.error)) {
+      response = await supabase
+        .from('playground_cells')
+        .upsert(cellsWithoutStyle(chunk), { onConflict: 'sheet_id,row_index,col_index' })
+        .select('*');
+    }
+
+    if (response.error) throw response.error;
+    upserted.push(...(response.data || []));
+  }
+  return upserted;
+}
+
+async function fetchSheetCellRefs(sheetId) {
+  const refs = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('playground_cells')
+      .select('id,row_index,col_index')
+      .eq('sheet_id', sheetId)
+      .range(from, to);
+
+    if (error) throw error;
+    refs.push(...(data || []));
+
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return refs;
+}
+
+async function deleteCellsByIds(ids = []) {
+  for (const chunk of chunkArray(ids)) {
+    const { error } = await supabase
+      .from('playground_cells')
+      .delete()
+      .in('id', chunk);
+
+    if (error) throw error;
+  }
+}
+
 export async function saveSheetCells(sheetId, grid) {
   const cells = gridToCells(sheetId, grid);
 
-  const { error: deleteError } = await supabase
-    .from('playground_cells')
-    .delete()
-    .eq('sheet_id', sheetId);
+  // Guardado seguro: antes se hacía DELETE de toda la hoja y luego INSERT.
+  // Si un chunk fallaba, la hoja quedaba incompleta y al volver a entrar parecía
+  // que “no cargaron” productos. Ahora primero hacemos UPSERT de todo lo que sí
+  // existe y solo después borramos celdas viejas que ya no están en el grid.
+  const existingRefs = await fetchSheetCellRefs(sheetId);
+  const nextKeys = new Set(cells.map((cell) => `${Number(cell.row_index)}:${Number(cell.col_index)}`));
 
-  if (deleteError) throw deleteError;
+  const savedCells = cells.length ? await upsertCellsInChunks(cells) : [];
 
-  if (!cells.length) return [];
+  const staleIds = existingRefs
+    .filter((cell) => !nextKeys.has(`${Number(cell.row_index)}:${Number(cell.col_index)}`))
+    .map((cell) => cell.id)
+    .filter(Boolean);
 
-  let response = await supabase
-    .from('playground_cells')
-    .insert(cells)
-    .select('*');
-
-  if (response.error && isMissingStyleColumnError(response.error)) {
-    response = await supabase
-      .from('playground_cells')
-      .insert(cellsWithoutStyle(cells))
-      .select('*');
+  if (staleIds.length) {
+    await deleteCellsByIds(staleIds);
   }
 
-  if (response.error) throw response.error;
-  return response.data || [];
+  return savedCells;
 }
 
 
@@ -403,20 +525,7 @@ export async function upsertSheetCells(sheetId, cells = []) {
   if (!normalized.length) return [];
 
   // Guardamos celdas vacías como UPDATE para que borrar contenido también viaje por realtime.
-  let response = await supabase
-    .from('playground_cells')
-    .upsert(normalized, { onConflict: 'sheet_id,row_index,col_index' })
-    .select('*');
-
-  if (response.error && isMissingStyleColumnError(response.error)) {
-    response = await supabase
-      .from('playground_cells')
-      .upsert(cellsWithoutStyle(normalized), { onConflict: 'sheet_id,row_index,col_index' })
-      .select('*');
-  }
-
-  if (response.error) throw response.error;
-  return response.data || [];
+  return upsertCellsInChunks(normalized);
 }
 
 export function subscribeToPlaygroundChanges({ workbookId, sheets = [], onCellChange, onSheetChange, onWorkbookChange }) {
@@ -579,6 +688,22 @@ async function selectWithOptionalDate({ table, select, orderColumn = 'created_at
   return data || [];
 }
 
+function calculateProductUtility(row = {}) {
+  const precio = Number(row.precio || 0);
+  const costo = Number(row.precio_compra || 0);
+
+  if (!Number.isFinite(precio) || precio <= 0 || !Number.isFinite(costo)) return '';
+
+  return Number((((precio - costo) / precio) * 100).toFixed(2));
+}
+
+function enrichProductForPlayground(row = {}) {
+  return {
+    ...row,
+    utilidad: calculateProductUtility(row),
+  };
+}
+
 function pickFields(row = {}, fields = []) {
   if (!fields.length) return row;
   return Object.fromEntries(fields.map((field) => [field, row[field] ?? '']));
@@ -586,7 +711,7 @@ function pickFields(row = {}, fields = []) {
 
 export const PLAYGROUND_IMPORT_FIELD_SETS = {
   productos: [
-    'id', 'codigo', 'nombre', 'descripcion', 'precio', 'precio_compra', 'categoria', 'unidad', 'cantidad_caja', 'habilitado', 'imagen',
+    'id', 'codigo', 'nombre', 'descripcion', 'precio', 'precio_compra', 'utilidad', 'categoria', 'unidad', 'cantidad_caja', 'habilitado', 'imagen',
   ],
   pedidos: [
     'id', 'folio', 'cliente_nombre', 'cliente_email', 'estado', 'estado_pago', 'fecha_inicio', 'fecha_fin', 'subtotal', 'iva_porcentaje', 'total', 'created_at',
@@ -610,7 +735,7 @@ export async function getPlaygroundImportData({ source, period = 'all', dateFrom
 
   if (source === 'productos') {
     const rows = await getProductsForPlayground();
-    return rows.map((row) => pickFields(row, selectedFields));
+    return rows.map((row) => pickFields(enrichProductForPlayground(row), selectedFields));
   }
 
   const config = {
@@ -654,16 +779,63 @@ export async function applyProductBulkChanges({ playgroundId, changes }) {
   const cleanChanges = Array.isArray(changes) ? changes : [];
 
   if (!cleanChanges.length) {
-    return { ok: true, updated_count: 0, change_id: null };
+    return { ok: true, updated_count: 0, created_count: 0, change_id: null };
   }
 
-  const { data, error } = await supabase.rpc('apply_product_bulk_changes', {
-    playground_id: playgroundId || null,
-    changes: cleanChanges,
-  });
+  const createChanges = cleanChanges.filter((change) => change?.action === 'create' || change?.tipo === 'crear' || change?.create === true);
+  const updateChanges = cleanChanges.filter((change) => !createChanges.includes(change));
 
-  if (error) throw error;
-  return data;
+  let updatedCount = 0;
+  let createdCount = 0;
+  let rpcResult = null;
+
+  if (updateChanges.length) {
+    const rpcChanges = updateChanges.map(({ action, tipo, create, ...change }) => change);
+
+    const { data, error } = await supabase.rpc('apply_product_bulk_changes', {
+      playground_id: playgroundId || null,
+      changes: rpcChanges,
+    });
+
+    if (error) throw error;
+    rpcResult = data;
+    updatedCount = Number(data?.updated_count ?? updateChanges.length);
+  }
+
+  if (createChanges.length) {
+    const payload = createChanges.map((change) => {
+      const clean = {
+        codigo: change.codigo || null,
+        nombre: change.nombre || null,
+        descripcion: change.descripcion || null,
+        precio: change.precio ?? null,
+        precio_compra: change.precio_compra ?? null,
+        categoria: change.categoria || null,
+        unidad: change.unidad || null,
+        cantidad_caja: change.cantidad_caja ?? null,
+        habilitado: change.habilitado ?? true,
+      };
+
+      return Object.fromEntries(
+        Object.entries(clean).filter(([, value]) => value !== undefined && value !== ''),
+      );
+    });
+
+    const { data, error } = await supabase
+      .from('productos')
+      .insert(payload)
+      .select('id');
+
+    if (error) throw error;
+    createdCount = data?.length ?? createChanges.length;
+  }
+
+  return {
+    ok: true,
+    ...(rpcResult || {}),
+    updated_count: updatedCount,
+    created_count: createdCount,
+  };
 }
 
 export async function getProductsForPlayground() {
@@ -675,7 +847,7 @@ export async function getProductsForPlayground() {
     .range(0, 9999);
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(enrichProductForPlayground);
 }
 
 export async function deletePlayground(id) {

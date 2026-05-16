@@ -301,6 +301,8 @@ export async function createDelivery({ order, delivery, products }) {
   const overLimit = rows.find((item) => item.cantidad_entregada > item.pendiente);
   if (overLimit) throw new Error("Hay cantidades mayores a lo pendiente.");
 
+  await validateDeliveryRowsAvailability({ orderId: order.id, rows });
+
   const { data: createdDelivery, error: deliveryError } = await supabase
     .from("entregas")
     .insert({
@@ -339,6 +341,8 @@ export async function updateDelivery({ order, delivery, products }) {
 
   const overLimit = rows.find((item) => item.cantidad_entregada > item.pendiente);
   if (overLimit) throw new Error("Hay cantidades mayores a lo disponible.");
+
+  await validateDeliveryRowsAvailability({ orderId: order.id, rows, deliveryId: delivery.id });
 
   const currentRows = await fetchDeliveryDetailRows(delivery.id);
   const currentDelivery = await fetchDeliveryHeader(delivery.id);
@@ -456,6 +460,10 @@ export async function saveRecurringOrderRule({ order, rule, products }) {
     if (error) throw error;
   }
 
+  if (rule.systemAction === "reminder_only") {
+    await notifyRecurringOrderReminder({ order, rule, recurrence, products: rows });
+  }
+
   return recurrence;
 }
 
@@ -534,9 +542,82 @@ function buildDeliveryRows(products = []) {
     .map((item) => ({
       pedido_detalle_id: item.pedido_detalle_id || item.id,
       producto_id: item.producto_id,
-      cantidad_entregada: Number(item.cantidad_entregada || 0),
-      pendiente: Number(item.pendiente || item.cantidad_pendiente || 0),
+      cantidad_entregada: Math.floor(Number(item.cantidad_entregada || 0)),
+      pendiente: Math.floor(Number(item.pendiente || item.cantidad_pendiente || 0)),
     }));
+}
+
+async function validateDeliveryRowsAvailability({ orderId, rows, deliveryId = null }) {
+  const { data: details, error: detailsError } = await supabase
+    .from("pedido_detalles")
+    .select("id,cantidad_pedida")
+    .eq("pedido_id", orderId);
+
+  if (detailsError) throw detailsError;
+
+  let deliveryDetailsQuery = supabase
+    .from("entrega_detalles")
+    .select("pedido_detalle_id,cantidad_entregada,entregas!inner(id,estado,pedido_id)")
+    .eq("entregas.pedido_id", orderId)
+    .neq("entregas.estado", "cancelada");
+
+  if (deliveryId) {
+    deliveryDetailsQuery = deliveryDetailsQuery.neq("entrega_id", deliveryId);
+  }
+
+  const { data: deliveryRows, error: deliveryRowsError } = await deliveryDetailsQuery;
+  if (deliveryRowsError) throw deliveryRowsError;
+
+  const reservedByDetailId = (deliveryRows || []).reduce((acc, item) => {
+    const detailId = item.pedido_detalle_id;
+    if (!detailId) return acc;
+    acc[detailId] = Math.floor(Number(acc[detailId] || 0)) + Math.floor(Number(item.cantidad_entregada || 0));
+    return acc;
+  }, {});
+
+  for (const row of rows) {
+    const detail = (details || []).find((item) => item.id === row.pedido_detalle_id);
+    if (!detail) throw new Error("Un producto de la entrega ya no existe en el pedido.");
+
+    const ordered = Math.floor(Number(detail.cantidad_pedida || 0));
+    const reserved = Math.floor(Number(reservedByDetailId[row.pedido_detalle_id] || 0));
+    const available = Math.max(ordered - reserved, 0);
+
+    if (Math.floor(Number(row.cantidad_entregada || 0)) > available) {
+      throw new Error(`La cantidad de ${row.producto_id || "un producto"} supera lo disponible. Disponible real: ${available}.`);
+    }
+  }
+}
+
+async function notifyRecurringOrderReminder({ order, rule, recurrence, products }) {
+  const recipients = [
+    "juan.osuna@waldodistribuciones.com",
+    "contacto@waldodistribuciones.com",
+  ];
+
+  try {
+    const { error } = await supabase.functions.invoke("send-recurring-order-reminder", {
+      body: {
+        to: recipients,
+        subject: `Recordatorio de pedido recurrente ${order?.folio || ""}`.trim(),
+        order: {
+          id: order?.id,
+          folio: order?.folio,
+          cliente_nombre: order?.cliente_nombre,
+          tracking_token: order?.tracking_token,
+        },
+        rule,
+        recurrence_id: recurrence?.id,
+        products,
+      },
+    });
+
+    if (error) {
+      console.warn("No se pudo enviar el correo del recordatorio:", error.message || error);
+    }
+  } catch (error) {
+    console.warn("No se pudo enviar el correo del recordatorio:", error.message || error);
+  }
 }
 
 async function insertDeliveryDetails(deliveryId, rows) {
@@ -669,8 +750,8 @@ function sanitizeDetails(details = []) {
     .filter((item) => item.producto_id && Number(item.cantidad_pedida || 0) > 0)
     .map((item) => ({
       ...item,
-      cantidad_pedida: Number(item.cantidad_pedida || 0),
-      cantidad_entregada: Number(item.cantidad_entregada || 0),
+      cantidad_pedida: Math.floor(Number(item.cantidad_pedida || 0)),
+      cantidad_entregada: Math.floor(Number(item.cantidad_entregada || 0)),
       precio_unitario: Number(item.precio_unitario || 0),
       costo_unitario: Number(item.costo_unitario || 0),
     }));
@@ -701,7 +782,7 @@ function calculateTotals(details, iva = 8) {
   const subtotal = details.reduce((acc, item) => {
     return acc + Number(item.cantidad_pedida || 0) * Number(item.precio_unitario || 0);
   }, 0);
-  const iva_porcentaje = Number(iva || 0);
+  const iva_porcentaje = Math.floor(Number(iva || 0));
   const total = subtotal * (1 + iva_porcentaje / 100);
   return { subtotal, iva_porcentaje, total };
 }
@@ -723,6 +804,24 @@ function getDetailStatus(ordered, delivered) {
 
 function deliveryCountsAsDelivered(status) {
   return String(status || "").toLowerCase() === "entregada";
+}
+
+function deliveryCountsAsReserved(status) {
+  return String(status || "").toLowerCase() !== "cancelada";
+}
+
+function getReservedQuantitiesFromActiveDeliveries(deliveries = []) {
+  return (deliveries || []).reduce((acc, delivery) => {
+    if (!deliveryCountsAsReserved(delivery.estado)) return acc;
+
+    (delivery.entrega_detalles || []).forEach((row) => {
+      const detailId = row.pedido_detalle_id;
+      if (!detailId) return;
+      acc[detailId] = Math.floor(Number(acc[detailId] || 0)) + Math.floor(Number(row.cantidad_entregada || 0));
+    });
+
+    return acc;
+  }, {});
 }
 
 function getDeliveredQuantitiesFromCompletedDeliveries(deliveries = []) {
@@ -762,16 +861,22 @@ function normalizeOrder(order) {
     .sort((a, b) => String(a.nombre_producto || "").localeCompare(String(b.nombre_producto || "")));
 
   const deliveredByDetailId = getDeliveredQuantitiesFromCompletedDeliveries(order.entregas || []);
+  const reservedByDetailId = getReservedQuantitiesFromActiveDeliveries(order.entregas || []);
 
   const details = rawDetails.map((item) => {
-    const ordered = Number(item.cantidad_pedida || 0);
-    const delivered = Math.min(Number(deliveredByDetailId[item.id] || 0), ordered);
+    const ordered = Math.floor(Number(item.cantidad_pedida || 0));
+    const delivered = Math.min(Math.floor(Number(deliveredByDetailId[item.id] || 0)), ordered);
+    const reserved = Math.min(Math.floor(Number(reservedByDetailId[item.id] || 0)), ordered);
     const pending = Math.max(ordered - delivered, 0);
+    const available = Math.max(ordered - reserved, 0);
 
     return {
       ...item,
+      cantidad_pedida: ordered,
       cantidad_entregada: delivered,
+      cantidad_reservada: reserved,
       cantidad_pendiente: pending,
+      cantidad_disponible: available,
       estado: getDetailStatus(ordered, delivered),
     };
   });

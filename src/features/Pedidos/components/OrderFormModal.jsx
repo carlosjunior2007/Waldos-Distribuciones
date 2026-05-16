@@ -14,6 +14,16 @@ const emptyForm = {
   notas: "",
 };
 
+function onlyDigits(value) {
+  return String(value ?? "").replace(/[^0-9]/g, "");
+}
+
+function toIntegerValue(value, fallback = 0) {
+  const digits = onlyDigits(value);
+  if (digits === "") return "";
+  return String(Math.max(Number(digits), fallback));
+}
+
 export default function OrderFormModal({
   open,
   order,
@@ -36,7 +46,7 @@ export default function OrderFormModal({
         cliente_id: order.cliente_id || "",
         metodo_pago: order.metodo_pago || "",
         estado_pago: order.estado_pago || "pendiente",
-        iva_porcentaje: Number(order.iva_porcentaje ?? 8),
+        iva_porcentaje: toIntegerValue(order.iva_porcentaje ?? 8),
         fecha_inicio: toDateInput(order.fecha_inicio || order.entrega_inicio),
         fecha_fin: toDateInput(order.fecha_fin || order.entrega_fin),
         notas: order.notas || "",
@@ -108,7 +118,7 @@ export default function OrderFormModal({
     setDetails((current) => {
       const copy = [...current];
       const currentItem = copy[index];
-      const nextValue = value === "" ? "" : Number(value);
+      const nextValue = value === "" ? "" : Number(toIntegerValue(value));
       copy[index] = { ...currentItem, [field]: nextValue };
       return copy;
     });
@@ -147,7 +157,7 @@ export default function OrderFormModal({
         cliente_email: selectedClient?.correo || selectedClient?.email || order?.cliente_email || null,
         metodo_pago: form.metodo_pago || null,
         estado_pago: form.estado_pago,
-        iva_porcentaje: Number(form.iva_porcentaje || 0),
+        iva_porcentaje: Number(toIntegerValue(form.iva_porcentaje || 0)),
         fecha_inicio: form.fecha_inicio || null,
         fecha_fin: form.fecha_fin || null,
         notas: form.notas,
@@ -210,7 +220,17 @@ export default function OrderFormModal({
           </Field>
 
           <Field label="IVA %">
-            <input type="number" min="0" step="0.01" className={inputClass} value={form.iva_porcentaje} onChange={(event) => updateForm("iva_porcentaje", event.target.value)} />
+            <input
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className={inputClass}
+              value={form.iva_porcentaje}
+              onChange={(event) => updateForm("iva_porcentaje", toIntegerValue(event.target.value))}
+              onBlur={() => updateForm("iva_porcentaje", toIntegerValue(form.iva_porcentaje || 0))}
+            />
           </Field>
 
           <Field label="Fecha inicio">
@@ -266,7 +286,7 @@ export default function OrderFormModal({
                           <div className="mt-1 text-xs text-text-muted">{item.codigo || "Sin código"}</div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <input type="number" min={item.cantidad_entregada || 0} step="0.01" className={`${inputClass} ml-auto w-28 text-right`} value={item.cantidad_pedida} onChange={(event) => updateDetail(index, "cantidad_pedida", event.target.value)} />
+                          <input type="number" min={item.cantidad_entregada || 0} step="1" inputMode="numeric" pattern="[0-9]*" className={`${inputClass} ml-auto w-28 text-right`} value={item.cantidad_pedida} onChange={(event) => updateDetail(index, "cantidad_pedida", toIntegerValue(event.target.value))} />
                         </td>
                         <td className="px-4 py-3 text-right">
                           <input type="number" min="0" step="0.01" className={`${inputClass} ml-auto w-32 text-right`} value={item.precio_unitario} onChange={(event) => updateDetail(index, "precio_unitario", event.target.value)} />

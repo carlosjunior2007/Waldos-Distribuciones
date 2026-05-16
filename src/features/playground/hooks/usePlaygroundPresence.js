@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import supabase from '../../../utils/supabase.js';
 import { PRESENCE_ANIMALS, PRESENCE_NAMES } from '../playground.constants';
+import { getCurrentPlaygroundUser } from '../services/playground.service';
 
 function getOrCreateGuestName() {
   if (typeof window === 'undefined') return 'Oso Juan';
@@ -31,6 +32,7 @@ export function usePlaygroundPresence(workbookId, activeSheetName, pageMode = 'e
   const [members, setMembers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const channelRef = useRef(null);
+  const trackTimerRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -39,8 +41,7 @@ export function usePlaygroundPresence(workbookId, activeSheetName, pageMode = 'e
     async function connect() {
       if (!workbookId) return;
 
-      const { data } = await supabase.auth.getUser();
-      const user = data?.user || null;
+      const user = await getCurrentPlaygroundUser().catch(() => null);
       if (!mounted) return;
 
       setCurrentUser(user);
@@ -96,26 +97,44 @@ export function usePlaygroundPresence(workbookId, activeSheetName, pageMode = 'e
 
     return () => {
       mounted = false;
+      if (trackTimerRef.current) {
+        window.clearTimeout(trackTimerRef.current);
+        trackTimerRef.current = null;
+      }
       if (channel) supabase.removeChannel(channel);
+      if (channelRef.current === channel) channelRef.current = null;
     };
-  }, [workbookId, pageMode]);
+  }, [workbookId]);
 
   useEffect(() => {
-    if (!workbookId) return;
+    if (!workbookId) return undefined;
 
     const channel = channelRef.current;
-    if (!channel) return;
+    if (!channel) return undefined;
 
-    const name = getUserName(currentUser);
-    channel.track({
-      name,
-      email: currentUser?.email || '',
-      isGuest: !currentUser,
-      sheet: activeSheetName || 'Hoja',
-      pageMode,
-      activeCell: activeCellLabel || '',
-      onlineAt: new Date().toISOString(),
-    });
+    if (trackTimerRef.current) {
+      window.clearTimeout(trackTimerRef.current);
+    }
+
+    trackTimerRef.current = window.setTimeout(() => {
+      const name = getUserName(currentUser);
+      channel.track({
+        name,
+        email: currentUser?.email || '',
+        isGuest: !currentUser,
+        sheet: activeSheetName || 'Hoja',
+        pageMode,
+        activeCell: activeCellLabel || '',
+        onlineAt: new Date().toISOString(),
+      });
+    }, 250);
+
+    return () => {
+      if (trackTimerRef.current) {
+        window.clearTimeout(trackTimerRef.current);
+        trackTimerRef.current = null;
+      }
+    };
   }, [workbookId, activeSheetName, activeCellLabel, currentUser, pageMode]);
 
   return useMemo(() => members, [members]);

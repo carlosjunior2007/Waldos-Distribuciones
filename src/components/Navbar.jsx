@@ -163,7 +163,7 @@ export default function Navbar() {
                 "
               >
                 <PackageSearch size={16} />
-                Tracking
+                Rastrear pedido
               </Link>
 
               <Link

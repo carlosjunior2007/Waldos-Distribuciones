@@ -11,6 +11,8 @@ function fieldLabel(field) {
     categoria: 'Categoría',
     unidad: 'Unidad',
     cantidad_caja: 'Cantidad por caja',
+    utilidad: 'Utilidad %',
+    codigo: 'Código',
     habilitado: 'Habilitado',
   };
 
@@ -19,6 +21,7 @@ function fieldLabel(field) {
 
 function formatValue(field, value) {
   if (field === 'precio' || field === 'precio_compra') return formatMoney(value || 0);
+  if (field === 'utilidad') return `${Number(value || 0).toFixed(2)}%`;
   if (field === 'habilitado') return String(value).toLowerCase() === 'true' || value === true ? 'Sí' : 'No';
   return value === null || value === undefined || value === '' ? '-' : String(value);
 }
@@ -34,6 +37,9 @@ export default function PlaygroundBulkProductChangesModal({ open, onClose, chang
   }, [changes]);
 
   const totalFieldChanges = grouped.reduce((sum, item) => sum + item.fields.length, 0);
+  const totalCreates = grouped.filter((item) => item.action === 'create').length;
+  const totalUpdates = grouped.filter((item) => item.action === 'update' || !item.action).length;
+  const hasInvalidRows = grouped.some((item) => item.action === 'invalid');
 
   if (!open) return null;
 
@@ -50,7 +56,7 @@ export default function PlaygroundBulkProductChangesModal({ open, onClose, chang
           <div>
             <p className="text-xs font-black uppercase tracking-[0.28em] text-red-600">Cambios masivos</p>
             <h2 className="mt-1 text-2xl font-black text-slate-950">Aplicar cambios a productos</h2>
-            <p className="mt-1 text-sm text-slate-500">Revisa los cambios detectados antes de actualizar la base de datos.</p>
+            <p className="mt-1 text-sm text-slate-500">Revisa productos a actualizar y productos nuevos antes de tocar la base de datos.</p>
           </div>
 
           <button type="button" onClick={onClose} className="rounded-2xl border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50">
@@ -58,19 +64,23 @@ export default function PlaygroundBulkProductChangesModal({ open, onClose, chang
           </button>
         </header>
 
-        <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 sm:grid-cols-3">
+        <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 sm:grid-cols-4">
           <div className="rounded-2xl bg-white p-4 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Productos</p>
             <p className="mt-1 text-2xl font-black text-slate-950">{grouped.length}</p>
           </div>
           <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Campos</p>
-            <p className="mt-1 text-2xl font-black text-slate-950">{totalFieldChanges}</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Crear</p>
+            <p className="mt-1 text-2xl font-black text-emerald-700">{totalCreates}</p>
+          </div>
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Actualizar</p>
+            <p className="mt-1 text-2xl font-black text-slate-950">{totalUpdates}</p>
           </div>
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-5 w-5" />
-              <p className="text-sm font-bold">Estos cambios actualizarán productos reales cuando confirmes.</p>
+              <p className="text-sm font-bold">Estos cambios crearán o actualizarán productos reales cuando confirmes.</p>
             </div>
           </div>
         </div>
@@ -84,14 +94,16 @@ export default function PlaygroundBulkProductChangesModal({ open, onClose, chang
             </div>
           ) : (
             <div className="grid gap-3">
-              {grouped.map((change) => (
-                <article key={change.producto_id} className="rounded-3xl border border-slate-200 bg-white p-4">
+              {grouped.map((change, index) => (
+                <article key={change.producto_id || `${change.action || 'change'}-${change.display_codigo || change.codigo || change.display_name || change.nombre || index}`} className="rounded-3xl border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                     <div>
-                      <h3 className="font-black text-slate-950">{change.nombre || change.codigo || change.producto_id}</h3>
-                      <p className="mt-1 text-xs font-bold text-slate-500">{change.codigo || change.producto_id}</p>
+                      <h3 className="font-black text-slate-950">{change.display_name || change.nombre || change.display_codigo || change.codigo || change.producto_id}</h3>
+                      <p className="mt-1 text-xs font-bold text-slate-500">{change.display_codigo || change.codigo || change.producto_id}</p>
                     </div>
-                    <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">{change.fields.length} cambios</span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-black ${change.action === 'create' ? 'bg-emerald-50 text-emerald-700' : change.action === 'invalid' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
+                      {change.action === 'create' ? 'Crear producto' : change.action === 'invalid' ? 'Incompleto' : `${change.fields.length} cambios`}
+                    </span>
                   </div>
 
                   <div className="mt-3 grid gap-2">
@@ -111,7 +123,7 @@ export default function PlaygroundBulkProductChangesModal({ open, onClose, chang
 
         <footer className="flex flex-col gap-3 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-semibold text-slate-500">
-            {grouped.length ? (seenBottom ? 'Revisión completada.' : 'Desplázate hasta abajo para habilitar la confirmación.') : 'No hay cambios listos.'}
+            {grouped.length ? (hasInvalidRows ? 'Hay filas incompletas. Se omitirán hasta que tengan nombre.' : seenBottom ? 'Revisión completada.' : 'Desplázate hasta abajo para habilitar la confirmación.') : 'No hay cambios listos.'}
           </p>
           <div className="flex justify-end gap-3">
             <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">Cancelar</button>

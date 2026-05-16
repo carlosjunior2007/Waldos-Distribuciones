@@ -12,7 +12,7 @@ function getInitialRows(details = [], delivery = null) {
   return (details || [])
     .map((product) => {
       const currentDeliveryQuantity = getDeliveryQuantity(delivery, product.id);
-      const pendingWithoutThisDelivery = Number(product.cantidad_pendiente || 0);
+      const pendingWithoutThisDelivery = Number(product.cantidad_disponible ?? product.cantidad_pendiente ?? 0);
       const available = pendingWithoutThisDelivery + currentDeliveryQuantity;
       const deliveredBeforeThisDelivery = Math.max(
         Number(product.cantidad_entregada || 0) - currentDeliveryQuantity,
@@ -61,7 +61,8 @@ export default function DeliveryProductPicker({ order, delivery = null, value, o
   }, [rows]);
 
   function updateQuantity(rowId, value) {
-    const nextValue = value === "" ? "" : Math.max(Number(value), 0);
+    const digits = String(value ?? "").replace(/[^0-9]/g, "");
+    const nextValue = digits === "" ? "" : Math.max(Number(digits), 0);
     setRows((prev) => prev.map((row) => row.id === rowId ? { ...row, cantidad_entregada: nextValue } : row));
   }
 
@@ -146,7 +147,9 @@ export default function DeliveryProductPicker({ order, delivery = null, value, o
                           type="number"
                           min="0"
                           max={row.pendiente}
-                          step="0.01"
+                          step="1"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.cantidad_entregada}
                           onChange={(event) => updateQuantity(row.id, event.target.value)}
                           className={`h-11 w-full rounded-2xl border bg-background px-3 text-right text-sm font-semibold text-text-primary outline-none focus:border-primary-400 ${isOverLimit ? "border-error-300" : "border-border"}`}

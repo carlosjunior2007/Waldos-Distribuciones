@@ -1,4 +1,4 @@
-import { Eye, EyeOff} from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { CATEGORY_OPTIONS } from "./product.constants";
 
 export function generateUUID() {
@@ -46,6 +46,25 @@ export function getInventoryStatus(product) {
     icon: Eye,
     className: "border-success-100 bg-success-50 text-success-700",
   };
+}
+
+
+export function calculateUtilityPercent(cost, salePrice) {
+  const costo = Number(cost || 0);
+  const precio = Number(salePrice || 0);
+
+  if (costo <= 0 || precio <= 0) return 0;
+
+  return ((precio - costo) / precio) * 100;
+}
+
+export function formatUtilityPercent(productOrForm) {
+  const utility = calculateUtilityPercent(
+    productOrForm?.precio_compra,
+    productOrForm?.precio,
+  );
+
+  return `${utility.toFixed(2)}%`;
 }
 
 export function looksLikeUUID(value) {
@@ -111,15 +130,19 @@ export function getStoragePathFromUrl(imageUrl, bucketName = "productos") {
 }
 
 export function buildProductForm(product) {
+  const precioCompra = product.precio_compra ?? "";
+  const precioVenta = product.precio ?? "";
+
   return {
     id: product.id || "",
     nombre: product.nombre || "",
     descripcion: product.descripcion || "",
-    precio: product.precio ?? "",
+    precio: precioVenta,
     imagen: product.imagen || "",
     imagenFile: null,
 
-    precio_compra: product.precio_compra ?? "",
+    precio_compra: precioCompra,
+    precio_utilidad: calculateUtilityPercent(precioCompra, precioVenta).toFixed(2),
     cantidad_caja: product.cantidad_caja ?? "",
 
     habilitado: Boolean(product.habilitado),
@@ -140,6 +163,7 @@ export function validateProductForm(form) {
   if (form.precio === "" || Number(form.precio) < 0) return "El precio debe ser válido.";
   if (form.precio_compra === "" || Number(form.precio_compra) < 0) return "El precio de compra debe ser válido.";
   if (form.cantidad_caja === "" || Number(form.cantidad_caja) < 0) return "La cantidad por caja debe ser válida.";
+  if (!Number.isInteger(Number(form.cantidad_caja))) return "La cantidad por caja debe ser un número entero, sin decimales.";
   if (!form.clave_sat?.trim()) return "La clave SAT es obligatoria.";
   if (!form.clave_unidad_sat?.trim()) return "La clave de unidad SAT es obligatoria.";
   if (form.iva_porcentaje === "" || Number(form.iva_porcentaje) < 0) return "El IVA debe ser válido.";

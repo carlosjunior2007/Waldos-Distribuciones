@@ -22,6 +22,7 @@ import {
 } from "../services/productsExport.service";
 
 import { updateProduct } from "../services/products.service";
+import { downloadProductLabel } from "../services/productLabel.service";
 
 export default function ProductsAdminPage() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -73,6 +74,15 @@ export default function ProductsAdminPage() {
   function handleOpenCatalogModal() {
     if (products.filteredProducts.length === 0) return;
     setCatalogModalOpen(true);
+  }
+
+  async function handleDownloadProductLabel(product) {
+    try {
+      await downloadProductLabel(product);
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "No se pudo descargar la etiqueta del producto.");
+    }
   }
 
   async function handleExportPDF(options) {
@@ -185,6 +195,7 @@ export default function ProductsAdminPage() {
               onView={products.openViewModal}
               onEdit={products.openEditModal}
               onDelete={products.openDeleteModal}
+              onDownloadLabel={handleDownloadProductLabel}
             />
 
             <ProductsMobileList
@@ -192,6 +203,7 @@ export default function ProductsAdminPage() {
               onView={products.openViewModal}
               onEdit={products.openEditModal}
               onDelete={products.openDeleteModal}
+              onDownloadLabel={handleDownloadProductLabel}
             />
 
             <ProductsPagination

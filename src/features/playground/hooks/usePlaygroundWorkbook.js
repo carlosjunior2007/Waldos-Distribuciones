@@ -18,322 +18,29 @@ import {
   updateWorkbookShareMode,
 } from '../services/playground.service';
 import {
-  adjustFormulaReferences,
   cellsToGrid,
   createEmptyGrid,
-  displayCell,
   ensureGridSize,
-} from '../playground.helpers';
+  getGridDataBounds,
+} from '../excelModule/excel.helpers';
+import {
+  buildFillValue,
+  makeGridFromObjects,
+} from '../excelModule/excelData.helpers';
+import {
+  buildProductChangesFromGrid,
+  getProductIdsFromGrid,
+  isProductSheetLike,
+  makeProductChangesGrid,
+  reconcileProductSheetGrid,
+} from '../domain/productExcel.adapter';
 import {
   DEFAULT_COLUMNS,
   DEFAULT_ROWS,
   PRODUCT_IMPORT_EXTRA_ROWS,
   PRODUCTS_SHEET_NAME,
   STARTER_COLUMNS,
-  PRODUCT_CHANGE_COLUMNS,
 } from '../playground.constants';
-
-function getCellNumber(cell, grid, context) {
-  const value = cell?.formula ? displayCell(cell, grid, context) : cell?.value;
-  const number = Number(String(value ?? '').replace(/[$,]/g, '').trim());
-  return Number.isFinite(number) ? number : null;
-}
-
-function getRangeCells(grid, range) {
-  const cells = [];
-
-  for (let row = range.startRow; row <= range.endRow; row += 1) {
-    for (let col = range.startCol; col <= range.endCol; col += 1) {
-      cells.push({ row, col, cell: grid[row]?.[col] || { value: '', formula: '' } });
-    }
-  }
-
-  return cells;
-}
-
-function makeGridFromObjects(rows = [], fields = []) {
-  const safeFields = fields.length ? fields : Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
-  const grid = createEmptyGrid(Math.max(DEFAULT_ROWS, rows.length + 25), Math.max(DEFAULT_COLUMNS, safeFields.length));
-
-  safeFields.forEach((field, index) => {
-    grid[0][index] = { value: field, formula: '', style: { bold: true, bgColor: '#f1f5f9' } };
-  });
-
-  rows.forEach((row, rowIndex) => {
-    safeFields.forEach((field, colIndex) => {
-      const value = row?.[field];
-      grid[rowIndex + 1][colIndex] = {
-        value: value === null || value === undefined ? '' : String(value),
-        formula: '',
-        style: {},
-      };
-    });
-  });
-
-  return grid;
-}
-
-function makeProductChangesGrid(products = []) {
-  const grid = createEmptyGrid(Math.max(DEFAULT_ROWS, products.length + 25), Math.max(DEFAULT_COLUMNS, PRODUCT_CHANGE_COLUMNS.length));
-
-  PRODUCT_CHANGE_COLUMNS.forEach((label, index) => {
-    grid[0][index] = { value: label, formula: '', style: { bold: true, bgColor: '#f1f5f9' } };
-  });
-
-  products.forEach((product, index) => {
-    const row = index + 1;
-    const values = [
-      product.id || '',
-      product.codigo || '',
-      product.nombre || '',
-      product.precio ?? '',
-      product.precio_compra ?? '',
-      product.descripcion || '',
-      product.categoria || '',
-      product.unidad || '',
-      product.cantidad_caja ?? '',
-      product.habilitado === false ? 'No' : 'Sí',
-      '',
-    ];
-
-    values.forEach((value, colIndex) => {
-      grid[row][colIndex] = { value: String(value), formula: '', style: {} };
-    });
-  });
-
-  return grid;
-}
-
-function normalizeHeader(value = '') {
-  return String(value)
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/\s+/g, '_');
-}
-
-function cellValue(cell = {}, grid = [], context = {}) {
-  if (cell?.formula) return displayCell(cell, grid, context);
-  return cell?.value ?? '';
-}
-
-function isApplyTruthy(value) {
-  const clean = String(value ?? '').trim().toLowerCase();
-  return ['si', 'sí', 'yes', 'true', '1', 'x', 'aplicar'].includes(clean);
-}
-
-function toNullableNumber(value) {
-  if (value === null || value === undefined || String(value).trim() === '') return null;
-  const number = Number(String(value).replace(/[$,]/g, '').trim());
-  return Number.isFinite(number) ? number : null;
-}
-
-function toNullableBoolean(value) {
-  if (value === null || value === undefined || String(value).trim() === '') return null;
-  const clean = String(value).trim().toLowerCase();
-  if (['si', 'sí', 'yes', 'true', '1', 'activo', 'habilitado'].includes(clean)) return true;
-  if (['no', 'false', '0', 'inactivo', 'deshabilitado'].includes(clean)) return false;
-  return null;
-}
-
-function getProductIdsFromGrid(grid = []) {
-  if (!grid.length) return [];
-
-  const headers = (grid[0] || []).map((cell) => normalizeHeader(cell?.value || cell?.formula));
-  const indexOf = (...names) => names.map(normalizeHeader).map((name) => headers.indexOf(name)).find((index) => index >= 0);
-  const idIndex = indexOf('Producto ID', 'producto_id', 'id');
-
-  if (idIndex === undefined || idIndex < 0) return [];
-
-  return Array.from(
-    new Set(
-      grid
-        .slice(1)
-        .map((row) => String(cellValue(row?.[idIndex], grid, {}) ?? '').trim())
-        .filter(Boolean),
-    ),
-  );
-}
-
-function normalizeComparableText(value) {
-  return String(value ?? '').trim();
-}
-
-function normalizeComparableNumber(value) {
-  const number = toNullableNumber(value);
-  return number === null ? null : Number(number.toFixed(6));
-}
-
-function normalizeComparableBoolean(value) {
-  return toNullableBoolean(value);
-}
-
-function productValue(product = {}, field) {
-  if (!product) return '';
-  return product[field];
-}
-
-function buildProductChangesFromGrid(grid = [], context = {}, productsById = {}) {
-  if (!grid.length) return [];
-
-  const headers = (grid[0] || []).map((cell) => normalizeHeader(cell?.value || cell?.formula));
-  const indexOf = (...names) => names.map(normalizeHeader).map((name) => headers.indexOf(name)).find((index) => index >= 0);
-
-  const idx = {
-    id: indexOf('Producto ID', 'producto_id', 'id'),
-    codigo: indexOf('Código', 'codigo'),
-
-    // Formato nuevo: editas directamente estas columnas.
-    nombre: indexOf('Nombre', 'nombre', 'Nombre actual', 'nombre_actual'),
-    precio: indexOf('Precio', 'precio', 'Precio actual', 'precio_actual'),
-    costo: indexOf('Costo', 'precio_compra', 'precio compra', 'Costo actual', 'precio_compra_actual', 'costo_actual'),
-    descripcion: indexOf('Descripción', 'descripcion', 'Descripción actual', 'descripcion_actual'),
-    categoria: indexOf('Categoría', 'categoria', 'Categoría actual', 'categoria_actual'),
-    unidad: indexOf('Unidad', 'unidad', 'Unidad actual', 'unidad_actual'),
-    caja: indexOf('Cantidad caja', 'cantidad_caja', 'cantidad por caja', 'Cantidad caja actual', 'cantidad_caja_actual'),
-    habilitado: indexOf('Habilitado', 'habilitado', 'Habilitado actual', 'habilitado_actual'),
-
-    // Compatibilidad con hojas viejas que todavía tienen columnas "Nuevo ...".
-    nombreNuevo: indexOf('Nuevo nombre', 'nuevo_nombre'),
-    precioNuevo: indexOf('Nuevo precio', 'nuevo_precio'),
-    costoNuevo: indexOf('Nuevo costo', 'nuevo_costo', 'nuevo_precio_compra'),
-    descripcionNueva: indexOf('Nueva descripción', 'nueva_descripcion'),
-    categoriaNueva: indexOf('Nueva categoría', 'nueva_categoria'),
-    unidadNueva: indexOf('Nueva unidad', 'nueva_unidad'),
-    cajaNueva: indexOf('Nueva cantidad caja', 'nueva_cantidad_caja'),
-    habilitadoNuevo: indexOf('Nuevo habilitado', 'nuevo_habilitado'),
-
-    aplicar: indexOf('Aplicar', 'apply'),
-    estado: indexOf('Estado', 'status'),
-  };
-
-  if (idx.id === undefined || idx.id < 0) return [];
-
-  const get = (row, colIndex) => (colIndex === undefined || colIndex < 0 ? '' : cellValue(row[colIndex], grid, context));
-  const changes = [];
-
-  grid.slice(1).forEach((row) => {
-    const productoId = String(get(row, idx.id)).trim();
-    if (!productoId) return;
-
-    const dbProduct = productsById[productoId] || null;
-    if (!dbProduct) return;
-
-    const applyValue = idx.aplicar === undefined || idx.aplicar < 0 ? '' : String(get(row, idx.aplicar)).trim().toLowerCase();
-    const isExplicitlySkipped = ['no', 'false', '0', 'omitido', 'omitir', 'skip'].includes(applyValue);
-    if (isExplicitlySkipped) return;
-
-    const fields = {};
-    const payload = { producto_id: productoId };
-    const codigo = dbProduct.codigo || get(row, idx.codigo);
-    const displayName = dbProduct.nombre || get(row, idx.nombre) || get(row, idx.nombreNuevo) || codigo;
-
-    function preferredIndex(primary, fallback) {
-      return primary !== undefined && primary >= 0 ? primary : fallback;
-    }
-
-    function addText(field, colIndex) {
-      if (colIndex === undefined || colIndex < 0) return;
-      const before = normalizeComparableText(productValue(dbProduct, field));
-      const afterRaw = get(row, colIndex);
-      const after = normalizeComparableText(afterRaw);
-      if (after === before) return;
-      payload[field] = after;
-      fields[field] = { before, after };
-    }
-
-    function addNumber(field, colIndex) {
-      if (colIndex === undefined || colIndex < 0) return;
-      const before = normalizeComparableNumber(productValue(dbProduct, field));
-      const after = normalizeComparableNumber(get(row, colIndex));
-      if (after === before) return;
-      if (after === null && before === null) return;
-      payload[field] = after;
-      fields[field] = { before, after };
-    }
-
-    function addBoolean(field, colIndex) {
-      if (colIndex === undefined || colIndex < 0) return;
-      const before = normalizeComparableBoolean(productValue(dbProduct, field));
-      const after = normalizeComparableBoolean(get(row, colIndex));
-      if (after === null || after === before) return;
-      payload[field] = after;
-      fields[field] = { before, after };
-    }
-
-    addText('nombre', preferredIndex(idx.nombre, idx.nombreNuevo));
-    addNumber('precio', preferredIndex(idx.precio, idx.precioNuevo));
-    addNumber('precio_compra', preferredIndex(idx.costo, idx.costoNuevo));
-    addText('descripcion', preferredIndex(idx.descripcion, idx.descripcionNueva));
-    addText('categoria', preferredIndex(idx.categoria, idx.categoriaNueva));
-    addText('unidad', preferredIndex(idx.unidad, idx.unidadNueva));
-    addNumber('cantidad_caja', preferredIndex(idx.caja, idx.cajaNueva));
-    addBoolean('habilitado', preferredIndex(idx.habilitado, idx.habilitadoNuevo));
-
-    if (Object.keys(fields).length) {
-      changes.push({
-        ...payload,
-        codigo,
-        nombre: displayName,
-        fields,
-      });
-    }
-  });
-
-  return changes;
-}
-
-function buildFillValue({ sourceRange, targetRow, targetCol, sourceGrid, context }) {
-  const rangeHeight = sourceRange.endRow - sourceRange.startRow + 1;
-  const rangeWidth = sourceRange.endCol - sourceRange.startCol + 1;
-  const rowOffset = targetRow - sourceRange.startRow;
-  const colOffset = targetCol - sourceRange.startCol;
-
-  // Serie vertical: seleccionas 1,2,3 y arrastras hacia abajo.
-  if (rangeWidth === 1 && rangeHeight >= 2 && targetRow > sourceRange.endRow) {
-    const sourceCells = getRangeCells(sourceGrid, sourceRange);
-    const numbers = sourceCells.map(({ cell }) => getCellNumber(cell, sourceGrid, context));
-    const allNumeric = numbers.every((value) => value !== null);
-
-    if (allNumeric) {
-      const step = numbers[numbers.length - 1] - numbers[numbers.length - 2];
-      const extraIndex = targetRow - sourceRange.endRow;
-      return {
-        value: String(numbers[numbers.length - 1] + step * extraIndex),
-        formula: '',
-      };
-    }
-  }
-
-  // Serie horizontal: seleccionas 1,2,3 y arrastras hacia la derecha.
-  if (rangeHeight === 1 && rangeWidth >= 2 && targetCol > sourceRange.endCol) {
-    const sourceCells = getRangeCells(sourceGrid, sourceRange);
-    const numbers = sourceCells.map(({ cell }) => getCellNumber(cell, sourceGrid, context));
-    const allNumeric = numbers.every((value) => value !== null);
-
-    if (allNumeric) {
-      const step = numbers[numbers.length - 1] - numbers[numbers.length - 2];
-      const extraIndex = targetCol - sourceRange.endCol;
-      return {
-        value: String(numbers[numbers.length - 1] + step * extraIndex),
-        formula: '',
-      };
-    }
-  }
-
-  const sourceRow = sourceRange.startRow + Math.abs(rowOffset % rangeHeight);
-  const sourceCol = sourceRange.startCol + Math.abs(colOffset % rangeWidth);
-  const source = sourceGrid[sourceRow]?.[sourceCol] || { value: '', formula: '' };
-  const formulaRowDelta = targetRow - sourceRow;
-  const formulaColDelta = targetCol - sourceCol;
-
-  return {
-    value: source.formula ? '' : source.value || '',
-    formula: source.formula ? adjustFormulaReferences(source.formula, formulaRowDelta, formulaColDelta) : '',
-    style: source.style || {},
-  };
-}
 
 export function usePlaygroundWorkbook(workbookId) {
   const [workbook, setWorkbook] = useState(null);
@@ -345,6 +52,7 @@ export function usePlaygroundWorkbook(workbookId) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const undoHistoryRef = useRef([]);
+  const redoHistoryRef = useRef([]);
   const maxUndoSteps = 60;
   const pendingCellSavesRef = useRef({});
   const pendingSaveTimerRef = useRef(null);
@@ -369,6 +77,7 @@ export function usePlaygroundWorkbook(workbookId) {
       ...undoHistoryRef.current.slice(-(maxUndoSteps - 1)),
       cloneGrids(snapshot),
     ];
+    redoHistoryRef.current = [];
   }, [cloneGrids]);
 
   const undoLastChange = useCallback(() => {
@@ -379,9 +88,33 @@ export function usePlaygroundWorkbook(workbookId) {
       return;
     }
 
-    setGridsBySheet(lastSnapshot);
+    setGridsBySheet((current) => {
+      redoHistoryRef.current = [
+        ...redoHistoryRef.current.slice(-(maxUndoSteps - 1)),
+        cloneGrids(current),
+      ];
+      return cloneGrids(lastSnapshot);
+    });
     setMessage('Cambio deshecho.');
-  }, []);
+  }, [cloneGrids]);
+
+  const redoLastChange = useCallback(() => {
+    const nextSnapshot = redoHistoryRef.current.pop();
+
+    if (!nextSnapshot) {
+      setMessage('No hay cambios para rehacer.');
+      return;
+    }
+
+    setGridsBySheet((current) => {
+      undoHistoryRef.current = [
+        ...undoHistoryRef.current.slice(-(maxUndoSteps - 1)),
+        cloneGrids(current),
+      ];
+      return cloneGrids(nextSnapshot);
+    });
+    setMessage('Cambio rehecho.');
+  }, [cloneGrids]);
 
   const scheduleCellsPersist = useCallback((sheetId, cells = []) => {
     if (!sheetId || !cells.length) return;
@@ -425,6 +158,38 @@ export function usePlaygroundWorkbook(workbookId) {
     }, 650);
   }, []);
 
+
+  const flushPendingCellSaves = useCallback(async () => {
+    if (pendingSaveTimerRef.current) {
+      window.clearTimeout(pendingSaveTimerRef.current);
+      pendingSaveTimerRef.current = null;
+    }
+
+    const pending = pendingCellSavesRef.current;
+    pendingCellSavesRef.current = {};
+
+    const entries = Object.entries(pending || {});
+    if (!entries.length) return;
+
+    await Promise.all(
+      entries.map(async ([targetSheetId, map]) => {
+        const changedCells = Object.values(map || {});
+        if (!changedCells.length) return;
+
+        await upsertSheetCells(targetSheetId, changedCells);
+
+        realtimeChannelRef.current?.send?.({
+          type: 'broadcast',
+          event: 'cell-change',
+          payload: {
+            sheetId: targetSheetId,
+            cells: changedCells,
+          },
+        });
+      }),
+    );
+  }, []);
+
   const applyRealtimeCellChange = useCallback((payload) => {
     const rowData = payload.new || payload.old;
     const sheetId = rowData?.sheet_id;
@@ -456,17 +221,26 @@ export function usePlaygroundWorkbook(workbookId) {
   }, []);
 
 
-  async function load() {
+  async function load({ showFullPageLoading = false } = {}) {
     if (!workbookId) {
       setError('No se recibió el ID del playground. Revisa la ruta configurada en React Router.');
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const shouldShowFullPageLoading = showFullPageLoading || !workbook;
+
+    if (shouldShowFullPageLoading) {
+      setLoading(true);
+    }
+
     setError('');
 
     try {
+      if (workbook) {
+        await flushPendingCellSaves();
+      }
+
       const [workbookData, productsData] = await Promise.all([
         getPlaygroundById(workbookId),
         getProductsForPlayground(),
@@ -476,11 +250,20 @@ export function usePlaygroundWorkbook(workbookId) {
       const sheets = workbookData.playground_sheets || [];
 
       sheets.forEach((sheet) => {
-        nextGrids[sheet.id] = cellsToGrid(
+        const loadedGrid = cellsToGrid(
           sheet.playground_cells || [],
           DEFAULT_ROWS,
           DEFAULT_COLUMNS,
+          { compactRows: false },
         );
+
+        // Si la hoja es de productos, la fuente de verdad es la tabla productos.
+        // No compactamos huecos ni inventamos filas: reconstruimos las filas usando
+        // los productos reales disponibles. Así deben aparecer los 109 productos si
+        // existen en la tabla productos y están habilitados.
+        nextGrids[sheet.id] = isProductSheetLike(sheet, loadedGrid)
+          ? reconcileProductSheetGrid(loadedGrid, productsData)
+          : loadedGrid;
       });
 
       setWorkbook(workbookData);
@@ -497,13 +280,36 @@ export function usePlaygroundWorkbook(workbookId) {
   }
 
   useEffect(() => {
-    load();
+    load({ showFullPageLoading: true });
   }, [workbookId]);
 
   useEffect(() => () => {
-    if (pendingSaveTimerRef.current) window.clearTimeout(pendingSaveTimerRef.current);
+    flushPendingCellSaves().catch((saveError) => {
+      console.warn('No se pudieron guardar cambios pendientes al salir:', saveError);
+    });
     if (realtimeChannelRef.current) removePlaygroundChannel(realtimeChannelRef.current);
-  }, []);
+  }, [flushPendingCellSaves]);
+
+
+  useEffect(() => {
+    function handleBeforeLeave() {
+      flushPendingCellSaves().catch((saveError) => {
+        console.warn('No se pudieron guardar cambios pendientes antes de salir:', saveError);
+      });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') handleBeforeLeave();
+    }
+
+    window.addEventListener('pagehide', handleBeforeLeave);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', handleBeforeLeave);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [flushPendingCellSaves]);
+
 
   const sheets = useMemo(() => workbook?.playground_sheets || [], [workbook]);
   const activeSheet = useMemo(
@@ -523,8 +329,8 @@ export function usePlaygroundWorkbook(workbookId) {
       workbookId: workbook.id,
       sheets,
       onCellChange: applyRealtimeCellChange,
-      onSheetChange: () => load(),
-      onWorkbookChange: () => load(),
+      onSheetChange: () => load({ showFullPageLoading: false }),
+      onWorkbookChange: () => load({ showFullPageLoading: false }),
     });
 
     realtimeChannelRef.current = channel;
@@ -601,6 +407,55 @@ export function usePlaygroundWorkbook(workbookId) {
       return {
         ...prev,
         [sheetId]: copy,
+      };
+    });
+  }
+
+
+  function updateCellsBulk(changes = []) {
+    if (!activeSheet || !Array.isArray(changes) || !changes.length) return;
+
+    setGridsBySheet((prev) => {
+      pushUndoSnapshot(prev);
+
+      const maxRow = changes.reduce((max, item) => Math.max(max, Number(item.rowIndex || 0)), 0);
+      const maxCol = changes.reduce((max, item) => Math.max(max, Number(item.colIndex || 0)), 0);
+      const grid = ensureGridSize(prev[activeSheet.id] || createEmptyGrid(), maxRow + 1, maxCol + 1);
+      const copy = [...grid];
+      const changedCells = [];
+      const rowCopies = new Map();
+
+      function getRowCopy(rowIndex) {
+        if (rowCopies.has(rowIndex)) return rowCopies.get(rowIndex);
+        const rowCopy = [...(copy[rowIndex] || [])];
+        copy[rowIndex] = rowCopy;
+        rowCopies.set(rowIndex, rowCopy);
+        return rowCopy;
+      }
+
+      changes.forEach((item) => {
+        const rowIndex = Number(item.rowIndex || 0);
+        const colIndex = Number(item.colIndex || 0);
+        const rowCopy = getRowCopy(rowIndex);
+        const currentCell = rowCopy[colIndex] || { value: '', formula: '', style: {} };
+        const rawValue = item.value ?? '';
+        const isFormula = String(rawValue || '').startsWith('=');
+        const nextCell = {
+          ...currentCell,
+          style: { ...(currentCell.style || {}) },
+          value: isFormula ? '' : rawValue,
+          formula: isFormula ? rawValue : '',
+        };
+
+        rowCopy[colIndex] = nextCell;
+        changedCells.push({ rowIndex, colIndex, cell: nextCell });
+      });
+
+      scheduleCellsPersist(activeSheet.id, changedCells);
+
+      return {
+        ...prev,
+        [activeSheet.id]: copy,
       };
     });
   }
@@ -731,6 +586,7 @@ export function usePlaygroundWorkbook(workbookId) {
     setSaving(true);
 
     try {
+      await flushPendingCellSaves();
       const rows = await getPlaygroundImportData(options);
       const fields = options?.fields?.length ? options.fields : Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
       const grid = makeGridFromObjects(rows, fields);
@@ -759,9 +615,9 @@ export function usePlaygroundWorkbook(workbookId) {
         return { ...prev, [targetSheet.id]: grid };
       });
 
-      await saveSheetCells(targetSheet.id, grid);
+      const savedCells = await saveSheetCells(targetSheet.id, grid);
       realtimeChannelRef.current?.send?.({ type: 'broadcast', event: 'workbook-reload', payload: {} });
-      setMessage(`Se importaron ${rows.length} registros en ${targetSheet.name || options.sheetName || 'la hoja'}.`);
+      setMessage(`Se importaron ${rows.length} registros en ${targetSheet.name || options.sheetName || 'la hoja'} y se guardaron ${savedCells.length} celdas con datos.`);
     } finally {
       setSaving(false);
     }
@@ -773,6 +629,7 @@ export function usePlaygroundWorkbook(workbookId) {
     setSaving(true);
 
     try {
+      await flushPendingCellSaves();
       const grid = makeProductChangesGrid(products);
       const sheet = await createSheet(workbook.id, 'Cambios productos', sheets.length);
 
@@ -783,9 +640,9 @@ export function usePlaygroundWorkbook(workbookId) {
       setGridsBySheet((prev) => ({ ...prev, [sheet.id]: grid }));
       setActiveSheetId(sheet.id);
 
-      await saveSheetCells(sheet.id, grid);
+      const savedCells = await saveSheetCells(sheet.id, grid);
       realtimeChannelRef.current?.send?.({ type: 'broadcast', event: 'workbook-reload', payload: {} });
-      setMessage('Hoja de cambios de productos creada. Edita directamente precio, costo, descripción, categoría u otros campos. Al aplicar, se comparará contra la DB actual.');
+      setMessage(`Hoja de cambios de productos creada. Se guardaron ${savedCells.length} celdas con datos. Edita directamente precio, costo, descripción, categoría u otros campos. Al aplicar, se comparará contra la DB actual.`);
     } finally {
       setSaving(false);
     }
@@ -793,26 +650,30 @@ export function usePlaygroundWorkbook(workbookId) {
 
   async function getProductBulkChangesFromActiveSheet() {
     const productIds = getProductIdsFromGrid(activeGrid);
-
-    if (!productIds.length) return [];
-
-    const freshProducts = await getProductsByIdsForPlayground(productIds);
+    const freshProducts = productIds.length ? await getProductsByIdsForPlayground(productIds) : [];
     const productsById = Object.fromEntries((freshProducts || []).map((product) => [product.id, product]));
 
     return buildProductChangesFromGrid(activeGrid, workbookContext, productsById);
   }
 
   async function applyProductBulkChangesFromActiveSheet(changes) {
-    const cleanChanges = Array.isArray(changes) ? changes : getProductBulkChangesFromActiveSheet();
+    const sourceChanges = Array.isArray(changes) ? changes : await getProductBulkChangesFromActiveSheet();
+    const cleanChanges = sourceChanges.filter((change) => change.action !== 'invalid');
+
+    if (!cleanChanges.length) {
+      setMessage('No hay cambios válidos para aplicar. Revisa las filas marcadas como incompletas.');
+      return null;
+    }
 
     setSaving(true);
 
     try {
       const result = await applyProductBulkChanges({
         playgroundId: workbook?.id,
-        changes: cleanChanges.map(({ fields, codigo, nombre, ...payload }) => payload),
+        changes: cleanChanges.map(({ fields, display_codigo: _displayCode, display_name: _displayName, ...payload }) => payload),
       });
-      setMessage(`Cambios aplicados. Productos actualizados: ${result?.updated_count ?? cleanChanges.length}.`);
+      setMessage(`Cambios aplicados. Productos actualizados: ${result?.updated_count ?? 0}. Productos creados: ${result?.created_count ?? 0}.`);
+      await load({ showFullPageLoading: false });
       return result;
     } finally {
       setSaving(false);
@@ -823,6 +684,8 @@ export function usePlaygroundWorkbook(workbookId) {
     if (!activeSheet) return;
 
     const rowsNeeded = Math.max(DEFAULT_ROWS, products.length + PRODUCT_IMPORT_EXTRA_ROWS + 1);
+    await flushPendingCellSaves();
+
     const grid = createEmptyGrid(rowsNeeded, DEFAULT_COLUMNS);
 
     STARTER_COLUMNS.forEach((label, index) => {
@@ -880,6 +743,7 @@ export function usePlaygroundWorkbook(workbookId) {
     setSaving(true);
 
     try {
+      await flushPendingCellSaves();
       await saveSheetCells(activeSheet.id, activeGrid);
       await updateWorkbook(workbook.id, {});
       realtimeChannelRef.current?.send?.({ type: 'broadcast', event: 'workbook-reload', payload: {} });
@@ -959,6 +823,18 @@ export function usePlaygroundWorkbook(workbookId) {
     }));
   }
 
+
+  async function switchActiveSheet(sheetId) {
+    if (!sheetId || sheetId === activeSheetId) return;
+    try {
+      await flushPendingCellSaves();
+    } catch (saveError) {
+      console.warn('No se pudieron guardar cambios pendientes antes de cambiar hoja:', saveError);
+      setMessage('Algunos cambios pendientes no se sincronizaron. Presiona Guardar.');
+    }
+    setActiveSheetId(sheetId);
+  }
+
   async function togglePublic(enabled, mode = workbook?.share_mode || 'view') {
     if (!workbook) return;
 
@@ -1013,9 +889,10 @@ export function usePlaygroundWorkbook(workbookId) {
     message,
     error,
     setMessage,
-    setActiveSheetId,
+    setActiveSheetId: switchActiveSheet,
     updateCell,
     updateCellInSheet,
+    updateCellsBulk,
     updateCellStyle,
     fillCells,
     addRows,
@@ -1033,6 +910,8 @@ export function usePlaygroundWorkbook(workbookId) {
     changeShareMode,
     removeWorkbook,
     undoLastChange,
-    reload: load,
+    redoLastChange,
+    flushPendingCellSaves,
+    reload: () => load({ showFullPageLoading: false }),
   };
 }

@@ -2,9 +2,11 @@ export const COMPANY_STORAGE_KEY = "logosClientes";
 
 export const COMPANY_DEFAULTS = {
   showCompanyLogo: false,
-  showCompanyName: false,
-  companyName: "Waldo Distribuciones",
-  companyLogo: "/camion.png",
+  showClientName: true,
+  showClientPhone: true,
+  showClientEmail: false,
+  showClientLogo: true,
+  companyLogo: "/Logo.png",
 };
 
 export const INITIAL_LABEL_FORM = {
@@ -16,3 +18,16 @@ export const INITIAL_LABEL_FORM = {
   ancho_mm: 100,
   alto_mm: 75,
 };
+
+export function normalizeCompanyOptions(options = {}) {
+  const merged = {
+    ...COMPANY_DEFAULTS,
+    ...options,
+  };
+
+  return {
+    ...merged,
+    showCompanyLogo: Boolean(merged.showCompanyLogo),
+    companyLogo: merged.companyLogo === "/camion.png" ? "/Logo.png" : merged.companyLogo || "/Logo.png",
+  };
+}

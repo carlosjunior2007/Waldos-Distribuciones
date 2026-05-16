@@ -25,7 +25,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
   const [quantities, setQuantities] = useState(() => {
     const initial = {};
     (order?.details || []).forEach((item) => {
-      initial[item.id] = Number(item.cantidad_pedida || 0);
+      initial[item.id] = Math.floor(Number(item.cantidad_pedida || 0));
     });
     return initial;
   });
@@ -55,7 +55,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
 
     const initial = {};
     (order.details || []).forEach((item) => {
-      initial[item.id] = Number(item.cantidad_pedida || 0);
+      initial[item.id] = Math.floor(Number(item.cantidad_pedida || 0));
     });
     setQuantities(initial);
   }, [open, order]);
@@ -105,14 +105,15 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
       return;
     }
 
-    const safeValue = Math.max(0, Number(value));
+    const digits = onlyDigits(value);
+    const safeValue = digits === "" ? "" : Math.max(0, Number(digits));
     setQuantities((current) => ({ ...current, [itemId]: safeValue }));
   }
 
   function copyOriginalQuantities() {
     const next = {};
     products.forEach((item) => {
-      next[item.id] = Number(item.cantidad_pedida || 0);
+      next[item.id] = Math.floor(Number(item.cantidad_pedida || 0));
     });
     setQuantities(next);
   }
@@ -134,7 +135,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
       producto_id: item.producto_id,
       codigo: item.codigo,
       nombre_producto: item.nombre_producto,
-      cantidad: Number(quantities[item.id] || 0),
+      cantidad: Math.floor(Number(quantities[item.id] || 0)),
       precio_unitario: Number(item.precio_unitario || 0),
     }));
 
@@ -307,6 +308,15 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
               </div>
             </section>
 
+            {systemAction === "reminder_only" && (
+              <section className="rounded-[22px] border border-border bg-background p-4 shadow-sm">
+                <SectionTitle icon={<Bell className="h-5 w-5" />} title="Correo de recordatorio" />
+                <div className="mt-4 rounded-2xl border border-primary-100 bg-primary-50 p-3 text-sm font-semibold text-primary-900">
+                  Se enviará aviso a juan.osuna@waldodistribuciones.com y contacto@waldodistribuciones.com.
+                </div>
+              </section>
+            )}
+
             {systemAction !== "reminder_only" && (
               <section className="rounded-[22px] border border-border bg-background p-4 shadow-sm">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -339,6 +349,9 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
                               <input
                                 type="number"
                                 min="0"
+                                step="1"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 className="ml-auto h-10 w-28 rounded-xl border border-border bg-background px-3 text-right text-sm font-semibold text-text-primary outline-none focus:border-primary-400"
                                 value={quantities[item.id] ?? 0}
                                 onChange={(event) => updateQuantity(item.id, event.target.value)}

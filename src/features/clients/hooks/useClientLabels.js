@@ -5,6 +5,7 @@ import { generateLabelPDF } from "../../../utils/labelPdf";
 import {
   COMPANY_DEFAULTS,
   COMPANY_STORAGE_KEY,
+  normalizeCompanyOptions,
 } from "../label.constants";
 
 import {
@@ -30,9 +31,11 @@ export function useClientLabels(selectedClient) {
   const [companyOptions, setCompanyOptions] = useState(() => {
     try {
       const raw = localStorage.getItem(COMPANY_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : COMPANY_DEFAULTS;
+      return raw
+        ? normalizeCompanyOptions({ ...COMPANY_DEFAULTS, ...JSON.parse(raw) })
+        : normalizeCompanyOptions(COMPANY_DEFAULTS);
     } catch {
-      return COMPANY_DEFAULTS;
+      return normalizeCompanyOptions(COMPANY_DEFAULTS);
     }
   });
 
@@ -106,7 +109,7 @@ export function useClientLabels(selectedClient) {
         form,
         client,
         product,
-        companyOptions,
+        companyOptions: normalizeCompanyOptions(companyOptions),
       });
 
       await new Promise((resolve) => requestAnimationFrame(resolve));

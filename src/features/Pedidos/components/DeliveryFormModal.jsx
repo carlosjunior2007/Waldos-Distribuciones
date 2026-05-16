@@ -53,7 +53,7 @@ export default function DeliveryFormModal({ open, order, delivery = null, saving
     setForm((current) => ({
       ...current,
       cliente_direccion_id: value,
-      recibido_por: current.recibido_por || address?.contacto_nombre || "",
+      recibido_por: address?.contacto_nombre || "",
     }));
   }
 

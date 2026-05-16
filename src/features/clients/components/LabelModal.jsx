@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { Check, Download, Search } from "lucide-react";
 
 import Modal from "../../../components/ui/Modal";
 import { generateLabelPDF } from "../../../utils/labelPdf";
@@ -11,6 +11,7 @@ import {
   buildLabelFormFromRow,
   buildLabelPayload,
 } from "../label.helpers";
+import { normalizeCompanyOptions } from "../label.constants";
 import {
   createLabel,
   updateLabel,
@@ -126,29 +127,18 @@ export default function LabelModal({
               </p>
             </div>
 
-            <select
-              value={form.producto_id}
-              onChange={(e) => {
-                const nextProductId = e.target.value;
-                const product = products.find((p) => p.id === nextProductId);
-
+            <ProductPicker
+              products={products}
+              selectedProductId={form.producto_id}
+              onSelect={(product) => {
                 setForm((prev) => ({
                   ...prev,
-                  producto_id: nextProductId,
+                  producto_id: product?.id || "",
                   codigo: product?.codigo || "",
                   codigo_barras: product?.codigo || "",
                 }));
               }}
-              className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm outline-none"
-            >
-              <option value="">Seleccionar producto</option>
-
-              {products.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.nombre}
-                </option>
-              ))}
-            </select>
+            />
 
             <Input
               placeholder="Código de barra"
@@ -221,11 +211,127 @@ export default function LabelModal({
             form={form}
             client={selectedClient}
             product={selectedProduct}
-            companyOptions={companyOptions}
+            companyOptions={normalizeCompanyOptions(companyOptions)}
           />
         </div>
       </div>
     </Modal>
+  );
+}
+
+
+function normalizeText(value = "") {
+  return String(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function ProductPicker({ products, selectedProductId, onSelect }) {
+  const [search, setSearch] = useState("");
+
+  const selectedProduct = useMemo(
+    () => products.find((product) => product.id === selectedProductId) || null,
+    [products, selectedProductId],
+  );
+
+  const filteredProducts = useMemo(() => {
+    const cleanSearch = normalizeText(search);
+
+    if (!cleanSearch) return products.slice(0, 10);
+
+    return products
+      .filter((product) => {
+        const name = normalizeText(product.nombre);
+        const code = normalizeText(product.codigo);
+
+        return name.includes(cleanSearch) || code.includes(cleanSearch);
+      })
+      .slice(0, 10);
+  }, [products, search]);
+
+  return (
+    <div className="rounded-2xl border border-border bg-background p-4">
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-text-primary">
+          Producto para la etiqueta
+        </label>
+        <p className="text-xs text-text-secondary">
+          Busca por nombre o código y selecciona el producto sin abrir una lista enorme.
+        </p>
+      </div>
+
+      {selectedProduct ? (
+        <div className="mt-3 rounded-2xl border border-accent-200 bg-accent-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-text-primary">
+                {selectedProduct.nombre}
+              </p>
+              <p className="mt-1 text-xs text-text-secondary">
+                Código: {selectedProduct.codigo || "Sin código"}
+              </p>
+            </div>
+
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-500 text-white">
+              <Check className="h-4 w-4" />
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="relative mt-3">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar producto por nombre o código"
+          className="h-12 w-full rounded-2xl border border-border bg-surface px-11 text-sm outline-none transition focus:border-accent-500 focus:ring-2 focus:ring-accent-100"
+        />
+      </div>
+
+      <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+        {!filteredProducts.length ? (
+          <div className="rounded-2xl border border-dashed border-border p-4 text-center text-sm text-text-secondary">
+            No encontré productos con esa búsqueda.
+          </div>
+        ) : (
+          filteredProducts.map((product) => {
+            const isSelected = product.id === selectedProductId;
+
+            return (
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => onSelect(product)}
+                className={`w-full rounded-2xl border p-3 text-left transition hover:border-accent-300 hover:bg-accent-50 ${
+                  isSelected
+                    ? "border-accent-400 bg-accent-50"
+                    : "border-border bg-surface"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-text-primary">
+                      {product.nombre}
+                    </p>
+                    <p className="mt-1 text-xs text-text-secondary">
+                      Código: {product.codigo || "Sin código"}
+                    </p>
+                  </div>
+
+                  {isSelected ? (
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent-600" />
+                  ) : null}
+                </div>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -249,42 +355,78 @@ function CompanyOptions({ companyOptions, setCompanyOptions }) {
   return (
     <div className="rounded-2xl border border-border bg-background p-4">
       <p className="text-sm font-semibold text-text-primary">
-        Opciones visuales de empresa
+        Qué mostrar en la etiqueta
+      </p>
+      <p className="mt-1 text-xs text-text-secondary">
+        Desactiva datos personales cuando no quieras que salgan impresos en la etiqueta.
       </p>
 
-      <div className="mt-4 space-y-3">
-        <label className="flex items-center justify-between gap-3 text-sm">
-          <span>Mostrar logo de la empresa</span>
+      <div className="mt-4 space-y-4">
+        <div className="rounded-2xl border border-border bg-surface p-3">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Datos del cliente
+          </p>
 
-          <input
-            type="checkbox"
-            checked={companyOptions.showCompanyLogo}
-            onChange={(e) => updateField("showCompanyLogo", e.target.checked)}
-          />
-        </label>
+          <div className="space-y-3">
+            <ToggleOption
+              label="Mostrar nombre del cliente"
+              checked={companyOptions.showClientName}
+              onChange={(checked) => updateField("showClientName", checked)}
+            />
 
-        <label className="flex items-center justify-between gap-3 text-sm">
-          <span>Mostrar nombre de la empresa</span>
+            <ToggleOption
+              label="Mostrar teléfono del cliente"
+              checked={companyOptions.showClientPhone}
+              onChange={(checked) => updateField("showClientPhone", checked)}
+            />
 
-          <input
-            type="checkbox"
-            checked={companyOptions.showCompanyName}
-            onChange={(e) => updateField("showCompanyName", e.target.checked)}
-          />
-        </label>
+            <ToggleOption
+              label="Mostrar correo del cliente"
+              checked={companyOptions.showClientEmail}
+              onChange={(checked) => updateField("showClientEmail", checked)}
+            />
 
-        <Input
-          placeholder="Nombre de la empresa"
-          value={companyOptions.companyName}
-          onChange={(value) => updateField("companyName", value)}
-        />
+            <ToggleOption
+              label="Mostrar logo del cliente"
+              checked={companyOptions.showClientLogo}
+              onChange={(checked) => updateField("showClientLogo", checked)}
+            />
+          </div>
+        </div>
 
-        <Input
-          placeholder="Ruta o URL del logo de tu empresa"
-          value={companyOptions.companyLogo}
-          onChange={(value) => updateField("companyLogo", value)}
-        />
+        <div className="rounded-2xl border border-border bg-surface p-3">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Logo
+          </p>
+
+          <div className="space-y-3">
+            <ToggleOption
+              label="Mostrar logo"
+              checked={companyOptions.showCompanyLogo}
+              onChange={(checked) =>
+                setCompanyOptions((prev) => ({
+                  ...prev,
+                  showCompanyLogo: checked,
+                  companyLogo: "/Logo.png",
+                }))
+              }
+            />
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+function ToggleOption({ label, checked, onChange }) {
+  return (
+    <label className="flex items-center justify-between gap-3 text-sm text-text-primary">
+      <span>{label}</span>
+      <input
+        type="checkbox"
+        checked={Boolean(checked)}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+    </label>
   );
 }

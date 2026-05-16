@@ -1,3 +1,5 @@
+import { useMemo, useState } from "react";
+
 import {
   Building2,
   FileText,
@@ -21,6 +23,7 @@ import {
   calculateOrderProfit,
   calculateOrderProgress,
   getOrderDisplayStatus,
+  getClientOrderTotals,
   isOrderProfitRealized,
 } from "../client.helpers";
 
@@ -34,6 +37,17 @@ export default function ClientDetail({
   labels,
 }) {
   const deliveryAddresses = client.cliente_direcciones || [];
+  const [orderPeriod, setOrderPeriod] = useState("all");
+
+  const filteredOrders = useMemo(
+    () => filterOrdersByPeriod(orders, orderPeriod),
+    [orders, orderPeriod],
+  );
+
+  const filteredTotals = useMemo(
+    () => getClientOrderTotals(filteredOrders),
+    [filteredOrders],
+  );
 
   return (
     <div className="space-y-5">
@@ -166,22 +180,28 @@ export default function ClientDetail({
       </section>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <MiniStat label="Pedidos" value={totals.count} />
-        <MiniStat label="Total en pedidos" value={formatMoney(totals.total)} />
+        <MiniStat label="Pedidos" value={filteredTotals.count} />
+        <MiniStat label="Total en pedidos" value={formatMoney(filteredTotals.total)} />
         <MiniStat
           label="Ganancia estimada"
-          value={formatMoney(totals.estimatedProfit)}
-          hint={`Realizada: ${formatMoney(totals.realizedProfit)}`}
+          value={formatMoney(filteredTotals.estimatedProfit)}
+          hint={`Realizada: ${formatMoney(filteredTotals.realizedProfit)}`}
         />
       </div>
 
       <section className="rounded-[24px] border border-border bg-background">
         <div className="border-b border-border p-5">
-          <p className="text-sm font-semibold text-accent-600">Pedidos</p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-accent-600">Pedidos</p>
 
-          <h3 className="mt-1 text-xl font-bold text-text-primary">
-            Asociados al cliente
-          </h3>
+              <h3 className="mt-1 text-xl font-bold text-text-primary">
+                Asociados al cliente
+              </h3>
+            </div>
+
+            <OrderPeriodFilter value={orderPeriod} onChange={setOrderPeriod} />
+          </div>
         </div>
 
         {loadingOrders ? (
@@ -190,6 +210,11 @@ export default function ClientDetail({
           <EmptyState
             title="Sin pedidos asociados"
             description="Cuando crees pedidos para este cliente, aparecerán aquí."
+          />
+        ) : !filteredOrders.length ? (
+          <EmptyState
+            title="Sin pedidos en este filtro"
+            description="Este cliente tiene pedidos, pero ninguno cae en el periodo seleccionado."
           />
         ) : (
           <div className="overflow-x-auto">
@@ -210,7 +235,7 @@ export default function ClientDetail({
               </thead>
 
               <tbody>
-                {orders.map((order) => (
+                {filteredOrders.map((order) => (
                   <OrderRow key={order.id} order={order} />
                 ))}
               </tbody>
@@ -220,6 +245,94 @@ export default function ClientDetail({
       </section>
     </div>
   );
+}
+
+
+const ORDER_PERIODS = [
+  { value: "week", label: "Semana" },
+  { value: "month", label: "Mes" },
+  { value: "year", label: "Año" },
+  { value: "all", label: "Todo" },
+];
+
+function OrderPeriodFilter({ value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-surface p-1">
+      {ORDER_PERIODS.map((period) => {
+        const active = value === period.value;
+
+        return (
+          <button
+            key={period.value}
+            type="button"
+            onClick={() => onChange(period.value)}
+            className={`h-9 rounded-xl px-3 text-sm font-semibold transition ${
+              active
+                ? "bg-accent-500 text-white shadow-sm"
+                : "text-text-secondary hover:bg-background hover:text-text-primary"
+            }`}
+          >
+            {period.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function filterOrdersByPeriod(orders = [], period = "all") {
+  if (period === "all") return orders;
+
+  const now = new Date();
+
+  return orders.filter((order) => {
+    const orderDate = getOrderDate(order);
+    if (!orderDate) return false;
+
+    if (period === "week") return isSameWeek(orderDate, now);
+    if (period === "month") return isSameMonth(orderDate, now);
+    if (period === "year") return isSameYear(orderDate, now);
+
+    return true;
+  });
+}
+
+function getOrderDate(order = {}) {
+  const rawDate = order.fecha_emision || order.created_at || order.updated_at;
+  if (!rawDate) return null;
+
+  const date = new Date(rawDate);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isSameWeek(date, reference) {
+  const start = getStartOfWeek(reference);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+
+  return date >= start && date < end;
+}
+
+function getStartOfWeek(date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+
+  const day = start.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diff);
+
+  return start;
+}
+
+function isSameMonth(date, reference) {
+  return (
+    date.getFullYear() === reference.getFullYear() &&
+    date.getMonth() === reference.getMonth()
+  );
+}
+
+function isSameYear(date, reference) {
+  return date.getFullYear() === reference.getFullYear();
 }
 
 function AddressCard({ address }) {

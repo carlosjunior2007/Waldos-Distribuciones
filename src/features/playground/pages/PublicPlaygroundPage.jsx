@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Bold, ChevronDown, Eraser, Eye, Loader2, PaintBucket, Palette, Save, Text, UsersRound } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, Bold, ChevronDown, Database, Eraser, Eye, FileSpreadsheet, HelpCircle, Italic, Loader2, PaintBucket, Palette, Plus, Save, Sigma, Text, Underline, UsersRound } from 'lucide-react';
 import PlaygroundGrid from '../components/PlaygroundGrid';
 import PlaygroundPresence from '../components/PlaygroundPresence';
 import PlaygroundSheetsTabs from '../components/PlaygroundSheetsTabs';
+import ExcelHelpModal from '../excelModule/components/ExcelHelpModal';
 import { usePlaygroundPresence } from '../hooks/usePlaygroundPresence';
 import {
   createPublicSheet,
@@ -18,16 +19,14 @@ import { cellsToGrid, createEmptyGrid, ensureGridSize, makeCellId, makeWorkbookC
 import { DEFAULT_COLUMNS, DEFAULT_ROWS } from '../playground.constants';
 
 
-function ToolbarMenu({ label, icon: Icon, open, onToggle, onClose, children }) {
+function ToolbarMenu({ label, icon: Icon, open, onToggle, onClose, children, wide = false, align = 'left' }) {
   const menuRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
 
     function handlePointerDown(event) {
-      if (!menuRef.current?.contains(event.target)) {
-        onClose?.();
-      }
+      if (!menuRef.current?.contains(event.target)) onClose?.();
     }
 
     function handleKeyDown(event) {
@@ -51,17 +50,19 @@ function ToolbarMenu({ label, icon: Icon, open, onToggle, onClose, children }) {
           event.stopPropagation();
           onToggle?.();
         }}
-        className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+        className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition ${
+          open ? 'bg-slate-100 text-slate-950' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+        }`}
       >
         {Icon ? <Icon className="h-4 w-4" /> : null}
         {label}
-        <ChevronDown className="h-4 w-4 text-slate-400" />
+        <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
       </button>
 
       {open ? (
         <div
           onClick={(event) => event.stopPropagation()}
-          className="absolute right-0 z-40 mt-2 w-[320px] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl"
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} z-50 mt-2 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl ring-1 ring-slate-900/5 ${wide ? 'w-[520px]' : 'w-[340px]'}`}
         >
           {children}
         </div>
@@ -69,6 +70,40 @@ function ToolbarMenu({ label, icon: Icon, open, onToggle, onClose, children }) {
     </div>
   );
 }
+
+function MenuItem({ icon: Icon, label, hint, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950">
+      {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {hint ? <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-500">{hint}</span> : null}
+    </button>
+  );
+}
+
+function ToolButton({ icon: Icon, label, title, onClick, disabled }) {
+  return (
+    <button type="button" title={title || label} onClick={onClick} disabled={disabled} className="inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-slate-700 transition hover:bg-white hover:text-slate-950 disabled:opacity-50">
+      {Icon ? <Icon className="h-4 w-4" /> : null}
+      {label ? <span>{label}</span> : null}
+    </button>
+  );
+}
+
+function ToolbarDivider() {
+  return <div className="mx-1 h-6 w-px bg-slate-200" />;
+}
+
+function ColorControl({ icon: Icon, value, onChange, title }) {
+  return (
+    <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-slate-700 transition hover:bg-white hover:text-slate-950" title={title}>
+      <Icon className="h-4 w-4" />
+      <span className="h-3.5 w-5 rounded border border-slate-300" style={{ backgroundColor: value }} />
+      <input type="color" value={value} onChange={onChange} className="sr-only" />
+    </label>
+  );
+}
+
 
 function cleanStyle(style = {}) {
   return Object.fromEntries(Object.entries(style || {}).filter(([, value]) => value !== '' && value !== null && value !== undefined));
@@ -93,6 +128,7 @@ export default function PublicPlaygroundPage() {
   const [textOpacity, setTextOpacity] = useState(100);
   const [bgOpacity, setBgOpacity] = useState(100);
   const [openMenu, setOpenMenu] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
   const realtimeChannelRef = useRef(null);
   const publicSaveTimersRef = useRef({});
 
@@ -145,7 +181,7 @@ export default function PublicPlaygroundPage() {
     const nextSheets = data.playground_sheets || [];
 
     nextSheets.forEach((sheet) => {
-      nextGrids[sheet.id] = cellsToGrid(sheet.playground_cells || [], DEFAULT_ROWS, DEFAULT_COLUMNS);
+      nextGrids[sheet.id] = cellsToGrid(sheet.playground_cells || [], DEFAULT_ROWS, DEFAULT_COLUMNS, { compactRows: false });
     });
 
     setWorkbook(data);
@@ -276,6 +312,65 @@ export default function PublicPlaygroundPage() {
       schedulePublicCellSave(activeSheet.id, rowIndex, colIndex, nextCell);
 
       return { ...prev, [activeSheet.id]: copy };
+    });
+  }
+
+
+  function updateCellsBulk(changes = []) {
+    if (!canEdit || !activeSheet || !Array.isArray(changes) || !changes.length) return;
+
+    const touchedCells = changes.map((item) => {
+      const rowIndex = Number(item.rowIndex || 0);
+      const colIndex = Number(item.colIndex || 0);
+      const currentCell = activeGrid[rowIndex]?.[colIndex] || { value: '', formula: '', style: {} };
+      const value = item.value ?? '';
+      const isFormula = String(value || '').startsWith('=');
+
+      return {
+        rowIndex,
+        colIndex,
+        cell: {
+          ...currentCell,
+          style: { ...(currentCell.style || {}) },
+          value: isFormula ? '' : value,
+          formula: isFormula ? value : '',
+        },
+      };
+    });
+
+    setGrids((prev) => {
+      const maxRow = touchedCells.reduce((max, item) => Math.max(max, item.rowIndex), 0);
+      const maxCol = touchedCells.reduce((max, item) => Math.max(max, item.colIndex), 0);
+      const grid = ensureGridSize(prev[activeSheet.id] || createEmptyGrid(), maxRow + 1, maxCol + 1);
+      const copy = [...grid];
+      const rowCopies = new Map();
+
+      function getRowCopy(rowIndex) {
+        if (rowCopies.has(rowIndex)) return rowCopies.get(rowIndex);
+        const rowCopy = [...(copy[rowIndex] || [])];
+        copy[rowIndex] = rowCopy;
+        rowCopies.set(rowIndex, rowCopy);
+        return rowCopy;
+      }
+
+      touchedCells.forEach(({ rowIndex, colIndex, cell }) => {
+        getRowCopy(rowIndex)[colIndex] = cell;
+      });
+
+      return { ...prev, [activeSheet.id]: copy };
+    });
+
+    touchedCells.forEach(({ rowIndex, colIndex, cell }) => {
+      schedulePublicCellSave(activeSheet.id, rowIndex, colIndex, cell);
+    });
+
+    realtimeChannelRef.current?.send?.({
+      type: 'broadcast',
+      event: 'cell-change',
+      payload: {
+        sheetId: activeSheet.id,
+        cells: touchedCells,
+      },
     });
   }
 
@@ -456,96 +551,64 @@ export default function PublicPlaygroundPage() {
   return (
     <div className="fixed inset-0 z-[90] flex flex-col overflow-hidden bg-slate-50">
       <div className="flex min-h-0 flex-1 flex-col p-3">
-        <div className="mb-3 rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="mb-3 overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-black text-slate-950">{workbook.name}</p>
-                <p className="text-xs font-semibold text-slate-500">{canEdit ? 'Link con edición' : 'Solo lectura'}</p>
+                <p className="truncate text-base font-black text-slate-950">{workbook.name}</p>
+                <p className="text-xs font-semibold text-slate-500">{canEdit ? 'Link con edición' : 'Solo lectura'} · Hoja activa: {activeSheet?.name || activeSheet?.nombre || 'Hoja'}</p>
               </div>
-
-              <div className="hidden h-8 w-px bg-slate-200 md:block" />
-
-              <PlaygroundSheetsTabs
-                sheets={sheets}
-                activeSheetId={activeSheetId}
-                onChangeSheet={setActiveSheetId}
-                onAddSheet={handleAddSheet}
-                onDeleteSheet={handleDeleteSheet}
-                disabled={saving || !canEdit}
-              />
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
+
               {canEdit ? (
-                <ToolbarMenu label="Formato" icon={Palette} open={openMenu === 'format'} onToggle={() => setOpenMenu((value) => (value === 'format' ? '' : 'format'))} onClose={() => setOpenMenu('')}>
-                  <div className="grid gap-3 text-sm font-semibold text-slate-700">
-                    <button type="button" onClick={() => applyPublicStyle({ bold: true })} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left font-bold hover:bg-slate-50">
-                      <Bold className="h-4 w-4" /> Negrita
-                    </button>
+                <ToolbarMenu label="Archivo" icon={FileSpreadsheet} open={openMenu === 'file'} onToggle={() => setOpenMenu((value) => (value === 'file' ? '' : 'file'))} onClose={() => setOpenMenu('')} align="right">
+                  <MenuItem icon={Save} label="Guardar cambios" hint="Ctrl+S" onClick={savePublicChanges} />
+                  <MenuItem icon={HelpCircle} label="Abrir ayuda del módulo" onClick={() => { setHelpOpen(true); setOpenMenu(''); }} />
+                </ToolbarMenu>
+              ) : null}
 
-                    <label className="grid gap-1 rounded-xl border border-slate-200 p-3">
-                      <span className="flex items-center gap-2"><Text className="h-4 w-4" /> Color de letra</span>
-                      <input
-                        type="color"
-                        value={textColor}
-                        onChange={(event) => setTextColor(event.target.value)}
-                        onBlur={(event) => applyPublicStyle({ textColor: event.target.value, textOpacity: Number(textOpacity) / 100 })}
-                        className="h-8 w-full cursor-pointer border-0 bg-transparent p-0"
-                      />
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        value={textOpacity}
-                        onChange={(event) => setTextOpacity(event.target.value)}
-                        onMouseUp={(event) => applyPublicStyle({ textColor, textOpacity: Number(event.currentTarget.value) / 100 })}
-                        onTouchEnd={(event) => applyPublicStyle({ textColor, textOpacity: Number(event.currentTarget.value) / 100 })}
-                      />
-                    </label>
+              {canEdit ? (
+                <ToolbarMenu label="Datos" icon={Database} open={openMenu === 'data'} onToggle={() => setOpenMenu((value) => (value === 'data' ? '' : 'data'))} onClose={() => setOpenMenu('')} align="right">
+                  <MenuItem icon={Plus} label="Agregar 120 filas visibles" onClick={() => { addRows(120); setOpenMenu(''); }} />
+                  <MenuItem icon={Plus} label="Agregar 12 columnas visibles" onClick={() => { addColumns(12); setOpenMenu(''); }} />
+                  <MenuItem icon={Sigma} label="Insertar autosuma" hint="Alt+=" onClick={() => { setFormulaDraft('=SUM('); setOpenMenu(''); }} />
+                </ToolbarMenu>
+              ) : null}
 
-                    <label className="grid gap-1 rounded-xl border border-slate-200 p-3">
-                      <span className="flex items-center gap-2"><PaintBucket className="h-4 w-4" /> Color de fondo</span>
-                      <input
-                        type="color"
-                        value={bgColor}
-                        onChange={(event) => setBgColor(event.target.value)}
-                        onBlur={(event) => applyPublicStyle({ bgColor: event.target.value, bgOpacity: Number(bgOpacity) / 100 })}
-                        className="h-8 w-full cursor-pointer border-0 bg-transparent p-0"
-                      />
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        value={bgOpacity}
-                        onChange={(event) => setBgOpacity(event.target.value)}
-                        onMouseUp={(event) => applyPublicStyle({ bgColor, bgOpacity: Number(event.currentTarget.value) / 100 })}
-                        onTouchEnd={(event) => applyPublicStyle({ bgColor, bgOpacity: Number(event.currentTarget.value) / 100 })}
-                      />
-                    </label>
-
-                    <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2">
-                      Tamaño
-                      <select
-                        value={fontSize}
-                        onChange={(event) => {
-                          setFontSize(event.target.value);
-                          applyPublicStyle({ fontSize: Number(event.target.value) });
-                        }}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none"
-                      >
-                        {[12, 14, 16, 18, 20, 24].map((size) => (
-                          <option key={size} value={size}>{size}px</option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <button type="button" onClick={clearPublicStyle} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left font-bold hover:bg-slate-50">
-                      <Eraser className="h-4 w-4" /> Limpiar estilo
-                    </button>
+              {canEdit ? (
+                <ToolbarMenu label="Formato" icon={Palette} open={openMenu === 'formatTop'} onToggle={() => setOpenMenu((value) => (value === 'formatTop' ? '' : 'formatTop'))} onClose={() => setOpenMenu('')} wide align="right">
+                  <div className="grid gap-3 p-1 text-sm font-semibold text-slate-700 md:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 p-3">
+                      <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Texto</p>
+                      <div className="grid gap-2">
+                        <MenuItem icon={Bold} label="Negrita" hint="Ctrl+B" onClick={() => applyPublicStyle({ bold: true })} />
+                        <MenuItem icon={Italic} label="Cursiva" hint="Ctrl+I" onClick={() => applyPublicStyle({ italic: true })} />
+                        <MenuItem icon={Underline} label="Subrayado" hint="Ctrl+U" onClick={() => applyPublicStyle({ underline: true })} />
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 p-3">
+                      <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Alineación</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button type="button" onClick={() => applyPublicStyle({ textAlign: 'left' })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold hover:bg-slate-50"><AlignLeft className="mx-auto h-4 w-4" />Izq.</button>
+                        <button type="button" onClick={() => applyPublicStyle({ textAlign: 'center' })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold hover:bg-slate-50"><AlignCenter className="mx-auto h-4 w-4" />Centro</button>
+                        <button type="button" onClick={() => applyPublicStyle({ textAlign: 'right' })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold hover:bg-slate-50"><AlignRight className="mx-auto h-4 w-4" />Der.</button>
+                      </div>
+                      <MenuItem icon={Eraser} label="Limpiar formato" hint="Ctrl+Shift+F" onClick={clearPublicStyle} />
+                    </div>
                   </div>
                 </ToolbarMenu>
               ) : null}
+
+              <button
+                type="button"
+                onClick={() => setHelpOpen(true)}
+                className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+              >
+                <HelpCircle className="h-4 w-4" />
+                Ayuda
+              </button>
 
               <PlaygroundPresence members={presenceMembers} />
 
@@ -570,6 +633,94 @@ export default function PublicPlaygroundPage() {
             </div>
           </div>
 
+          <div className="hidden">
+            {canEdit ? (
+              <ToolbarMenu label="Formato" icon={Palette} open={openMenu === 'format'} onToggle={() => setOpenMenu((value) => (value === 'format' ? '' : 'format'))} onClose={() => setOpenMenu('')} wide>
+                <div className="grid gap-3 p-1 text-sm font-semibold text-slate-700 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 p-3">
+                    <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Texto</p>
+                    <div className="grid gap-2">
+                      <MenuItem icon={Bold} label="Negrita" hint="Ctrl+B" onClick={() => applyPublicStyle({ bold: true })} />
+                      <MenuItem icon={Italic} label="Cursiva" hint="Ctrl+I" onClick={() => applyPublicStyle({ italic: true })} />
+                      <MenuItem icon={Underline} label="Subrayado" hint="Ctrl+U" onClick={() => applyPublicStyle({ underline: true })} />
+                    </div>
+                    <label className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2">
+                      <span>Tamaño</span>
+                      <select
+                        value={fontSize}
+                        onChange={(event) => {
+                          setFontSize(event.target.value);
+                          applyPublicStyle({ fontSize: Number(event.target.value) });
+                        }}
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none"
+                      >
+                        {[10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map((size) => (
+                          <option key={size} value={size}>{size}px</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 p-3">
+                    <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Alineación y color</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button type="button" onClick={() => applyPublicStyle({ textAlign: 'left' })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold hover:bg-slate-50"><AlignLeft className="mx-auto h-4 w-4" />Izq.</button>
+                      <button type="button" onClick={() => applyPublicStyle({ textAlign: 'center' })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold hover:bg-slate-50"><AlignCenter className="mx-auto h-4 w-4" />Centro</button>
+                      <button type="button" onClick={() => applyPublicStyle({ textAlign: 'right' })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold hover:bg-slate-50"><AlignRight className="mx-auto h-4 w-4" />Der.</button>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      <label className="grid gap-1 rounded-xl border border-slate-200 p-3"><span className="flex items-center gap-2"><Text className="h-4 w-4" /> Color de letra</span><input type="color" value={textColor} onChange={(event) => { setTextColor(event.target.value); applyPublicStyle({ textColor: event.target.value, textOpacity: Number(textOpacity) / 100 }); }} className="h-8 w-full cursor-pointer border-0 bg-transparent p-0" /></label>
+                      <label className="grid gap-1 rounded-xl border border-slate-200 p-3"><span className="flex items-center gap-2"><PaintBucket className="h-4 w-4" /> Color de fondo</span><input type="color" value={bgColor} onChange={(event) => { setBgColor(event.target.value); applyPublicStyle({ bgColor: event.target.value, bgOpacity: Number(bgOpacity) / 100 }); }} className="h-8 w-full cursor-pointer border-0 bg-transparent p-0" /></label>
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-slate-100 p-2">
+                  <MenuItem icon={Eraser} label="Limpiar formato de la selección" hint="Ctrl+Shift+F" onClick={clearPublicStyle} />
+                </div>
+              </ToolbarMenu>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+            >
+              <HelpCircle className="h-4 w-4" />
+              Ayuda
+            </button>
+          </div>
+
+          {canEdit ? (
+            <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50/80 px-3 py-2">
+              <ToolButton icon={Sigma} label="SUM" title="Insertar suma" onClick={() => setFormulaDraft((value) => value || '=SUM(')} />
+              <select
+                value={fontSize}
+                onChange={(event) => {
+                  setFontSize(event.target.value);
+                  applyPublicStyle({ fontSize: Number(event.target.value) });
+                }}
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 outline-none"
+                title="Tamaño de letra"
+              >
+                {[10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+              <ToolbarDivider />
+              <ToolButton icon={Bold} title="Negrita" onClick={() => applyPublicStyle({ bold: true })} />
+              <ToolButton icon={Italic} title="Cursiva" onClick={() => applyPublicStyle({ italic: true })} />
+              <ToolButton icon={Underline} title="Subrayado" onClick={() => applyPublicStyle({ underline: true })} />
+              <ToolbarDivider />
+              <ToolButton icon={AlignLeft} title="Alinear izquierda" onClick={() => applyPublicStyle({ textAlign: 'left' })} />
+              <ToolButton icon={AlignCenter} title="Alinear centro" onClick={() => applyPublicStyle({ textAlign: 'center' })} />
+              <ToolButton icon={AlignRight} title="Alinear derecha" onClick={() => applyPublicStyle({ textAlign: 'right' })} />
+              <ToolbarDivider />
+              <ColorControl icon={Text} value={textColor} title="Color de letra" onChange={(event) => { setTextColor(event.target.value); applyPublicStyle({ textColor: event.target.value, textOpacity: Number(textOpacity) / 100 }); }} />
+              <ColorControl icon={PaintBucket} value={bgColor} title="Color de fondo" onChange={(event) => { setBgColor(event.target.value); applyPublicStyle({ bgColor: event.target.value, bgOpacity: Number(bgOpacity) / 100 }); }} />
+              <ToolbarDivider />
+              <ToolButton icon={Eraser} label="Limpiar" title="Limpiar formato" onClick={clearPublicStyle} />
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-2 px-4 py-2">
             <div className="min-w-[86px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600">
               {activeCellKey || 'Celda'}
@@ -592,20 +743,39 @@ export default function PublicPlaygroundPage() {
         ) : null}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <PlaygroundGrid
-            grid={activeGrid}
-            sheetId={activeSheetId}
-            sheetName={activeSheet?.name || activeSheet?.nombre || 'Hoja'}
-            onChange={updateCell}
-            onNeedMoreRows={addRows}
-            onNeedMoreColumns={addColumns}
-            onSelectionChange={handleSelectionChange}
-            readOnly={!canEdit}
-            workbookContext={workbookContext}
-            presenceMembers={presenceMembers}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <PlaygroundGrid
+              grid={activeGrid}
+              sheetId={activeSheetId}
+              sheetName={activeSheet?.name || activeSheet?.nombre || 'Hoja'}
+              onChange={updateCell}
+              onBulkChange={updateCellsBulk}
+              onNeedMoreRows={addRows}
+              onNeedMoreColumns={addColumns}
+              onSelectionChange={handleSelectionChange}
+              onSave={savePublicChanges}
+              onApplyStyle={(_, style) => applyPublicStyle(style)}
+              readOnly={!canEdit}
+              workbookContext={workbookContext}
+              presenceMembers={presenceMembers}
+            />
+          </div>
+
+          <PlaygroundSheetsTabs
+            sheets={sheets}
+            activeSheetId={activeSheetId}
+            onChangeSheet={setActiveSheetId}
+            onAddSheet={handleAddSheet}
+            onDeleteSheet={handleDeleteSheet}
+            disabled={saving || !canEdit}
           />
         </div>
       </div>
+
+      <ExcelHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+      />
     </div>
   );
 }

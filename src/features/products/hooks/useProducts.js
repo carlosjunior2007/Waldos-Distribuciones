@@ -16,6 +16,7 @@ import {
 
 import {
   buildProductForm,
+  calculateUtilityPercent,
   generateUUID,
   getAuthUserLabel,
   getInventoryStatus,
@@ -196,6 +197,50 @@ export function useProducts() {
       return;
     }
 
+    if (name === "cantidad_caja") {
+      const onlyIntegers = value.replace(/\D/g, "");
+
+      setForm((prev) => ({
+        ...prev,
+        [name]: onlyIntegers,
+      }));
+
+      return;
+    }
+
+    if (["precio_compra", "precio_utilidad", "precio"].includes(name)) {
+      setForm((prev) => {
+        const next = {
+          ...prev,
+          [name]: value,
+        };
+
+        const costo = Number(next.precio_compra || 0);
+        const utilidad = Number(next.precio_utilidad || 0);
+        const precio = Number(next.precio || 0);
+
+        if (name === "precio_utilidad") {
+          next.precio = calculateSalePriceFromUtility(costo, utilidad).toFixed(2);
+        }
+
+        if (name === "precio") {
+          next.precio_utilidad = calculateUtilityPercent(costo, precio).toFixed(2);
+        }
+
+        if (name === "precio_compra") {
+          if (next.precio_utilidad !== "" && utilidad > 0) {
+            next.precio = calculateSalePriceFromUtility(costo, utilidad).toFixed(2);
+          } else if (precio > 0) {
+            next.precio_utilidad = calculateUtilityPercent(costo, precio).toFixed(2);
+          }
+        }
+
+        return next;
+      });
+
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -254,7 +299,7 @@ export function useProducts() {
         imagen: imageUrl,
 
         precio_compra: Number(form.precio_compra),
-        cantidad_caja: Number(form.cantidad_caja),
+        cantidad_caja: parseInt(form.cantidad_caja, 10),
 
         habilitado: Boolean(form.habilitado),
         categoria: form.categoria,
@@ -390,15 +435,6 @@ export function useProducts() {
     if (utilidad >= 100) return 0;
 
     return costo / (1 - utilidad / 100);
-  }
-
-  function calculateUtilityPercent(cost, salePrice) {
-    const costo = Number(cost || 0);
-    const precio = Number(salePrice || 0);
-
-    if (costo <= 0 || precio <= 0) return 0;
-
-    return ((precio - costo) / precio) * 100;
   }
 
   function onPriceBlur(fieldName) {

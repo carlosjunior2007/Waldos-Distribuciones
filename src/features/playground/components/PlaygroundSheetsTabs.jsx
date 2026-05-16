@@ -34,19 +34,19 @@ export default function PlaygroundSheetsTabs({
 
   return (
     <>
-      <div className="flex max-w-full flex-wrap items-center gap-2 overflow-x-auto">
+      <div className="flex max-w-full items-end gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 pt-2">
         {sheets.map((sheet) => {
           const active = sheet.id === activeSheetId;
 
           return (
-            <div key={sheet.id} className="group inline-flex overflow-hidden rounded-xl">
+            <div key={sheet.id} className="group inline-flex overflow-hidden rounded-t-xl border border-b-0 border-slate-200 shadow-sm">
               <button
                 type="button"
                 onClick={() => onChangeSheet(sheet.id)}
-                className={`px-4 py-2 text-sm font-semibold transition ${
+                className={`min-w-[96px] px-4 py-2 text-sm font-semibold transition ${
                   active
                     ? 'bg-red-600 text-white shadow-sm'
-                    : 'border border-r-0 border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    : 'bg-white text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 {sheet.name}
@@ -60,7 +60,7 @@ export default function PlaygroundSheetsTabs({
                 className={`inline-flex items-center justify-center px-3 transition disabled:opacity-60 ${
                   active
                     ? 'bg-red-700 text-white hover:bg-red-800'
-                    : 'border border-r-0 border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                    : 'border-l border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                 }`}
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -74,7 +74,7 @@ export default function PlaygroundSheetsTabs({
                 className={`inline-flex items-center justify-center px-3 transition disabled:cursor-not-allowed disabled:opacity-40 ${
                   active
                     ? 'bg-red-800 text-white hover:bg-red-900'
-                    : 'border border-slate-200 bg-white text-slate-400 hover:bg-red-50 hover:text-red-700'
+                    : 'border-l border-slate-200 bg-white text-slate-400 hover:bg-red-50 hover:text-red-700'
                 }`}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -87,7 +87,7 @@ export default function PlaygroundSheetsTabs({
           type="button"
           onClick={onAddSheet}
           disabled={disabled}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          className="mb-px inline-flex items-center gap-2 rounded-t-xl border border-b-0 border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
         >
           <Plus className="h-4 w-4" />
           Hoja

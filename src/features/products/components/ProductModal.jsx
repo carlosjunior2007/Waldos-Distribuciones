@@ -327,8 +327,10 @@ function ProductFormFields({
       <Field label="Cantidad por caja">
         <input
           type="number"
-          step="0.01"
+          step="1"
           min="0"
+          inputMode="numeric"
+          pattern="[0-9]*"
           name="cantidad_caja"
           value={form.cantidad_caja}
           onChange={onChange}

@@ -364,6 +364,26 @@ export default function PlaygroundPage() {
     }
   }
 
+  function makeReference(target) {
+    const targetSheet = sheets.find((sheet) => sheet.id === target.sheetId);
+    const targetRef = makeCellId(target.rowIndex, target.colIndex);
+
+    return target.sheetId === referenceMode.sourceSheetId
+      ? targetRef
+      : `${quoteSheetName(targetSheet?.name || targetSheet?.nombre || target.sheetName)}!${targetRef}`;
+  }
+
+  function appendToFormula(currentFormula, piece) {
+    const base = String(currentFormula || '=').trim() || '=';
+
+    if (base === '=') return `=${piece}`;
+
+    const lastChar = base.slice(-1);
+    const needsOperator = !['=', '+', '-', '*', '/', '(', ','].includes(lastChar);
+
+    return `${base}${needsOperator ? '+' : ''}${piece}`;
+  }
+
   function handlePickReference(target) {
     if (!referenceMode) return;
 
@@ -374,17 +394,34 @@ export default function PlaygroundPage() {
 
     if (isSourceCell) return;
 
-    const sourceSheet = sheets.find((sheet) => sheet.id === referenceMode.sourceSheetId);
-    const targetSheet = sheets.find((sheet) => sheet.id === target.sheetId);
     const sourceGrid = gridsBySheet[referenceMode.sourceSheetId] || [];
     const sourceCell = sourceGrid[referenceMode.rowIndex]?.[referenceMode.colIndex] || { value: '', formula: '' };
     const currentFormula = sourceCell.formula || sourceCell.value || '=';
-    const targetRef = makeCellId(target.rowIndex, target.colIndex);
-    const reference = target.sheetId === referenceMode.sourceSheetId
-      ? targetRef
-      : `${quoteSheetName(targetSheet?.name || targetSheet?.nombre || target.sheetName)}!${targetRef}`;
+    const reference = makeReference(target);
 
-    const nextFormula = `${currentFormula}${reference}`;
+    if (target.rangeMode && !referenceMode.rangeStart) {
+      setReferenceMode({
+        ...referenceMode,
+        rangeStart: target,
+        rangeStartLabel: reference,
+      });
+      setActiveSheetId(target.sheetId);
+      setActiveCell({ rowIndex: target.rowIndex, colIndex: target.colIndex });
+      return;
+    }
+
+    const rangeStart = referenceMode.rangeStart;
+    const shouldBuildSum = Boolean(rangeStart);
+
+    let piece = reference;
+
+    if (shouldBuildSum) {
+      const startLabel = referenceMode.rangeStartLabel || makeReference(rangeStart);
+      const endLabel = reference;
+      piece = `SUM(${startLabel}:${endLabel})`;
+    }
+
+    const nextFormula = appendToFormula(currentFormula, piece);
 
     updateCellInSheet(
       referenceMode.sourceSheetId,
@@ -607,7 +644,7 @@ export default function PlaygroundPage() {
 
         {referenceMode ? (
           <div className="mb-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
-            Selecciona una celda en cualquier hoja para agregarla a la fórmula.
+            Selecciona una celda para agregarla a la fórmula. Para SUMA rápida: mantén Shift, selecciona la primera celda y luego la última.
           </div>
         ) : null}
 
@@ -632,7 +669,7 @@ export default function PlaygroundPage() {
             onNeedMoreRows={addRows}
             onNeedMoreColumns={addColumns}
             onSelectionChange={handleSelectionChange}
-            onStartFormulaReference={(source) => setReferenceMode({ ...source, sourceSheetId: source.sheetId })}
+            onStartFormulaReference={(source) => setReferenceMode(source ? { ...source, sourceSheetId: source.sheetId } : null)}
             onPickReference={handlePickReference}
             onUndo={undoLastChange}
             referenceMode={referenceMode}

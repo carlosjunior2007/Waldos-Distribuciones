@@ -125,9 +125,11 @@ export default function PublicPlaygroundPage() {
       const rowIndex = Number(rowData.row_index || 0);
       const colIndex = Number(rowData.col_index || 0);
       const grid = ensureGridSize(prev[sheetId] || createEmptyGrid(), rowIndex + 1, colIndex + 1);
-      const copy = grid.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell?.style || {}) } })));
+      const copy = [...grid];
+      const rowCopy = [...(copy[rowIndex] || [])];
+      copy[rowIndex] = rowCopy;
 
-      copy[rowIndex][colIndex] = {
+      rowCopy[colIndex] = {
         value: rowData.value ?? '',
         formula: rowData.formula ?? '',
         style: rowData.style || {},
@@ -257,16 +259,20 @@ export default function PublicPlaygroundPage() {
 
     setGrids((prev) => {
       const grid = ensureGridSize(prev[activeSheet.id] || createEmptyGrid(), rowIndex + 1, colIndex + 1);
-      const copy = grid.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell?.style || {}) } })));
+      const copy = [...grid];
+      const rowCopy = [...(copy[rowIndex] || [])];
+      copy[rowIndex] = rowCopy;
+      const currentCell = rowCopy[colIndex] || { value: '', formula: '', style: {} };
       const isFormula = String(value || '').startsWith('=');
 
       const nextCell = {
-        ...copy[rowIndex][colIndex],
+        ...currentCell,
+        style: { ...(currentCell.style || {}) },
         value: isFormula ? '' : value,
         formula: isFormula ? value : '',
       };
 
-      copy[rowIndex][colIndex] = nextCell;
+      rowCopy[colIndex] = nextCell;
       schedulePublicCellSave(activeSheet.id, rowIndex, colIndex, nextCell);
 
       return { ...prev, [activeSheet.id]: copy };
@@ -292,17 +298,20 @@ export default function PublicPlaygroundPage() {
       selectedRange.endRow + 1,
       selectedRange.endCol + 1,
     );
-    const nextGrid = baseGrid.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell?.style || {}) } })));
+    const nextGrid = [...baseGrid];
     const touchedCells = [];
 
     for (let rowIndex = selectedRange.startRow; rowIndex <= selectedRange.endRow; rowIndex += 1) {
+      const rowCopy = [...(nextGrid[rowIndex] || [])];
+      nextGrid[rowIndex] = rowCopy;
+
       for (let colIndex = selectedRange.startCol; colIndex <= selectedRange.endCol; colIndex += 1) {
-        const current = nextGrid[rowIndex][colIndex] || { value: '', formula: '', style: {} };
+        const current = rowCopy[colIndex] || { value: '', formula: '', style: {} };
         const nextCell = {
           ...current,
           style: cleanStyle({ ...(current.style || {}), ...nextStyle }),
         };
-        nextGrid[rowIndex][colIndex] = nextCell;
+        rowCopy[colIndex] = nextCell;
         touchedCells.push({ rowIndex, colIndex, cell: nextCell });
       }
     }

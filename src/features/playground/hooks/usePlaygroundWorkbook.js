@@ -434,12 +434,14 @@ export function usePlaygroundWorkbook(workbookId) {
       const rowIndex = Number(rowData.row_index || 0);
       const colIndex = Number(rowData.col_index || 0);
       const grid = ensureGridSize(prev[sheetId] || createEmptyGrid(), rowIndex + 1, colIndex + 1);
-      const copy = grid.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell?.style || {}) } })));
+      const copy = [...grid];
+      const rowCopy = [...(copy[rowIndex] || [])];
+      copy[rowIndex] = rowCopy;
 
       if (payload.eventType === 'DELETE') {
-        copy[rowIndex][colIndex] = { value: '', formula: '', style: {} };
+        rowCopy[colIndex] = { value: '', formula: '', style: {} };
       } else {
-        copy[rowIndex][colIndex] = {
+        rowCopy[colIndex] = {
           value: rowData.value ?? '',
           formula: rowData.formula ?? '',
           style: rowData.style || {},
@@ -549,16 +551,20 @@ export function usePlaygroundWorkbook(workbookId) {
     setGridsBySheet((prev) => {
       pushUndoSnapshot(prev);
       const grid = ensureGridSize(prev[activeSheet.id] || createEmptyGrid(), rowIndex + 1, colIndex + 1);
-      const copy = grid.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell.style || {}) } })));
+      const copy = [...grid];
+      const rowCopy = [...(copy[rowIndex] || [])];
+      copy[rowIndex] = rowCopy;
+      const currentCell = rowCopy[colIndex] || { value: '', formula: '', style: {} };
       const isFormula = String(value || '').startsWith('=');
 
       const nextCell = {
-        ...copy[rowIndex][colIndex],
+        ...currentCell,
+        style: { ...(currentCell.style || {}) },
         value: isFormula ? '' : value,
         formula: isFormula ? value : '',
       };
 
-      copy[rowIndex][colIndex] = nextCell;
+      rowCopy[colIndex] = nextCell;
       scheduleCellsPersist(activeSheet.id, [{ rowIndex, colIndex, cell: nextCell }]);
 
       return {
@@ -576,16 +582,20 @@ export function usePlaygroundWorkbook(workbookId) {
     setGridsBySheet((prev) => {
       pushUndoSnapshot(prev);
       const grid = ensureGridSize(prev[sheetId] || createEmptyGrid(), rowIndex + 1, colIndex + 1);
-      const copy = grid.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell.style || {}) } })));
+      const copy = [...grid];
+      const rowCopy = [...(copy[rowIndex] || [])];
+      copy[rowIndex] = rowCopy;
+      const currentCell = rowCopy[colIndex] || { value: '', formula: '', style: {} };
       const isFormula = String(value || '').startsWith('=');
 
       const nextCell = {
-        ...copy[rowIndex][colIndex],
+        ...currentCell,
+        style: { ...(currentCell.style || {}) },
         value: isFormula ? '' : value,
         formula: isFormula ? value : '',
       };
 
-      copy[rowIndex][colIndex] = nextCell;
+      rowCopy[colIndex] = nextCell;
       scheduleCellsPersist(sheetId, [{ rowIndex, colIndex, cell: nextCell }]);
 
       return {
@@ -605,20 +615,23 @@ export function usePlaygroundWorkbook(workbookId) {
         range.endRow + 1,
         range.endCol + 1,
       );
-      const copy = grid.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell.style || {}) } })));
-
+      const copy = [...grid];
       const changedCells = [];
 
       for (let row = range.startRow; row <= range.endRow; row += 1) {
+        const rowCopy = [...(copy[row] || [])];
+        copy[row] = rowCopy;
+
         for (let col = range.startCol; col <= range.endCol; col += 1) {
-          copy[row][col] = {
-            ...copy[row][col],
+          const currentCell = rowCopy[col] || { value: '', formula: '', style: {} };
+          rowCopy[col] = {
+            ...currentCell,
             style: {
-              ...(copy[row][col].style || {}),
+              ...(currentCell.style || {}),
               ...nextStyle,
             },
           };
-          changedCells.push({ rowIndex: row, colIndex: col, cell: copy[row][col] });
+          changedCells.push({ rowIndex: row, colIndex: col, cell: rowCopy[col] });
         }
       }
 
@@ -674,13 +687,14 @@ export function usePlaygroundWorkbook(workbookId) {
       const neededRows = Math.max(grid.length, targetRange.endRow + 1);
       const neededCols = Math.max(grid[0]?.length || DEFAULT_COLUMNS, targetRange.endCol + 1);
       const expanded = ensureGridSize(grid, neededRows, neededCols);
-      const copy = expanded.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell.style || {}) } })));
-
-      const sourceGrid = expanded.map((row) => row.map((cell) => ({ ...cell, style: { ...(cell.style || {}) } })));
-
+      const copy = [...expanded];
+      const sourceGrid = expanded;
       const changedCells = [];
 
       for (let row = targetRange.startRow; row <= targetRange.endRow; row += 1) {
+        const rowCopy = [...(copy[row] || [])];
+        copy[row] = rowCopy;
+
         for (let col = targetRange.startCol; col <= targetRange.endCol; col += 1) {
           const isSource =
             row >= sourceRange.startRow &&
@@ -690,14 +704,14 @@ export function usePlaygroundWorkbook(workbookId) {
 
           if (isSource) continue;
 
-          copy[row][col] = buildFillValue({
+          rowCopy[col] = buildFillValue({
             sourceRange,
             targetRow: row,
             targetCol: col,
             sourceGrid,
             context: workbookContext,
           });
-          changedCells.push({ rowIndex: row, colIndex: col, cell: copy[row][col] });
+          changedCells.push({ rowIndex: row, colIndex: col, cell: rowCopy[col] });
         }
       }
 

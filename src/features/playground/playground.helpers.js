@@ -217,9 +217,26 @@ export function evaluateFormula(formula, grid, context = {}, visited = new Set()
   }
 }
 
+export function formatSpreadsheetValue(value) {
+  if (value === null || value === undefined || value === '') return '';
+
+  const text = String(value).trim();
+
+  // Solo formatea números simples. No toca códigos, IDs, teléfonos ni textos.
+  if (!/^-?\d+(?:\.\d+)?$/.test(text)) return value;
+
+  const number = Number(text);
+  if (!Number.isFinite(number)) return value;
+
+  return number.toLocaleString('en-US', {
+    maximumFractionDigits: 8,
+    useGrouping: true,
+  });
+}
+
 export function displayCell(cell, grid, context = {}) {
-  if (cell?.formula) return evaluateFormula(cell.formula, grid, context);
-  return cell?.value ?? '';
+  const value = cell?.formula ? evaluateFormula(cell.formula, grid, context) : (cell?.value ?? '');
+  return formatSpreadsheetValue(value);
 }
 
 export function adjustFormulaReferences(formula, rowDelta = 0, colDelta = 0) {

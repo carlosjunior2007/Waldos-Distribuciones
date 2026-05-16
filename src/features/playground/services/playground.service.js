@@ -537,10 +537,139 @@ export async function savePublicSheetCells(token, sheetId, grid) {
   return data;
 }
 
+
+function startOfMonth(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
+}
+
+function startOfYear(date = new Date()) {
+  return new Date(date.getFullYear(), 0, 1).toISOString();
+}
+
+function buildDateRange(period = 'all', dateFrom = '', dateTo = '') {
+  const now = new Date();
+
+  if (period === 'month') {
+    return { from: startOfMonth(now), to: now.toISOString() };
+  }
+
+  if (period === 'year') {
+    return { from: startOfYear(now), to: now.toISOString() };
+  }
+
+  if (period === 'custom') {
+    return {
+      from: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : '',
+      to: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : '',
+    };
+  }
+
+  return { from: '', to: '' };
+}
+
+async function selectWithOptionalDate({ table, select, orderColumn = 'created_at', period = 'all', dateFrom = '', dateTo = '', limit = 10000 }) {
+  const range = buildDateRange(period, dateFrom, dateTo);
+  let query = supabase.from(table).select(select).order(orderColumn, { ascending: false }).limit(limit);
+
+  if (range.from) query = query.gte(orderColumn, range.from);
+  if (range.to) query = query.lte(orderColumn, range.to);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+function pickFields(row = {}, fields = []) {
+  if (!fields.length) return row;
+  return Object.fromEntries(fields.map((field) => [field, row[field] ?? '']));
+}
+
+export const PLAYGROUND_IMPORT_FIELD_SETS = {
+  productos: [
+    'id', 'codigo', 'nombre', 'descripcion', 'precio', 'precio_compra', 'categoria', 'unidad', 'cantidad_caja', 'habilitado', 'imagen',
+  ],
+  pedidos: [
+    'id', 'folio', 'cliente_nombre', 'cliente_email', 'estado', 'estado_pago', 'fecha_inicio', 'fecha_fin', 'subtotal', 'iva_porcentaje', 'total', 'created_at',
+  ],
+  cotizaciones: [
+    'id', 'folio', 'cliente_nombre', 'cliente_email', 'estado', 'subtotal', 'iva_porcentaje', 'total', 'fecha_vencimiento', 'created_at',
+  ],
+  clientes: [
+    'id', 'nombre', 'correo', 'numero', 'telefono', 'rfc', 'razon_social', 'regimen_fiscal', 'uso_cfdi', 'ciudad', 'estado', 'created_at',
+  ],
+  gastos: [
+    'id', 'concepto', 'descripcion', 'monto', 'tipo', 'fecha', 'pedido_id', 'cotizacion_id', 'created_at',
+  ],
+  entregas: [
+    'id', 'folio', 'pedido_id', 'estado', 'fecha_entrega', 'recibido_por', 'cliente_direccion_id', 'created_at',
+  ],
+};
+
+export async function getPlaygroundImportData({ source, period = 'all', dateFrom = '', dateTo = '', fields = [] }) {
+  const selectedFields = Array.isArray(fields) && fields.length ? fields : PLAYGROUND_IMPORT_FIELD_SETS[source] || [];
+
+  if (source === 'productos') {
+    const rows = await getProductsForPlayground();
+    return rows.map((row) => pickFields(row, selectedFields));
+  }
+
+  const config = {
+    pedidos: { table: 'pedidos', select: PLAYGROUND_IMPORT_FIELD_SETS.pedidos.join(', '), orderColumn: 'created_at' },
+    cotizaciones: { table: 'cotizaciones', select: PLAYGROUND_IMPORT_FIELD_SETS.cotizaciones.join(', '), orderColumn: 'created_at' },
+    clientes: { table: 'clientes', select: PLAYGROUND_IMPORT_FIELD_SETS.clientes.join(', '), orderColumn: 'created_at' },
+    gastos: { table: 'gastos', select: PLAYGROUND_IMPORT_FIELD_SETS.gastos.join(', '), orderColumn: 'created_at' },
+    entregas: { table: 'entregas', select: PLAYGROUND_IMPORT_FIELD_SETS.entregas.join(', '), orderColumn: 'created_at' },
+  }[source];
+
+  if (!config) throw new Error('Fuente de datos no soportada.');
+
+  const rows = await selectWithOptionalDate({
+    table: config.table,
+    select: config.select,
+    orderColumn: config.orderColumn,
+    period,
+    dateFrom,
+    dateTo,
+  });
+
+  return rows.map((row) => pickFields(row, selectedFields));
+}
+
+
+export async function getProductsByIdsForPlayground(productIds = []) {
+  const ids = Array.from(new Set((productIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
+
+  if (!ids.length) return [];
+
+  const { data, error } = await supabase
+    .from('productos')
+    .select('id, codigo, nombre, descripcion, precio, precio_compra, cantidad_caja, unidad, categoria, habilitado, imagen')
+    .in('id', ids);
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function applyProductBulkChanges({ playgroundId, changes }) {
+  const cleanChanges = Array.isArray(changes) ? changes : [];
+
+  if (!cleanChanges.length) {
+    return { ok: true, updated_count: 0, change_id: null };
+  }
+
+  const { data, error } = await supabase.rpc('apply_product_bulk_changes', {
+    playground_id: playgroundId || null,
+    changes: cleanChanges,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getProductsForPlayground() {
   const { data, error } = await supabase
     .from('productos')
-    .select('id, codigo, nombre, descripcion, precio, precio_compra, cantidad_caja, unidad, categoria, imagen')
+    .select('id, codigo, nombre, descripcion, precio, precio_compra, cantidad_caja, unidad, categoria, habilitado, imagen')
     .eq('habilitado', true)
     .order('nombre', { ascending: true })
     .range(0, 9999);

@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Bold,
   ChevronDown,
+  Database,
   Download,
   Eraser,
   FileSpreadsheet,
@@ -12,6 +13,7 @@ import {
   Minimize2,
   PaintBucket,
   PackagePlus,
+  Wand2,
   Palette,
   Save,
   Share2,
@@ -22,6 +24,8 @@ import {
 import PlaygroundGrid from '../components/PlaygroundGrid';
 import PlaygroundPresence from '../components/PlaygroundPresence';
 import PlaygroundShareModal from '../components/PlaygroundShareModal';
+import PlaygroundImportDataModal from '../components/PlaygroundImportDataModal';
+import PlaygroundBulkProductChangesModal from '../components/PlaygroundBulkProductChangesModal';
 import PlaygroundSheetsTabs from '../components/PlaygroundSheetsTabs';
 import { usePlaygroundPresence } from '../hooks/usePlaygroundPresence';
 import { usePlaygroundWorkbook } from '../hooks/usePlaygroundWorkbook';
@@ -122,6 +126,9 @@ export default function PlaygroundPage() {
   const styleTimerRef = useRef(null);
 
   const [shareOpen, setShareOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkChanges, setBulkChanges] = useState([]);
   const [fullscreen, setFullscreen] = useState(false);
   const [selectedRange, setSelectedRange] = useState(null);
   const [activeCell, setActiveCell] = useState(null);
@@ -154,6 +161,10 @@ export default function PlaygroundPage() {
     addRows,
     addColumns,
     importProductsToActiveSheet,
+    importDataToSheet,
+    prepareProductChangesSheet,
+    getProductBulkChangesFromActiveSheet,
+    applyProductBulkChangesFromActiveSheet,
     saveActiveSheet,
     addSheet,
     updateSheetName,
@@ -253,6 +264,35 @@ export default function PlaygroundPage() {
     a.download = `${workbook?.name || 'playground'}.xls`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+
+  async function handleImportData(options) {
+    await importDataToSheet(options);
+    setImportOpen(false);
+  }
+
+  async function handlePrepareProductChanges() {
+    await prepareProductChangesSheet();
+    setOpenMenu('');
+  }
+
+  async function handleOpenBulkChanges() {
+    setOpenMenu('');
+
+    try {
+      const changes = await getProductBulkChangesFromActiveSheet();
+      setBulkChanges(changes);
+      setBulkOpen(true);
+    } catch (error) {
+      console.error('Error detectando cambios de productos:', error);
+      setMessage('No se pudieron detectar los cambios. Revisa la conexión o permisos.');
+    }
+  }
+
+  async function handleApplyBulkChanges() {
+    await applyProductBulkChangesFromActiveSheet(bulkChanges);
+    setBulkOpen(false);
   }
 
   async function handleDelete() {
@@ -447,8 +487,17 @@ export default function PlaygroundPage() {
 
               <ToolbarMenu label="Datos" icon={SlidersHorizontal} open={openMenu === 'data'} onToggle={() => toggleMenu('data')} onClose={() => setOpenMenu('')}>
                 <div className="grid gap-2">
+                  <button type="button" onClick={() => { setImportOpen(true); setOpenMenu(''); }} disabled={saving} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+                    <Database className="h-4 w-4" /> Importar datos
+                  </button>
                   <button type="button" onClick={importProductsToActiveSheet} disabled={saving} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
-                    <PackagePlus className="h-4 w-4" /> Cargar productos
+                    <PackagePlus className="h-4 w-4" /> Cargar productos rápido
+                  </button>
+                  <button type="button" onClick={handlePrepareProductChanges} disabled={saving} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+                    <Wand2 className="h-4 w-4" /> Preparar cambios de productos
+                  </button>
+                  <button type="button" onClick={handleOpenBulkChanges} disabled={saving} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60">
+                    <Wand2 className="h-4 w-4" /> Aplicar cambios a productos
                   </button>
                 </div>
               </ToolbarMenu>
@@ -592,6 +641,21 @@ export default function PlaygroundPage() {
           />
         </div>
       </div>
+
+      <PlaygroundImportDataModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImport={handleImportData}
+        loading={saving}
+      />
+
+      <PlaygroundBulkProductChangesModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        changes={bulkChanges}
+        onApply={handleApplyBulkChanges}
+        loading={saving}
+      />
 
       <PlaygroundShareModal
         open={shareOpen}

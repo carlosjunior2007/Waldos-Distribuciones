@@ -187,6 +187,13 @@ export function evaluateFormula(formula, grid, context = {}, visited = new Set()
   let expression = String(formula).slice(1).trim();
   if (!expression) return '';
 
+  const singleReferenceMatch = expression.match(/^((?:'[^']+'|[A-Z0-9_ÁÉÍÓÚÑ ]+)!?)?(\$?[A-Z]+\$?\d+)$/i);
+  if (singleReferenceMatch) {
+    const [, sheetPrefix = '', cellId] = singleReferenceMatch;
+    const value = getCellRawValue(grid, cellId, context, sheetPrefix, visited);
+    return value === null || value === undefined ? '' : String(value);
+  }
+
   expression = replaceRangeFunctions(expression, grid, context, visited);
 
   const cellReferencePattern = /((?:'[^']+'|[A-Z0-9_ÁÉÍÓÚÑ ]+)!?)?(\$?[A-Z]+\$?\d+)/gi;

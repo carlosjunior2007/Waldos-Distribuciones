@@ -50,3 +50,17 @@ export const PRESENCE_NAMES = [
   'Sofi',
   'Roco',
 ];
+
+export const PRODUCT_CHANGE_COLUMNS = [
+  'Producto ID',
+  'Código',
+  'Nombre',
+  'Precio',
+  'Costo',
+  'Descripción',
+  'Categoría',
+  'Unidad',
+  'Cantidad caja',
+  'Habilitado',
+  'Estado',
+];

@@ -9,6 +9,8 @@ const ORDER_SELECT = `
     correo,
     rfc,
     razon_social,
+    regimen_fiscal,
+    uso_cfdi,
     direccion,
     ciudad,
     estado,
@@ -119,6 +121,8 @@ export async function fetchOrderClients() {
       correo,
       rfc,
       razon_social,
+      regimen_fiscal,
+      uso_cfdi,
       direccion,
       ciudad,
       estado,
@@ -156,7 +160,7 @@ export async function fetchOrderClients() {
 export async function fetchOrderProducts() {
   const { data, error } = await supabase
     .from("productos")
-    .select("id,nombre,descripcion,precio,precio_compra,cantidad_caja,codigo,iva_porcentaje,habilitado")
+    .select("id,nombre,descripcion,precio,precio_compra,cantidad_caja,codigo,iva_porcentaje,habilitado,clave_sat,clave_unidad_sat,unidad,tax_object")
     .order("nombre", { ascending: true });
 
   if (error) throw error;
@@ -168,7 +172,7 @@ export async function createOrder({ order, details }) {
   const cleanDetails = sanitizeDetails(details);
   if (!cleanDetails.length) throw new Error("Agrega al menos un producto al pedido.");
 
-  const totals = calculateTotals(cleanDetails, order.iva_porcentaje);
+  const totals = calculateTotals(cleanDetails, order.iva_porcentaje, order.isr_porcentaje);
   const folio = order.folio || generateFolio("PED");
 
   const { data: createdOrder, error: orderError } = await supabase
@@ -183,6 +187,9 @@ export async function createOrder({ order, details }) {
       subtotal: totals.subtotal,
       descuento: Number(order.descuento || 0),
       iva_porcentaje: totals.iva_porcentaje,
+      iva_monto: totals.iva_monto,
+      isr_porcentaje: totals.isr_porcentaje,
+      isr_monto: totals.isr_monto,
       total: totals.total,
       estado: order.fecha_inicio || order.fecha_fin ? "creado" : "borrador",
       estado_pago: order.estado_pago || "pendiente",
@@ -209,7 +216,7 @@ export async function updateOrder(orderId, { order, details }) {
   const cleanDetails = sanitizeDetails(details);
   if (!cleanDetails.length) throw new Error("Agrega al menos un producto al pedido.");
 
-  const totals = calculateTotals(cleanDetails, order.iva_porcentaje);
+  const totals = calculateTotals(cleanDetails, order.iva_porcentaje, order.isr_porcentaje);
   const derivedStatus = order.fecha_inicio || order.fecha_fin ? deriveOrderStatusFromDetails(cleanDetails) : "borrador";
 
   const { error: orderError } = await supabase
@@ -222,6 +229,9 @@ export async function updateOrder(orderId, { order, details }) {
       subtotal: totals.subtotal,
       descuento: Number(order.descuento || 0),
       iva_porcentaje: totals.iva_porcentaje,
+      iva_monto: totals.iva_monto,
+      isr_porcentaje: totals.isr_porcentaje,
+      isr_monto: totals.isr_monto,
       total: totals.total,
       estado: derivedStatus,
       estado_pago: order.estado_pago || "pendiente",
@@ -239,6 +249,45 @@ export async function updateOrder(orderId, { order, details }) {
 
   await syncOrderDetails(orderId, cleanDetails);
   await updateOrderStatus(orderId);
+
+  return fetchOrderById(orderId);
+}
+
+
+export async function updateOrderInvoiceDraft({ orderId, clientId, values }) {
+  if (!orderId) throw new Error("Pedido inválido.");
+  if (!values) throw new Error("No hay datos fiscales para guardar.");
+
+  if (clientId) {
+    const { error: clientError } = await supabase
+      .from("clientes")
+      .update({
+        rfc: values.receiverRfc || null,
+        razon_social: values.receiverName || null,
+        regimen_fiscal: values.receiverFiscalRegime || null,
+        uso_cfdi: values.receiverCfdiUse || null,
+        codigo_postal: values.receiverTaxZipCode || null,
+        correo: values.receiverEmail || null,
+      })
+      .eq("id", clientId);
+
+    if (clientError) throw clientError;
+  }
+
+  const orderPayload = {
+    cliente_email: values.receiverEmail || null,
+    payment_form: values.paymentForm || null,
+    payment_method: values.paymentMethod || null,
+    currency: values.currency || "MXN",
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: orderError } = await supabase
+    .from("pedidos")
+    .update(orderPayload)
+    .eq("id", orderId);
+
+  if (orderError) throw orderError;
 
   return fetchOrderById(orderId);
 }
@@ -778,13 +827,16 @@ function buildDetailPayload(orderId, item) {
   };
 }
 
-function calculateTotals(details, iva = 8) {
+function calculateTotals(details, iva = 8, isr = 0) {
   const subtotal = details.reduce((acc, item) => {
     return acc + Number(item.cantidad_pedida || 0) * Number(item.precio_unitario || 0);
   }, 0);
   const iva_porcentaje = Math.floor(Number(iva || 0));
-  const total = subtotal * (1 + iva_porcentaje / 100);
-  return { subtotal, iva_porcentaje, total };
+  const isr_porcentaje = Number(isr || 0);
+  const iva_monto = subtotal * (iva_porcentaje / 100);
+  const isr_monto = subtotal * (isr_porcentaje / 100);
+  const total = Math.max(subtotal + iva_monto - isr_monto, 0);
+  return { subtotal, iva_porcentaje, iva_monto, isr_porcentaje, isr_monto, total };
 }
 
 function deriveOrderStatusFromDetails(details = []) {
@@ -900,6 +952,12 @@ function normalizeOrder(order) {
     cliente_nombre: order.cliente_nombre || client.nombre || "Cliente sin nombre",
     cliente_telefono: order.cliente_telefono || client.numero || "",
     cliente_email: order.cliente_email || client.correo || "",
+    cliente_rfc: client.rfc || order.cliente_rfc || "",
+    cliente_razon_social: client.razon_social || order.cliente_razon_social || order.cliente_nombre || "",
+    cliente_regimen_fiscal: client.regimen_fiscal || order.cliente_regimen_fiscal || "",
+    cliente_uso_cfdi: client.uso_cfdi || order.cliente_uso_cfdi || "",
+    cliente_codigo_postal: client.codigo_postal || order.cliente_codigo_postal || "",
+    cliente_direccion_fiscal: client.direccion || order.cliente_direccion_fiscal || "",
     cliente_direcciones: (client.cliente_direcciones || [])
       .filter((address) => address.activo !== false)
       .sort((a, b) => Number(b.es_principal) - Number(a.es_principal)),
@@ -929,4 +987,41 @@ function generateTrackingToken() {
 function cryptoRandom() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID().replaceAll("-", "");
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+
+export async function stampOrderInvoiceSandbox({ orderId, invoiceData }) {
+  if (!orderId) throw new Error("Pedido inválido.");
+  if (!invoiceData) throw new Error("No hay datos de factura para timbrar.");
+
+  const { data, error } = await supabase.functions.invoke("facturama-stamp-order-sandbox", {
+    body: {
+      orderId,
+      invoiceData,
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message || "No se pudo llamar la función de Facturama.");
+  }
+
+  if (!data) {
+    throw new Error("La función de Facturama no regresó datos.");
+  }
+
+  if (data.ok !== true) {
+    const facturamaMessage =
+      data?.facturamaData?.Message ||
+      data?.facturamaData?.message ||
+      data?.facturamaData?.ModelState ||
+      data?.message;
+
+    throw new Error(
+      typeof facturamaMessage === "string"
+        ? facturamaMessage
+        : data?.message || "Facturama rechazó el timbrado sandbox.",
+    );
+  }
+
+  return data;
 }

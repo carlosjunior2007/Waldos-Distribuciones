@@ -9,6 +9,7 @@ const emptyForm = {
   metodo_pago: "",
   estado_pago: "pendiente",
   iva_porcentaje: 8,
+  isr_porcentaje: 0,
   fecha_inicio: "",
   fecha_fin: "",
   notas: "",
@@ -47,6 +48,10 @@ export default function OrderFormModal({
         metodo_pago: order.metodo_pago || "",
         estado_pago: order.estado_pago || "pendiente",
         iva_porcentaje: toIntegerValue(order.iva_porcentaje ?? 8),
+        isr_porcentaje:
+          order.isr_porcentaje !== null && order.isr_porcentaje !== undefined
+            ? String(order.isr_porcentaje)
+            : "0",
         fecha_inicio: toDateInput(order.fecha_inicio || order.entrega_inicio),
         fecha_fin: toDateInput(order.fecha_fin || order.entrega_fin),
         notas: order.notas || "",
@@ -75,9 +80,20 @@ export default function OrderFormModal({
       return acc + Number(item.cantidad_pedida || 0) * Number(item.precio_unitario || 0);
     }, 0);
     const iva = Number(form.iva_porcentaje || 0);
+    const isr = Number(form.isr_porcentaje || 0);
+    const ivaMonto = subtotal * (iva / 100);
+    const isrMonto = subtotal * (isr / 100);
     const profit = calculateOrderProfit(details);
-    return { subtotal, iva, total: subtotal * (1 + iva / 100), ...profit };
-  }, [details, form.iva_porcentaje]);
+    return {
+      subtotal,
+      iva,
+      isr,
+      ivaMonto,
+      isrMonto,
+      total: Math.max(subtotal + ivaMonto - isrMonto, 0),
+      ...profit,
+    };
+  }, [details, form.iva_porcentaje, form.isr_porcentaje]);
 
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -158,6 +174,7 @@ export default function OrderFormModal({
         metodo_pago: form.metodo_pago || null,
         estado_pago: form.estado_pago,
         iva_porcentaje: Number(toIntegerValue(form.iva_porcentaje || 0)),
+        isr_porcentaje: Number(form.isr_porcentaje || 0),
         fecha_inicio: form.fecha_inicio || null,
         fecha_fin: form.fecha_fin || null,
         notas: form.notas,
@@ -230,6 +247,19 @@ export default function OrderFormModal({
               value={form.iva_porcentaje}
               onChange={(event) => updateForm("iva_porcentaje", toIntegerValue(event.target.value))}
               onBlur={() => updateForm("iva_porcentaje", toIntegerValue(form.iva_porcentaje || 0))}
+            />
+          </Field>
+
+          <Field label="ISR retenido %">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              className={inputClass}
+              value={form.isr_porcentaje}
+              onChange={(event) => updateForm("isr_porcentaje", event.target.value)}
+              onBlur={() => updateForm("isr_porcentaje", String(Number(form.isr_porcentaje || 0)))}
             />
           </Field>
 
@@ -317,11 +347,12 @@ export default function OrderFormModal({
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-border bg-surface-soft p-4 text-sm md:grid-cols-5">
+          <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-border bg-surface-soft p-4 text-sm md:grid-cols-6">
             <TotalPill label="Subtotal" value={formatMoney(totals.subtotal)} />
             <TotalPill label="Costo" value={formatMoney(totals.cost)} />
             <TotalPill label="Utilidad estimada" value={`${formatMoney(totals.profit)} · ${totals.margin.toFixed(1)}%`} tone={totals.profit >= 0 ? "success" : "error"} />
-            <TotalPill label="IVA" value={`${Number(totals.iva || 0)}%`} />
+            <TotalPill label="IVA" value={`${Number(totals.iva || 0)}% · ${formatMoney(totals.ivaMonto)}`} />
+            <TotalPill label="ISR retenido" value={`${Number(totals.isr || 0)}% · -${formatMoney(totals.isrMonto)}`} tone="error" />
             <TotalPill label="Total" value={formatMoney(totals.total)} strong />
           </div>
         </section>

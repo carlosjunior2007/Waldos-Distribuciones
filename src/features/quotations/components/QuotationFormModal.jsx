@@ -17,7 +17,7 @@ import { formatMoney } from "../../../utils/formatters";
 import { formatInputDate } from "../../../utils/dates";
 import { cleanNumericInput } from "../../../utils/input";
 
-import { INITIAL_QUOTATION_FORM, IVA_OPTIONS } from "../quotation.constants";
+import { INITIAL_QUOTATION_FORM, IVA_OPTIONS, ISR_OPTIONS } from "../quotation.constants";
 
 import {
   buildQuotationItemsFromDetails,
@@ -75,6 +75,11 @@ export default function QuotationFormModal({
           editingQuotation.iva_porcentaje !== undefined
             ? String(editingQuotation.iva_porcentaje)
             : "16",
+        isr_porcentaje:
+          editingQuotation.isr_porcentaje !== null &&
+          editingQuotation.isr_porcentaje !== undefined
+            ? String(editingQuotation.isr_porcentaje)
+            : "0",
         notas: editingQuotation.notas || "",
       });
 
@@ -162,7 +167,7 @@ export default function QuotationFormModal({
 
   const totals = useMemo(() => {
     return calculateQuotationTotals(items, form);
-  }, [items, form.descuento, form.iva_porcentaje]);
+  }, [items, form.descuento, form.iva_porcentaje, form.isr_porcentaje]);
 
   function updateFormField(key, value) {
     setForm((prev) => ({
@@ -606,6 +611,14 @@ function QuoteConfigSection({ form, updateFormField }) {
           onChange={(value) => updateFormField("iva_porcentaje", value)}
         />
 
+        <TaxPercentInput
+          label="ISR retenido %"
+          value={form.isr_porcentaje}
+          options={ISR_OPTIONS}
+          onChange={(value) => updateFormField("isr_porcentaje", value)}
+          helper="Se resta del total. Úsalo solo cuando aplique retención de ISR."
+        />
+
         <label className="space-y-2">
           <span className="text-sm font-semibold text-text-primary">Notas</span>
 
@@ -640,6 +653,49 @@ function MoneyInput({ label, value, onChange }) {
           className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none"
         />
       </div>
+    </label>
+  );
+}
+
+function TaxPercentInput({ label, value, options, onChange, helper }) {
+  const isCustom = !options.some((item) => item.value === String(value));
+
+  return (
+    <label className="space-y-2">
+      <span className="text-sm font-semibold text-text-primary">{label}</span>
+
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <select
+          value={isCustom ? "custom" : String(value)}
+          onChange={(e) => {
+            if (e.target.value === "custom") {
+              onChange(value || "0");
+              return;
+            }
+            onChange(e.target.value);
+          }}
+          className="h-12 min-w-0 rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none focus:border-primary-400"
+        >
+          {options.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) =>
+            onChange(cleanNumericInput(e.target.value, { allowDecimal: true }))
+          }
+          className="h-12 w-24 rounded-2xl border border-border bg-surface px-3 text-right text-sm text-text-primary outline-none focus:border-primary-400"
+          placeholder="0"
+        />
+      </div>
+
+      {helper ? <p className="text-xs text-text-muted">{helper}</p> : null}
     </label>
   );
 }
@@ -679,6 +735,11 @@ function SummarySection({ form, totals, loading, className = "" }) {
         <SummaryLine
           label={`IVA ${form.iva_porcentaje || 0}%`}
           value={formatMoney(totals.ivaMonto)}
+        />
+
+        <SummaryLine
+          label={`ISR retenido ${form.isr_porcentaje || 0}%`}
+          value={formatMoney(-Number(totals.isrMonto || 0))}
         />
 
         <SummaryLine label="Total" value={formatMoney(totals.total)} bold />

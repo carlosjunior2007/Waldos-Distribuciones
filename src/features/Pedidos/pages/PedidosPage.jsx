@@ -16,6 +16,7 @@ import DeliveryFormModal from "../components/DeliveryFormModal";
 import DeliveriesModal from "../components/DeliveriesModal";
 import RecurringOrderModal from "../components/RecurringOrderModal";
 import OperationOverlay from "../components/OperationOverlay";
+import InvoicePreviewModal from "../components/InvoicePreviewModal";
 
 export default function PedidosPage() {
   const orders = useOrders();
@@ -74,6 +75,16 @@ export default function PedidosPage() {
         onSave={orders.saveRecurring}
       />
 
+      <InvoicePreviewModal
+        open={orders.modal === "invoice"}
+        order={orders.selectedOrder}
+        products={orders.products}
+        saving={orders.saving}
+        onClose={orders.closeModal}
+        onSaveDraft={orders.saveInvoiceDraft}
+        onStampInvoice={orders.stampInvoiceSandbox}
+      />
+
       <OrdersStats stats={orders.stats} />
 
       {orders.loading ? (
@@ -116,6 +127,7 @@ export default function PedidosPage() {
               onViewDeliveries={(order) => orders.openModal("deliveries", order)}
               onDownloadCounterReceipt={orders.downloadCounterReceipt}
               onDownloadPdf={orders.downloadOrderPdf}
+              onOpenInvoice={(order) => orders.openModal("invoice", order)}
               onCancel={orders.cancelSelectedOrder}
               onRestore={orders.restoreSelectedOrder}
             />
@@ -130,6 +142,7 @@ export default function PedidosPage() {
               onViewDeliveries={(order) => orders.openModal("deliveries", order)}
               onDownloadCounterReceipt={orders.downloadCounterReceipt}
               onDownloadPdf={orders.downloadOrderPdf}
+              onOpenInvoice={(order) => orders.openModal("invoice", order)}
               onCancel={orders.cancelSelectedOrder}
               onRestore={orders.restoreSelectedOrder}
             />

@@ -14,6 +14,7 @@ import {
   getDeliveryReceiver,
   getDeliveryUnits,
   moneyMX,
+  percentMX,
   publicDeliveryStatusLabel,
   publicOrderStatusLabel,
   safeText,
@@ -163,7 +164,9 @@ export function generatePublicTrackingPDF(order) {
 
   function drawTotalsBox(startY) {
     const boxW = 66;
-    const boxH = totals.descuento > 0 ? 38 : 32;
+    const hasDiscount = totals.hasDiscount || Number(totals.descuento || 0) > 0;
+    const hasIsr = totals.hasIsr || Number(totals.isr || 0) > 0 || Number(totals.isrPorcentaje || 0) > 0;
+    const boxH = 32 + (hasDiscount ? 7 : 0) + (hasIsr ? 7 : 0);
     const boxX = pageWidth - marginX - boxW;
 
     let y = ensureSpace(startY, boxH + 4);
@@ -184,8 +187,9 @@ export function generatePublicTrackingPDF(order) {
     }
 
     line('Subtotal', moneyMX(totals.subtotal));
-    if (totals.descuento > 0) line('Descuento', `-${moneyMX(totals.descuento)}`);
-    line(`IVA ${totals.ivaPorcentaje}%`, moneyMX(totals.iva));
+    if (hasDiscount) line('Descuento', `-${moneyMX(totals.descuento)}`);
+    line(`IVA ${percentMX(totals.ivaPorcentaje)}%`, moneyMX(totals.iva));
+    if (hasIsr) line(`ISR retenido ${percentMX(totals.isrPorcentaje)}%`, `-${moneyMX(totals.isr)}`);
 
     doc.setFillColor(...BRAND);
     doc.roundedRect(boxX + 4, y + boxH - 9, boxW - 8, 7, 2, 2, 'F');
@@ -357,3 +361,5 @@ export function generatePublicTrackingPDF(order) {
 
   doc.save(`${order?.folio || trackingToken || 'pedido'}.pdf`);
 }
+
+export const generatePublicOrderPDF = generatePublicTrackingPDF;

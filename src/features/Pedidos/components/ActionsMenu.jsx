@@ -92,16 +92,25 @@ export default function ActionsMenu({ actions = [] }) {
             {actions.map((action) => {
               const Icon = action.icon;
 
+              const disabled = Boolean(action.disabled);
+
               return (
                 <button
                   key={action.label}
                   type="button"
+                  disabled={disabled}
+                  title={action.disabledReason || action.label}
                   onClick={() => {
+                    if (disabled) return;
                     setOpen(false);
                     action.onClick?.();
                   }}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition hover:bg-surface-soft ${
-                    action.danger ? "text-error-700" : "text-text-primary"
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
+                    disabled
+                      ? "cursor-not-allowed text-text-muted opacity-50"
+                      : action.danger
+                        ? "text-error-700 hover:bg-surface-soft"
+                        : "text-text-primary hover:bg-surface-soft"
                   }`}
                 >
                   {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}

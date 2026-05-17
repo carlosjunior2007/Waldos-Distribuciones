@@ -32,6 +32,65 @@ function qty(value) {
   return number.toLocaleString("es-MX", { maximumFractionDigits: 2 });
 }
 
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function hasValue(value) {
+  return value !== null && value !== undefined && value !== "";
+}
+
+function getOrderFinancialSummary(order, details = []) {
+  const detailsSubtotal = details.reduce((sum, item) => {
+    const quantity = finiteNumber(item.cantidad_pedida ?? item.cantidad, 0);
+    const price = finiteNumber(item.precio_unitario ?? item.precio, 0);
+    return sum + quantity * price;
+  }, 0);
+
+  const subtotal = finiteNumber(order?.subtotal, detailsSubtotal);
+  const descuento = finiteNumber(order?.descuento, 0);
+  const base = Math.max(subtotal - descuento, 0);
+  const ivaPorcentaje = finiteNumber(order?.iva_porcentaje, 0);
+  const iva = hasValue(order?.iva_monto)
+    ? finiteNumber(order.iva_monto, 0)
+    : base * (ivaPorcentaje / 100);
+
+  const explicitIsr = hasValue(order?.isr_monto);
+  let isrPorcentaje = finiteNumber(order?.isr_porcentaje, 0);
+  let isr = explicitIsr ? finiteNumber(order.isr_monto, 0) : base * (isrPorcentaje / 100);
+
+  const fallbackTotal = Math.max(base + iva - isr, 0);
+  const total = hasValue(order?.total) ? finiteNumber(order.total, fallbackTotal) : fallbackTotal;
+
+  if (!explicitIsr && isr <= 0 && total < base + iva) {
+    isr = Math.max(base + iva - total, 0);
+    if (base > 0 && isrPorcentaje <= 0) {
+      isrPorcentaje = (isr / base) * 100;
+    }
+  }
+
+  return {
+    subtotal,
+    descuento,
+    base,
+    iva,
+    ivaPorcentaje,
+    isr,
+    isrPorcentaje,
+    total,
+    hasDiscount: descuento > 0,
+    hasIsr: isr > 0.004 || isrPorcentaje > 0,
+  };
+}
+
+function percentText(value) {
+  const number = finiteNumber(value, 0);
+  return Number.isInteger(number)
+    ? String(number)
+    : number.toLocaleString("es-MX", { maximumFractionDigits: 4 });
+}
+
 function statusText(value) {
   const map = {
     borrador: "Borrador",
@@ -138,7 +197,7 @@ export function generateOrderPDF(order) {
   const orderedUnits = details.reduce((sum, item) => sum + Number(item.cantidad_pedida || 0), 0);
   const pendingUnits = Math.max(orderedUnits - deliveredUnits, 0);
   const progress = orderedUnits > 0 ? Math.min(deliveredUnits / orderedUnits, 1) : 0;
-  const iva = Math.max(Number(order?.total || 0) - Number(order?.subtotal || 0), 0);
+  const totals = getOrderFinancialSummary(order, details);
   const trackingToken = text(order?.tracking_token, "Pendiente");
 
   function drawPageHeader() {
@@ -298,7 +357,14 @@ export function generateOrderPDF(order) {
     finalY = doc.lastAutoTable?.finalY || finalY;
   }
 
-  const totalsH = 38;
+  const totalLines = [
+    { label: "Subtotal", value: money(totals.subtotal) },
+    ...(totals.hasDiscount ? [{ label: "Descuento", value: `-${money(totals.descuento)}` }] : []),
+    { label: `IVA ${percentText(totals.ivaPorcentaje)}%`, value: money(totals.iva) },
+    ...(totals.hasIsr ? [{ label: `ISR retenido ${percentText(totals.isrPorcentaje)}%`, value: `-${money(totals.isr)}` }] : []),
+  ];
+
+  const totalsH = 20 + totalLines.length * 8;
   let totalsY = finalY + 10;
   if (totalsY + totalsH > pageHeight - 28) {
     doc.addPage();
@@ -328,20 +394,23 @@ export function generateOrderPDF(order) {
   doc.roundedRect(totalsX, totalsY, totalsW, totalsH, 4, 4, "FD");
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.3);
   doc.setTextColor(...colors.DARK);
-  doc.text("Subtotal", totalsX + 6, totalsY + 9);
-  doc.text(money(order?.subtotal), totalsX + totalsW - 6, totalsY + 9, { align: "right" });
-  doc.text(`IVA ${Number(order?.iva_porcentaje || 0)}%`, totalsX + 6, totalsY + 18);
-  doc.text(money(iva), totalsX + totalsW - 6, totalsY + 18, { align: "right" });
+
+  let totalLineY = totalsY + 9;
+  totalLines.forEach((line) => {
+    doc.text(line.label, totalsX + 6, totalLineY);
+    doc.text(line.value, totalsX + totalsW - 6, totalLineY, { align: "right" });
+    totalLineY += 8;
+  });
 
   doc.setFillColor(...colors.RED);
-  doc.roundedRect(totalsX + 4, totalsY + 25, totalsW - 8, 9, 2, 2, "F");
+  doc.roundedRect(totalsX + 4, totalsY + totalsH - 13, totalsW - 8, 9, 2, 2, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
   doc.setTextColor(...colors.WHITE);
-  doc.text("Total", totalsX + 8, totalsY + 31);
-  doc.text(money(order?.total), totalsX + totalsW - 8, totalsY + 31, { align: "right" });
+  doc.text("Total", totalsX + 8, totalsY + totalsH - 7);
+  doc.text(money(totals.total), totalsX + totalsW - 8, totalsY + totalsH - 7, { align: "right" });
 
   addPageNumbers(doc, colors.MUTED);
   doc.save(`${order?.folio || "pedido"}.pdf`);

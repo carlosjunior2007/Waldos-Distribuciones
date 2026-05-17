@@ -4,6 +4,7 @@ import {
   FileText,
   PackagePlus,
   Pencil,
+  ReceiptText,
   Repeat2,
   RotateCcw,
   Truck,
@@ -18,6 +19,7 @@ import {
   formatMoney,
   getOrderStatusMeta,
   getPaymentStatusMeta,
+  getOrderInvoiceReadiness,
 } from "../order.helpers";
 
 import OrderStatusBadge from "./OrderStatusBadge";
@@ -34,6 +36,7 @@ export default function OrdersMobileList({
   onViewDeliveries,
   onDownloadCounterReceipt,
   onDownloadPdf,
+  onOpenInvoice,
   onCancel,
   onRestore,
 }) {
@@ -51,6 +54,7 @@ export default function OrdersMobileList({
           onViewDeliveries={onViewDeliveries}
           onDownloadCounterReceipt={onDownloadCounterReceipt}
           onDownloadPdf={onDownloadPdf}
+          onOpenInvoice={onOpenInvoice}
           onCancel={onCancel}
           onRestore={onRestore}
         />
@@ -69,6 +73,7 @@ function OrderMobileCard({
   onViewDeliveries,
   onDownloadCounterReceipt,
   onDownloadPdf,
+  onOpenInvoice,
   onCancel,
   onRestore,
 }) {
@@ -76,6 +81,7 @@ function OrderMobileCard({
   const payment = getPaymentStatusMeta(order.estado_pago);
   const profit = calculateOrderProfit(order.details);
   const showProfit = isOrderProfitRealized(order);
+  const invoiceReadiness = getOrderInvoiceReadiness(order);
 
   const actions = [
     { label: "Ver pedido", icon: Eye, onClick: () => onView(order) },
@@ -111,6 +117,15 @@ function OrderMobileCard({
       onClick: () => onDownloadCounterReceipt(order),
     },
     { label: "PDF del pedido", icon: Download, onClick: () => onDownloadPdf(order) },
+    {
+      label: "Factura",
+      icon: ReceiptText,
+      disabled: !invoiceReadiness.ready,
+      disabledReason: invoiceReadiness.ready
+        ? "Factura"
+        : `Disponible cuando el pedido esté pagado y entregado completo. ${invoiceReadiness.reasons.join(" ")}`,
+      onClick: () => onOpenInvoice?.(order),
+    },
     ...(status.key === "cancelado"
       ? [
           {

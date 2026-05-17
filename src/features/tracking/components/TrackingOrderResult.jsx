@@ -15,6 +15,7 @@ import {
   getDeliveryReceiver,
   getDeliveryUnits,
   moneyMX,
+  percentMX,
   publicDeliveryStatusLabel,
   publicOrderStatusLabel,
   safeText,
@@ -139,7 +140,8 @@ export default function TrackingOrderResult({ order }) {
             <div className="mt-5 space-y-3 text-sm">
               <TotalLine label="Subtotal" value={moneyMX(totals.subtotal)} />
               {totals.descuento > 0 ? <TotalLine label="Descuento" value={`-${moneyMX(totals.descuento)}`} /> : null}
-              <TotalLine label={`IVA ${totals.ivaPorcentaje}%`} value={moneyMX(totals.iva)} />
+              <TotalLine label={`IVA ${percentMX(totals.ivaPorcentaje)}%`} value={moneyMX(totals.iva)} />
+              {totals.hasIsr ? <TotalLine label={`ISR retenido ${percentMX(totals.isrPorcentaje)}%`} value={`-${moneyMX(totals.isr)}`} /> : null}
               <div className="mt-4 rounded-2xl bg-red-600 px-4 py-4 text-white">
                 <div className="flex items-center justify-between gap-4">
                   <span className="font-black">Total</span>

@@ -166,8 +166,10 @@ export function calculateQuotationTotals(items = [], form = {}) {
   const descuento = Number(form.descuento || 0);
   const base = Math.max(subtotal - descuento, 0);
   const ivaPorcentaje = Number(form.iva_porcentaje || 0);
+  const isrPorcentaje = Number(form.isr_porcentaje || 0);
   const ivaMonto = base * (ivaPorcentaje / 100);
-  const total = base + ivaMonto;
+  const isrMonto = base * (isrPorcentaje / 100);
+  const total = Math.max(base + ivaMonto - isrMonto, 0);
 
   const ganancia = rows.reduce(
     (acc, item) => acc + Number(item.ganancia_linea || 0),
@@ -180,6 +182,8 @@ export function calculateQuotationTotals(items = [], form = {}) {
     descuento,
     base,
     ivaMonto,
+    isrMonto,
+    isrPorcentaje,
     total,
     ganancia,
   };
@@ -207,6 +211,9 @@ export function buildQuotationPayload({ form, totals }) {
       subtotal: Number(totals.subtotal || 0),
       descuento: Number(totals.descuento || 0),
       iva_porcentaje: Number(form.iva_porcentaje || 0),
+      iva_monto: Number(totals.ivaMonto || 0),
+      isr_porcentaje: Number(form.isr_porcentaje || 0),
+      isr_monto: Number(totals.isrMonto || 0),
       total: Number(totals.total || 0),
       fecha_vencimiento: form.fecha_vencimiento || null,
       notas: form.notas || null,

@@ -29,6 +29,22 @@ export function safeText(value, fallback = '-') {
   return text || fallback;
 }
 
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function hasValue(value) {
+  return value !== null && value !== undefined && value !== '';
+}
+
+export function percentMX(value) {
+  const number = finiteNumber(value, 0);
+  return Number.isInteger(number)
+    ? String(number)
+    : number.toLocaleString('es-MX', { maximumFractionDigits: 4 });
+}
+
 export function normalizeTracking(value) {
   return String(value || '').trim().toUpperCase();
 }
@@ -158,27 +174,47 @@ export function getDeliveryAddress(delivery) {
 export function getOrderTotals(order) {
   const items = getOrderItems(order);
 
-  const subtotal = Number(
-    order?.subtotal ??
-      items.reduce((sum, item) => {
-        const qty = Number(item.cantidad_pedida ?? item.cantidad ?? 0);
-        const price = Number(item.precio_unitario ?? item.precio ?? 0);
-        return sum + qty * price;
-      }, 0),
-  );
+  const itemsSubtotal = items.reduce((sum, item) => {
+    const qty = finiteNumber(item.cantidad_pedida ?? item.cantidad, 0);
+    const price = finiteNumber(item.precio_unitario ?? item.precio, 0);
+    return sum + qty * price;
+  }, 0);
 
-  const ivaPorcentaje = Number(order?.iva_porcentaje ?? 8);
-  const descuento = Number(order?.descuento ?? 0);
+  const subtotal = finiteNumber(order?.subtotal, itemsSubtotal);
+  const ivaPorcentaje = finiteNumber(order?.iva_porcentaje, 8);
+  const descuento = finiteNumber(order?.descuento, 0);
   const base = Math.max(subtotal - descuento, 0);
-  const iva = Number(order?.iva_monto ?? base * (ivaPorcentaje / 100));
-  const total = Number(order?.total ?? base + iva);
+  const iva = hasValue(order?.iva_monto)
+    ? finiteNumber(order.iva_monto, 0)
+    : base * (ivaPorcentaje / 100);
+
+  const explicitIsr = hasValue(order?.isr_monto);
+  let isrPorcentaje = finiteNumber(order?.isr_porcentaje, 0);
+  let isr = explicitIsr ? finiteNumber(order.isr_monto, 0) : base * (isrPorcentaje / 100);
+
+  const fallbackTotal = Math.max(base + iva - isr, 0);
+  const total = hasValue(order?.total) ? finiteNumber(order.total, fallbackTotal) : fallbackTotal;
+
+  // Si el endpoint público aún no manda isr_monto/isr_porcentaje, pero el total ya viene con ISR retenido,
+  // inferimos la retención para que el desglose del PDF/tracking no oculte el impuesto.
+  if (!explicitIsr && isr <= 0 && total < base + iva) {
+    isr = Math.max(base + iva - total, 0);
+    if (base > 0 && isrPorcentaje <= 0) {
+      isrPorcentaje = (isr / base) * 100;
+    }
+  }
 
   return {
     subtotal,
     descuento,
+    base,
     iva,
     ivaPorcentaje,
+    isr,
+    isrPorcentaje,
     total,
+    hasIsr: isr > 0.004 || isrPorcentaje > 0,
+    hasDiscount: descuento > 0,
   };
 }
 

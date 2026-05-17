@@ -1,10 +1,11 @@
 import { CalendarDays, CreditCard, FileDown, PackageCheck } from "lucide-react";
 import TrackingStatusBadge from "./TrackingStatusBadge";
-import { dateMX, money, safeText } from "../tracking.helpers";
+import { dateMX, getOrderTotals, moneyMX, percentMX, safeText } from "../tracking.helpers";
 import { generatePublicOrderPDF } from "../services/trackingPdf.service";
 
 export default function PublicOrderHeader({ order, progress }) {
   const tracking = order?.tracking?.token || order?.tracking || "-";
+  const totals = getOrderTotals(order);
 
   return (
     <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
@@ -56,8 +57,8 @@ export default function PublicOrderHeader({ order, progress }) {
         <InfoCard
           icon={<PackageCheck className="h-5 w-5" />}
           label="Total"
-          value={money(order.total)}
-          helper={`IVA ${Number(order.iva_porcentaje || 0)}%`}
+          value={moneyMX(totals.total)}
+          helper={totals.hasIsr ? `IVA ${percentMX(totals.ivaPorcentaje)}% · ISR ${percentMX(totals.isrPorcentaje)}%` : `IVA ${percentMX(totals.ivaPorcentaje)}%`}
         />
       </div>
 

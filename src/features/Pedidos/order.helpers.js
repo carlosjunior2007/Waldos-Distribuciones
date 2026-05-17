@@ -253,6 +253,34 @@ export function calculateOrderProfit(details = []) {
   };
 }
 
+
+export function getOrderInvoiceReadiness(order = {}) {
+  const paymentStatus = String(order.estado_pago || "").toLowerCase();
+  const derivedStatus = calculateDerivedOrderStatus(order);
+  const progress = calculateOrderProgress(order.details || []);
+
+  const isPaid = paymentStatus === "pagado";
+  const isDelivered = derivedStatus === "entregado" && progress.total > 0 && progress.pending <= 0;
+
+  const reasons = [];
+
+  if (!isPaid) {
+    reasons.push("El pedido debe estar pagado.");
+  }
+
+  if (!isDelivered) {
+    reasons.push("El pedido debe estar entregado completamente.");
+  }
+
+  return {
+    ready: isPaid && isDelivered,
+    isPaid,
+    isDelivered,
+    progress,
+    reasons,
+  };
+}
+
 export function calculateLineProfit(item = {}) {
   const quantity = Number(item.cantidad_pedida || 0);
   const price = Number(item.precio_unitario || 0);

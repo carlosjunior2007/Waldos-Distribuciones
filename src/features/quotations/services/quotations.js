@@ -14,6 +14,9 @@ const QUOTATION_SELECT = `
   subtotal,
   descuento,
   iva_porcentaje,
+  iva_monto,
+  isr_porcentaje,
+  isr_monto,
   total,
   fecha_vencimiento,
   notas,
@@ -429,13 +432,19 @@ function calculateTotals(detailsPayload = [], header = {}) {
 
   const descuento = Number(header.descuento || 0);
   const ivaPorcentaje = Number(header.iva_porcentaje || 0);
+  const isrPorcentaje = Number(header.isr_porcentaje || 0);
   const base = Math.max(subtotal - descuento, 0);
-  const total = base + base * (ivaPorcentaje / 100);
+  const ivaMonto = base * (ivaPorcentaje / 100);
+  const isrMonto = base * (isrPorcentaje / 100);
+  const total = Math.max(base + ivaMonto - isrMonto, 0);
 
   return {
     subtotal,
     descuento,
     iva_porcentaje: ivaPorcentaje,
+    iva_monto: ivaMonto,
+    isr_porcentaje: isrPorcentaje,
+    isr_monto: isrMonto,
     total,
   };
 }
@@ -454,6 +463,9 @@ function buildQuotationHeader({ header, detailsPayload, folio = null }) {
     subtotal: totals.subtotal,
     descuento: totals.descuento,
     iva_porcentaje: totals.iva_porcentaje,
+    iva_monto: totals.iva_monto,
+    isr_porcentaje: totals.isr_porcentaje,
+    isr_monto: totals.isr_monto,
     total: totals.total,
 
     fecha_vencimiento: header.fecha_vencimiento || addDaysISO(14),
@@ -653,6 +665,9 @@ export async function convertQuotationToOrder(quotationId, extra = {}) {
     subtotal: Number(quotation.subtotal || 0),
     descuento: Number(quotation.descuento || 0),
     iva_porcentaje: Number(quotation.iva_porcentaje || 0),
+    iva_monto: Number(quotation.iva_monto || 0),
+    isr_porcentaje: Number(quotation.isr_porcentaje || 0),
+    isr_monto: Number(quotation.isr_monto || 0),
     total: Number(quotation.total || 0),
 
     estado: fechaInicio || fechaFin ? "creado" : "borrador",

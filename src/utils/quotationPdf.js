@@ -27,9 +27,16 @@ function safeText(value) {
   return value ? String(value) : "-";
 }
 
+function calculateBase({ subtotal, descuento }) {
+  return Math.max(Number(subtotal || 0) - Number(descuento || 0), 0);
+}
+
 function calculateIva({ subtotal, descuento, iva_porcentaje }) {
-  const base = Math.max(Number(subtotal || 0) - Number(descuento || 0), 0);
-  return base * (Number(iva_porcentaje || 0) / 100);
+  return calculateBase({ subtotal, descuento }) * (Number(iva_porcentaje || 0) / 100);
+}
+
+function calculateIsr({ subtotal, descuento, isr_porcentaje }) {
+  return calculateBase({ subtotal, descuento }) * (Number(isr_porcentaje || 0) / 100);
 }
 
 export function generateQuotationPDF(quotation) {
@@ -57,17 +64,33 @@ export function generateQuotationPDF(quotation) {
     descuento,
     total,
     iva_porcentaje,
+    iva_monto,
+    isr_porcentaje,
+    isr_monto,
     notas,
     detalles = [],
   } = quotation || {};
 
-  const ivaMonto = calculateIva({
-    subtotal,
-    descuento,
-    iva_porcentaje,
-  });
+  const base = calculateBase({ subtotal, descuento });
+  const ivaMonto = Number(
+    iva_monto ??
+      calculateIva({
+        subtotal,
+        descuento,
+        iva_porcentaje,
+      }),
+  );
+  const isrPorcentaje = Number(isr_porcentaje || 0);
+  const isrMonto = Number(
+    isr_monto ??
+      calculateIsr({
+        subtotal,
+        descuento,
+        isr_porcentaje: isrPorcentaje,
+      }),
+  );
 
-  const base = Math.max(Number(subtotal || 0) - Number(descuento || 0), 0);
+  const displayTotal = Number(total ?? base + ivaMonto - isrMonto);
 
   const marginX = 12;
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -77,7 +100,8 @@ export function generateQuotationPDF(quotation) {
   const footerReservedSpace = 24;
 
   const totalsBoxW = 76;
-  const totalsBoxH = 42;
+  const hasIsr = Number(isr_monto ?? 0) > 0 || Number(isr_porcentaje || 0) > 0;
+  const totalsBoxH = hasIsr ? 49 : 42;
   const totalsBoxX = pageWidth - marginX - totalsBoxW;
   const totalsBoxBottomY = footerLineY - 8;
   const totalsBoxFixedY = totalsBoxBottomY - totalsBoxH;
@@ -216,6 +240,13 @@ export function generateQuotationPDF(quotation) {
     lineY += 7;
 
     drawTotalLine(`IVA ${Number(iva_porcentaje || 0)}%:`, ivaMonto, lineY);
+    lineY += 7;
+
+    if (hasIsr) {
+      drawTotalLine(`ISR retenido ${isrPorcentaje}%:`, isrMonto, lineY, {
+        negative: true,
+      });
+    }
 
     doc.setFillColor(...BRAND_PRIMARY);
     doc.roundedRect(
@@ -232,7 +263,7 @@ export function generateQuotationPDF(quotation) {
     doc.setFontSize(10);
     doc.setTextColor(...WHITE);
     doc.text("Total", totalsBoxX + 6, y + totalsBoxH - 5);
-    doc.text(money(total || 0), totalsBoxX + totalsBoxW - 6, y + totalsBoxH - 5, {
+    doc.text(money(displayTotal), totalsBoxX + totalsBoxW - 6, y + totalsBoxH - 5, {
       align: "right",
     });
   }

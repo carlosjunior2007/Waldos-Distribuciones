@@ -13,6 +13,8 @@ import {
   saveRecurringOrderRule,
   updateDelivery,
   updateOrder,
+  updateOrderInvoiceDraft,
+  stampOrderInvoiceSandbox,
 } from "../services/pedidos.service";
 import { calculateDerivedOrderStatus, calculateOrderProfit, isOrderProfitRealized } from "../order.helpers";
 import { generateDeliveryReceiptPDF, generateOrderPDF } from "../services/orderDocuments.service";
@@ -218,6 +220,60 @@ export function useOrders() {
     }
   }
 
+
+  async function saveInvoiceDraft(payload) {
+    try {
+      const updated = await runOperation(
+        "Guardando datos fiscales...",
+        async () => {
+          const saved = await updateOrderInvoiceDraft({
+            orderId: payload.order?.id,
+            clientId: payload.order?.cliente_id,
+            values: payload.values,
+          });
+          await loadCatalogs();
+          await loadOrders();
+          setSelectedOrder(saved);
+          setModal("invoice");
+          return saved;
+        },
+        "Datos fiscales actualizados.",
+      );
+
+      return updated;
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "No se pudieron guardar los datos fiscales.");
+      throw error;
+    }
+  }
+
+
+
+  async function stampInvoiceSandbox(payload) {
+    try {
+      const result = await runOperation(
+        "Timbrando factura en Facturama sandbox...",
+        async () => {
+          const stamped = await stampOrderInvoiceSandbox({
+            orderId: payload.order?.id,
+            invoiceData: payload.invoiceData,
+          });
+          await loadOrders();
+          setModal("invoice");
+          return stamped;
+        },
+        "Factura timbrada en sandbox.",
+      );
+
+      return result;
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "No se pudo timbrar la factura en sandbox.");
+      throw error;
+    }
+  }
+
   async function cancelSelectedOrder(order) {
     if (!order?.id) return;
     const ok = window.confirm(`¿Cancelar el pedido ${order.folio}?`);
@@ -346,6 +402,8 @@ export function useOrders() {
     saveDelivery,
     removeDelivery,
     saveRecurring,
+    saveInvoiceDraft,
+    stampInvoiceSandbox,
     deactivateRecurring,
     cancelSelectedOrder,
     restoreSelectedOrder,

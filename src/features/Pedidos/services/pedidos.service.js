@@ -15,6 +15,9 @@ const ORDER_SELECT = `
     ciudad,
     estado,
     codigo_postal,
+    factura_payment_form,
+    factura_payment_method,
+    factura_currency,
     cliente_direcciones (
       id,
       cliente_id,
@@ -87,6 +90,25 @@ const ORDER_SELECT = `
     accion,
     activo,
     created_at
+  ),
+  facturas (
+    id,
+    pedido_id,
+    facturama_id,
+    uuid,
+    serie,
+    folio,
+    status,
+    subtotal,
+    total,
+    cancel_reason,
+    replacement_uuid,
+    created_at,
+    timbrada_at,
+    cancelada_at,
+    deleted_local,
+    deleted_local_at,
+    deleted_local_reason
   )
 `;
 
@@ -127,6 +149,9 @@ export async function fetchOrderClients() {
       ciudad,
       estado,
       codigo_postal,
+      factura_payment_form,
+      factura_payment_method,
+      factura_currency,
       cliente_direcciones (
         id,
         cliente_id,
@@ -268,6 +293,9 @@ export async function updateOrderInvoiceDraft({ orderId, clientId, values }) {
         uso_cfdi: values.receiverCfdiUse || null,
         codigo_postal: values.receiverTaxZipCode || null,
         correo: values.receiverEmail || null,
+        factura_payment_form: values.paymentForm || null,
+        factura_payment_method: values.paymentMethod || null,
+        factura_currency: values.currency || "MXN",
       })
       .eq("id", clientId);
 
@@ -279,6 +307,8 @@ export async function updateOrderInvoiceDraft({ orderId, clientId, values }) {
     payment_form: values.paymentForm || null,
     payment_method: values.paymentMethod || null,
     currency: values.currency || "MXN",
+    serie_factura: values.serie || null,
+    folio_factura: values.folio || null,
     updated_at: new Date().toISOString(),
   };
 
@@ -964,6 +994,7 @@ function normalizeOrder(order) {
     tracking_token: tracking?.token || order.tracking_token || "",
     active_recurrence: activeRecurrence,
     is_recurrent: Boolean(activeRecurrence),
+    facturas: (order.facturas || []).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)),
     details,
     deliveries,
     entrega_inicio: order.fecha_inicio || order.entrega_inicio,
@@ -990,6 +1021,34 @@ function cryptoRandom() {
 }
 
 
+
+function getFacturamaErrorMessage(data, fallback = "Operación rechazada por Facturama.") {
+  const facturamaData = data?.facturamaData || data;
+
+  if (typeof facturamaData === "string") return facturamaData;
+  if (facturamaData?.Message) return facturamaData.Message;
+  if (facturamaData?.message) return facturamaData.message;
+
+  if (facturamaData?.ModelState) {
+    return Object.entries(facturamaData.ModelState)
+      .flatMap(([field, messages]) => {
+        if (Array.isArray(messages)) return messages.map((message) => `${field}: ${message}`);
+        return [`${field}: ${messages}`];
+      })
+      .join("\n");
+  }
+
+  return data?.message || fallback;
+}
+
+function buildFacturamaError(data, fallback) {
+  const err = new Error(getFacturamaErrorMessage(data, fallback));
+  err.status = data?.status || null;
+  err.facturamaData = data?.facturamaData || null;
+  err.payloadSent = data?.payloadSent || null;
+  return err;
+}
+
 export async function stampOrderInvoiceSandbox({ orderId, invoiceData }) {
   if (!orderId) throw new Error("Pedido inválido.");
   if (!invoiceData) throw new Error("No hay datos de factura para timbrar.");
@@ -1002,7 +1061,9 @@ export async function stampOrderInvoiceSandbox({ orderId, invoiceData }) {
   });
 
   if (error) {
-    throw new Error(error.message || "No se pudo llamar la función de Facturama.");
+    const err = new Error(error.message || "No se pudo llamar la función de Facturama.");
+    err.originalError = error;
+    throw err;
   }
 
   if (!data) {
@@ -1010,18 +1071,153 @@ export async function stampOrderInvoiceSandbox({ orderId, invoiceData }) {
   }
 
   if (data.ok !== true) {
-    const facturamaMessage =
-      data?.facturamaData?.Message ||
-      data?.facturamaData?.message ||
-      data?.facturamaData?.ModelState ||
-      data?.message;
-
-    throw new Error(
-      typeof facturamaMessage === "string"
-        ? facturamaMessage
-        : data?.message || "Facturama rechazó el timbrado sandbox.",
-    );
+    throw buildFacturamaError(data, "Facturama rechazó el timbrado sandbox.");
   }
 
   return data;
 }
+
+export async function downloadInvoiceDocumentSandbox({ orderId, format }) {
+  if (!orderId) throw new Error("Pedido inválido.");
+  if (!["pdf", "xml"].includes(format)) throw new Error("Formato inválido.");
+
+  const { data, error } = await supabase.functions.invoke("facturama-download-document-sandbox", {
+    body: { orderId, format },
+  });
+
+  if (error) throw new Error(error.message || `No se pudo descargar ${format.toUpperCase()}.`);
+  if (!data?.ok) throw new Error(data?.message || `No se pudo descargar ${format.toUpperCase()}.`);
+
+  downloadBase64File({
+    base64: data.base64,
+    filename: data.filename || `factura-${orderId}.${format}`,
+    mimeType: data.mimeType || (format === "pdf" ? "application/pdf" : "application/xml"),
+  });
+
+  return data;
+}
+
+
+export async function sendInvoiceEmailSandbox({ orderId, email }) {
+  if (!orderId) throw new Error("Pedido inválido.");
+  if (!email || !String(email).includes("@")) throw new Error("Correo inválido.");
+
+  const { data, error } = await supabase.functions.invoke("facturama-send-invoice-email-sandbox", {
+    body: { orderId, email },
+  });
+
+  if (error) throw new Error(error.message || "No se pudo enviar la factura por correo.");
+
+  if (!data?.ok) {
+    throw buildFacturamaError(data, "No se pudo enviar la factura por correo.");
+  }
+
+  return data;
+}
+
+export async function cancelInvoiceSandbox({ orderId, reason = "02", replacementUuid = "" }) {
+  if (!orderId) throw new Error("Pedido inválido.");
+
+  const { data, error } = await supabase.functions.invoke("facturama-cancel-invoice-sandbox", {
+    body: { orderId, reason, replacementUuid },
+  });
+
+  if (error) throw new Error(error.message || "No se pudo cancelar el CFDI.");
+
+  if (!data?.ok) {
+    throw buildFacturamaError(data, "No se pudo cancelar el CFDI.");
+  }
+
+  return data;
+}
+
+export async function deleteLocalInvoiceRecord({ orderId, invoiceId }) {
+  if (!orderId) throw new Error("Pedido inválido.");
+  if (!invoiceId) throw new Error("Factura inválida. No se puede borrar sin ID específico.");
+
+  const { data: order, error: orderError } = await supabase
+    .from("pedidos")
+    .select("id,factura_status,facturama_id,factura_uuid")
+    .eq("id", orderId)
+    .single();
+
+  if (orderError) throw orderError;
+
+  const status = String(order?.factura_status || "").toLowerCase();
+  const hasActiveInvoice = Boolean(order?.facturama_id || order?.factura_uuid) && status !== "cancelada";
+
+  if (hasActiveInvoice) {
+    throw new Error("Primero cancela el CFDI activo antes de borrar registros locales del historial.");
+  }
+
+  const { data: invoice, error: invoiceReadError } = await supabase
+    .from("facturas")
+    .select("id,pedido_id,status,uuid,facturama_id")
+    .eq("id", invoiceId)
+    .eq("pedido_id", orderId)
+    .single();
+
+  if (invoiceReadError) throw invoiceReadError;
+
+  if (String(invoice?.status || "").toLowerCase() !== "cancelada") {
+    throw new Error("Solo puedes borrar del historial facturas canceladas.");
+  }
+
+  const { error: invoiceDeleteError } = await supabase
+    .from("facturas")
+    .delete()
+    .eq("id", invoiceId)
+    .eq("pedido_id", orderId);
+
+  if (invoiceDeleteError) throw invoiceDeleteError;
+
+  // Si el pedido conserva en sus campos resumen la misma factura eliminada,
+  // se limpian esos datos para que no vuelva a aparecer en la relación CFDI.
+  const sameSummaryInvoice =
+    (invoice?.uuid && invoice.uuid === order?.factura_uuid) ||
+    (invoice?.facturama_id && invoice.facturama_id === order?.facturama_id);
+
+  if (sameSummaryInvoice) {
+    const { error: orderUpdateError } = await supabase
+      .from("pedidos")
+      .update({
+        facturama_id: null,
+        factura_uuid: null,
+        factura_status: null,
+        factura_pdf_url: null,
+        factura_xml_url: null,
+        factura_cancel_reason: null,
+        factura_replacement_uuid: null,
+        factura_timbrada_at: null,
+        factura_cancelada_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", orderId);
+
+    if (orderUpdateError) throw orderUpdateError;
+  }
+
+  return fetchOrderById(orderId);
+}
+
+function downloadBase64File({ base64, filename, mimeType }) {
+  if (!base64) throw new Error("La descarga no regresó contenido.");
+
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+
+  for (let index = 0; index < byteCharacters.length; index += 1) {
+    byteNumbers[index] = byteCharacters.charCodeAt(index);
+  }
+
+  const blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+

@@ -111,6 +111,8 @@ function OrderRow({
   const profit = calculateOrderProfit(order.details);
   const showProfit = isOrderProfitRealized(order);
   const invoiceReadiness = getOrderInvoiceReadiness(order);
+  const hasInvoice = Boolean(order.factura_uuid || order.facturama_id || order.factura_status === "timbrada" || order.factura_status === "cancelada");
+  const invoiceDisabled = status.key === "cancelado" && !hasInvoice;
 
   const actions = [
     { label: "Editar pedido", icon: Pencil, onClick: () => onEdit(order) },
@@ -148,10 +150,12 @@ function OrderRow({
     {
       label: "Factura",
       icon: ReceiptText,
-      disabled: !invoiceReadiness.ready,
-      disabledReason: invoiceReadiness.ready
-        ? "Factura"
-        : `Disponible cuando el pedido esté pagado y entregado completo. ${invoiceReadiness.reasons.join(" ")}`,
+      disabled: invoiceDisabled,
+      disabledReason: invoiceDisabled
+        ? "No puedes facturar un pedido cancelado sin factura timbrada."
+        : hasInvoice
+          ? "Ver factura del pedido."
+          : "Facturar pedido. No se bloquea por pago o entrega; se validan datos fiscales antes de enviar.",
       onClick: () => onOpenInvoice?.(order),
     },
     ...(status.key === "cancelado"
@@ -204,6 +208,7 @@ function OrderRow({
         <div className="flex flex-col items-start gap-2">
           <OrderStatusBadge meta={status} />
           <OrderStatusBadge meta={payment} />
+          <InvoiceStatusPill order={order} />
         </div>
       </td>
 
@@ -268,5 +273,40 @@ function OrderRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+
+function InvoiceStatusPill({ order }) {
+  const status = String(order.factura_status || "").toLowerCase();
+
+  if (status === "cancelada") {
+    return (
+      <span className="inline-flex rounded-full border border-error-100 bg-error-50 px-2.5 py-1 text-[11px] font-bold text-error-700">
+        CFDI cancelado
+      </span>
+    );
+  }
+
+  if (status === "timbrada" && (order.factura_uuid || order.facturama_id)) {
+    return (
+      <span className="inline-flex rounded-full border border-success-100 bg-success-50 px-2.5 py-1 text-[11px] font-bold text-success-700">
+        Timbrado
+      </span>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <span className="inline-flex rounded-full border border-warning-100 bg-warning-50 px-2.5 py-1 text-[11px] font-bold text-warning-700">
+        Error factura
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+      No timbrado
+    </span>
   );
 }

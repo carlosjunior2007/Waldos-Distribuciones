@@ -1,4 +1,5 @@
-import { CalendarDays, CheckCircle2, Download, MapPin, Package, Truck } from 'lucide-react';
+import { useState } from 'react';
+import { CalendarDays, CheckCircle2, Download, FileCode2, FileText, MapPin, Package, Truck } from 'lucide-react';
 import { DELIVERY_STATUS_STYLES, PUBLIC_STATUS_STYLES } from '../tracking.constants';
 import {
   dateMX,
@@ -6,6 +7,7 @@ import {
   getOrderItems,
   getOrderTotals,
   getPublicProgress,
+  getActiveInvoice,
   getTrackingToken,
   getDeliveryAddress,
   getDeliveryItems,
@@ -21,6 +23,7 @@ import {
   safeText,
 } from '../tracking.helpers';
 import { generatePublicTrackingPDF } from '../services/trackingPdf.service';
+import { downloadPublicInvoiceDocument } from '../services/tracking.service';
 
 export default function TrackingOrderResult({ order }) {
   const items = getOrderItems(order);
@@ -30,32 +33,87 @@ export default function TrackingOrderResult({ order }) {
   const trackingToken = getTrackingToken(order);
   const orderStatus = String(order?.estado || '').toLowerCase();
   const orderStatusClass = PUBLIC_STATUS_STYLES[orderStatus] || PUBLIC_STATUS_STYLES.creado;
+  const activeInvoice = getActiveInvoice(order);
+  const [invoiceDownloading, setInvoiceDownloading] = useState('');
+  const [invoiceDownloadError, setInvoiceDownloadError] = useState('');
+
+  async function handleDownloadInvoice(format) {
+    setInvoiceDownloading(format);
+    setInvoiceDownloadError('');
+
+    try {
+      await downloadPublicInvoiceDocument({ order, format });
+    } catch (error) {
+      console.error(error);
+      setInvoiceDownloadError(error?.message || `No se pudo descargar ${String(format).toUpperCase()}.`);
+    } finally {
+      setInvoiceDownloading('');
+    }
+  }
 
   return (
     <section className="space-y-6">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-xl shadow-slate-950/5 sm:p-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+          <div className="max-w-3xl">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-red-600">Resultado</p>
             <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
               Pedido {safeText(order?.folio)}
             </h2>
             <p className="mt-2 text-sm font-semibold text-slate-500">Tracking: {trackingToken}</p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Estado del pedido</span>
+              <span className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-sm font-black ${orderStatusClass}`}>
+                {publicOrderStatusLabel(order?.estado)}
+              </span>
+              {activeInvoice ? (
+                <span className="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
+                  Factura disponible
+                </span>
+              ) : null}
+            </div>
+
+            <p className="mt-3 text-sm font-semibold text-slate-600">
+              {activeInvoice
+                ? 'Puedes consultar el avance del pedido y descargar también la factura en PDF o XML desde los botones de descarga.'
+                : 'Aquí puedes consultar el avance del pedido y descargar el PDF público del pedido.'}
+            </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <span className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-black ${orderStatusClass}`}>
-              {publicOrderStatusLabel(order?.estado)}
-            </span>
-
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:shrink-0 lg:justify-end">
             <button
               type="button"
               onClick={() => generatePublicTrackingPDF(order)}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-slate-950 px-4 text-xs font-black text-white shadow-md shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800 sm:w-auto"
             >
-              <Download size={17} />
-              Descargar pedido
+              <Download size={16} />
+              Pedido PDF
             </button>
+
+            {activeInvoice ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadInvoice('pdf')}
+                  disabled={Boolean(invoiceDownloading)}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-red-600 px-4 text-xs font-black text-white shadow-md shadow-red-600/15 transition hover:-translate-y-0.5 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 sm:w-auto"
+                >
+                  <FileText size={16} />
+                  {invoiceDownloading === 'pdf' ? 'Descargando...' : 'Factura PDF'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDownloadInvoice('xml')}
+                  disabled={Boolean(invoiceDownloading)}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-emerald-200 bg-white px-4 text-xs font-black text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 sm:w-auto"
+                >
+                  <FileCode2 size={16} />
+                  {invoiceDownloading === 'xml' ? 'Descargando...' : 'Factura XML'}
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -87,6 +145,10 @@ export default function TrackingOrderResult({ order }) {
             <span className="rounded-2xl bg-white px-4 py-3">Pendiente: {progress.pending}</span>
           </div>
         </div>
+
+        {invoiceDownloadError ? (
+          <p className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{invoiceDownloadError}</p>
+        ) : null}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">

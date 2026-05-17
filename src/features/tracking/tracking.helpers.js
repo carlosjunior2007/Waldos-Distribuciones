@@ -240,6 +240,160 @@ export function getPublicProgress(order) {
   };
 }
 
+
+
+export function normalizeInvoiceStatus(source) {
+  const raw = String(
+    source?.status ||
+      source?.factura_status ||
+      source?.invoice_status ||
+      source?.cfdi_status ||
+      source?.estado_factura ||
+      source?.estado_cfdi ||
+      source?.facturacion_status ||
+      source?.estatus_factura ||
+      source?.estatus_cfdi ||
+      '',
+  ).toLowerCase().trim();
+
+  if (raw) return raw;
+
+  if (source?.timbrado || source?.timbrada || source?.is_timbrado || source?.isInvoiced || source?.facturado) {
+    return 'timbrada';
+  }
+
+  return '';
+}
+
+export function isActiveInvoiceStatus(status) {
+  const normalized = String(status || '').toLowerCase().trim();
+  return [
+    'timbrada',
+    'timbrado',
+    'facturada',
+    'facturado',
+    'invoiced',
+    'issued',
+    'vigente',
+    'active',
+  ].includes(normalized);
+}
+
+export function isCanceledInvoice(invoice) {
+  const status = normalizeInvoiceStatus(invoice);
+
+  return ['cancelada', 'cancelado', 'canceled', 'cancelled', 'cancelled_cfdi'].includes(status);
+}
+
+export function isDeletedLocalInvoice(invoice) {
+  return Boolean(
+    invoice?.deleted_local ||
+      invoice?.deletedLocal ||
+      invoice?.deleted_local_at ||
+      invoice?.deletedLocalAt,
+  );
+}
+
+export function getInvoiceTitle(invoice, fallback = 'Factura') {
+  const serie = safeText(invoice?.serie || invoice?.factura_serie || invoice?.invoice_serie || invoice?.serie_factura, '');
+  const folio = safeText(invoice?.folio || invoice?.factura_folio || invoice?.invoice_folio || invoice?.folio_factura, '');
+  return [serie, folio].filter(Boolean).join('-') || fallback;
+}
+
+export function getInvoiceUuid(invoice) {
+  return safeText(invoice?.uuid || invoice?.factura_uuid || invoice?.invoice_uuid || invoice?.cfdi_uuid, '');
+}
+
+export function getInvoiceFacturamaId(invoice) {
+  return safeText(invoice?.facturama_id || invoice?.facturamaId || invoice?.factura_facturama_id || invoice?.invoice_facturama_id, '');
+}
+
+export function getInvoiceDate(invoice) {
+  return (
+    invoice?.timbrada_at ||
+    invoice?.factura_timbrada_at ||
+    invoice?.invoice_timbrada_at ||
+    invoice?.fecha_timbrado ||
+    invoice?.fecha_factura ||
+    invoice?.created_at ||
+    invoice?.factura_fecha ||
+    invoice?.fecha ||
+    null
+  );
+}
+
+export function getActiveInvoice(order) {
+  const invoices = Array.isArray(order?.facturas) ? order.facturas : [];
+  const activeFromHistory = invoices.find((invoice) => {
+    if (isDeletedLocalInvoice(invoice) || isCanceledInvoice(invoice)) return false;
+
+    return Boolean(
+      invoice?.id ||
+        invoice?.facturama_id ||
+        invoice?.facturamaId ||
+        invoice?.uuid ||
+        invoice?.factura_uuid ||
+        invoice?.pdf_url ||
+        invoice?.xml_url ||
+        isActiveInvoiceStatus(normalizeInvoiceStatus(invoice)),
+    );
+  });
+
+  if (activeFromHistory) return activeFromHistory;
+
+  const summaryStatus = normalizeInvoiceStatus(order);
+  const hasSummaryInvoice = Boolean(
+    order?.factura_id ||
+      order?.invoice_id ||
+      order?.facturama_id ||
+      order?.facturamaId ||
+      order?.factura_uuid ||
+      order?.invoice_uuid ||
+      order?.cfdi_uuid ||
+      order?.factura_pdf_url ||
+      order?.factura_xml_url ||
+      order?.pdf_url ||
+      order?.xml_url ||
+      isActiveInvoiceStatus(summaryStatus),
+  );
+
+  if (hasSummaryInvoice && !['cancelada', 'cancelado', 'canceled', 'cancelled'].includes(summaryStatus)) {
+    return {
+      id: order?.factura_id || order?.invoice_id || null,
+      pedido_id: order?.id || order?.pedido_id || null,
+      facturama_id: order?.facturama_id || order?.facturamaId || order?.factura_facturama_id || null,
+      uuid: order?.factura_uuid || order?.invoice_uuid || order?.cfdi_uuid || null,
+      serie: order?.factura_serie || order?.serie_factura || order?.invoice_serie || null,
+      folio: order?.factura_folio || order?.folio_factura || order?.invoice_folio || order?.folio || null,
+      status: summaryStatus || 'timbrada',
+      pdf_url: order?.factura_pdf_url || order?.pdf_url || null,
+      xml_url: order?.factura_xml_url || order?.xml_url || null,
+      created_at: order?.factura_fecha || order?.factura_timbrada_at || order?.fecha_factura || null,
+      timbrada_at: order?.factura_timbrada_at || order?.factura_fecha || order?.fecha_timbrado || order?.fecha_factura || null,
+    };
+  }
+
+  return null;
+}
+
+export function getInvoiceDocumentUrl(order, invoice, format) {
+  const normalizedFormat = String(format || '').toLowerCase();
+  if (!['pdf', 'xml'].includes(normalizedFormat)) return '';
+
+  const direct =
+    invoice?.[`${normalizedFormat}_url`] ||
+    invoice?.[`factura_${normalizedFormat}_url`] ||
+    invoice?.[`invoice_${normalizedFormat}_url`] ||
+    invoice?.documents?.[normalizedFormat] ||
+    order?.[`factura_${normalizedFormat}_url`] ||
+    order?.[`invoice_${normalizedFormat}_url`] ||
+    order?.[`${normalizedFormat}_url`] ||
+    order?.factura?.[`${normalizedFormat}_url`] ||
+    '';
+
+  return safeText(direct, '');
+}
+
 export function publicOrderStatusLabel(status) {
   const normalized = String(status || '').toLowerCase();
 

@@ -20,7 +20,7 @@ export default function TrackingSearchCard({ tracking, setTracking, status, erro
           </h1>
 
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-            Ingresa tu número de tracking para revisar productos, entregas registradas, cantidades pendientes y descargar tu pedido en PDF.
+            Ingresa tu número de tracking para revisar productos, entregas registradas, cantidades pendientes y descargar tu pedido. Si ya tiene factura, también podrás descargar el PDF y el XML.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 max-w-2xl rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
@@ -64,7 +64,7 @@ export default function TrackingSearchCard({ tracking, setTracking, status, erro
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <FeaturePill icon={<PackageCheck size={17} />} text="Datos del pedido" />
             <FeaturePill icon={<Truck size={17} />} text="Entregas" />
-            <FeaturePill icon={<Download size={17} />} text="PDF público" />
+            <FeaturePill icon={<Download size={17} />} text="Pedido y factura" />
           </div>
         </div>
 
@@ -82,7 +82,7 @@ export default function TrackingSearchCard({ tracking, setTracking, status, erro
               </div>
               <h2 className="mt-5 text-2xl font-black">Seguimiento de pedidos y entregas</h2>
               <p className="mt-3 text-sm leading-6 text-white/75">
-                Revisa el avance de tu pedido, consulta entregas registradas y descarga una copia pública en PDF.
+                Revisa el avance, consulta entregas registradas y descarga el pedido. Si la factura ya está disponible, también podrás bajar su PDF y XML.
               </p>
             </div>
           </div>

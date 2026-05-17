@@ -1,11 +1,11 @@
-import { Download, FileSearch, PackageCheck, SearchX, Truck } from 'lucide-react';
+import { Download, FileSearch, PackageCheck, ReceiptText, SearchX, Truck } from 'lucide-react';
 
 export function TrackingInitialState() {
   return (
     <section className="grid gap-5 md:grid-cols-3">
       <StepCard icon={<FileSearch size={22} />} label="Paso 1" title="Ingresa el tracking" text="Usa el código que viene en tu pedido o documento PDF." />
       <StepCard icon={<Truck size={22} />} label="Paso 2" title="Revisa el avance" text="Consulta productos, unidades entregadas y entregas registradas." />
-      <StepCard icon={<Download size={22} />} label="Paso 3" title="Descarga tu pedido" text="Genera un PDF público para guardar o compartir." />
+      <StepCard icon={<Download size={22} />} label="Paso 3" title="Descarga documentos" text="Descarga el pedido en PDF y, si ya fue facturado, también la factura en PDF y XML." />
     </section>
   );
 }

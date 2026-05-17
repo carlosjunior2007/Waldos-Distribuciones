@@ -15,6 +15,10 @@ import {
   updateOrder,
   updateOrderInvoiceDraft,
   stampOrderInvoiceSandbox,
+  downloadInvoiceDocumentSandbox,
+  cancelInvoiceSandbox,
+  deleteLocalInvoiceRecord,
+  sendInvoiceEmailSandbox,
 } from "../services/pedidos.service";
 import { calculateDerivedOrderStatus, calculateOrderProfit, isOrderProfitRealized } from "../order.helpers";
 import { generateDeliveryReceiptPDF, generateOrderPDF } from "../services/orderDocuments.service";
@@ -269,7 +273,106 @@ export function useOrders() {
       return result;
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo timbrar la factura en sandbox.");
+      throw error;
+    }
+  }
+
+
+  async function downloadInvoicePdf(order) {
+    try {
+      await runOperation(
+        "Descargando PDF de Facturama...",
+        async () => {
+          await downloadInvoiceDocumentSandbox({ orderId: order?.id, format: "pdf" });
+        },
+        "PDF descargado.",
+      );
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async function downloadInvoiceXml(order) {
+    try {
+      await runOperation(
+        "Descargando XML de Facturama...",
+        async () => {
+          await downloadInvoiceDocumentSandbox({ orderId: order?.id, format: "xml" });
+        },
+        "XML descargado.",
+      );
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+
+  async function sendInvoiceEmail(payload) {
+    try {
+      const result = await runOperation(
+        "Enviando factura por correo...",
+        async () => {
+          const response = await sendInvoiceEmailSandbox({
+            orderId: payload.order?.id,
+            email: payload.email,
+          });
+          await loadOrders();
+          setModal("invoice");
+          return response;
+        },
+        "Factura enviada por correo.",
+      );
+
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async function cancelInvoiceSandboxAction(payload) {
+    try {
+      const result = await runOperation(
+        "Cancelando CFDI en Facturama sandbox...",
+        async () => {
+          const response = await cancelInvoiceSandbox({
+            orderId: payload.order?.id,
+            reason: payload.reason,
+            replacementUuid: payload.replacementUuid,
+          });
+          await loadOrders();
+          setModal("invoice");
+          return response;
+        },
+        "CFDI cancelado en sandbox.",
+      );
+
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
+
+  async function deleteLocalInvoice({ order, invoice }) {
+    try {
+      const updated = await runOperation(
+        "Eliminando solo la factura seleccionada del historial...",
+        async () => {
+          const saved = await deleteLocalInvoiceRecord({ orderId: order?.id, invoiceId: invoice?.id });
+          await loadOrders();
+          setSelectedOrder(saved);
+          setModal("invoice");
+          return saved;
+        },
+        "Factura eliminada del historial.",
+      );
+
+      return updated;
+    } catch (error) {
+      console.error(error);
       throw error;
     }
   }
@@ -404,6 +507,11 @@ export function useOrders() {
     saveRecurring,
     saveInvoiceDraft,
     stampInvoiceSandbox,
+    downloadInvoicePdf,
+    downloadInvoiceXml,
+    sendInvoiceEmail,
+    cancelInvoiceSandbox: cancelInvoiceSandboxAction,
+    deleteLocalInvoice,
     deactivateRecurring,
     cancelSelectedOrder,
     restoreSelectedOrder,

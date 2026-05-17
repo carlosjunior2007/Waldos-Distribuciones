@@ -83,6 +83,11 @@ export default function PedidosPage() {
         onClose={orders.closeModal}
         onSaveDraft={orders.saveInvoiceDraft}
         onStampInvoice={orders.stampInvoiceSandbox}
+        onDownloadInvoicePdf={orders.downloadInvoicePdf}
+        onDownloadInvoiceXml={orders.downloadInvoiceXml}
+        onSendInvoiceEmail={orders.sendInvoiceEmail}
+        onCancelInvoice={orders.cancelInvoiceSandbox}
+        onDeleteLocalInvoice={orders.deleteLocalInvoice}
       />
 
       <OrdersStats stats={orders.stats} />

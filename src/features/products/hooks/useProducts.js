@@ -20,8 +20,10 @@ import {
   generateUUID,
   getAuthUserLabel,
   getInventoryStatus,
+  capitalizeFirstLetter,
   getStoragePathFromUrl,
   looksLikeUUID,
+  normalizeProductTextField,
   validateProductForm,
 } from "../product.helpers";
 
@@ -176,6 +178,8 @@ export function useProducts() {
     setLocalImagePreview("");
   }
 
+  const CAPITALIZED_TEXT_FIELDS = ["nombre", "descripcion"];
+
   function onInputChange(e) {
     const { name, value, type, checked, files } = e.target;
 
@@ -243,7 +247,11 @@ export function useProducts() {
 
     setForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === "checkbox"
+        ? checked
+        : CAPITALIZED_TEXT_FIELDS.includes(name)
+          ? capitalizeFirstLetter(value)
+          : value,
     }));
   }
 
@@ -293,8 +301,8 @@ export function useProducts() {
       }
 
       const payload = {
-        nombre: form.nombre.trim(),
-        descripcion: form.descripcion.trim(),
+        nombre: normalizeProductTextField(form.nombre),
+        descripcion: normalizeProductTextField(form.descripcion),
         precio: Number(form.precio),
         imagen: imageUrl,
 

@@ -292,3 +292,21 @@ export function calculateLineProfit(item = {}) {
 
   return { sale, cost, profit, margin };
 }
+
+
+export function capitalizeFirstLetter(value) {
+  const text = String(value ?? "");
+  const firstLetterIndex = text.search(/[A-Za-zÀ-ÖØ-öø-ÿ]/);
+
+  if (firstLetterIndex === -1) return text;
+
+  return (
+    text.slice(0, firstLetterIndex) +
+    text.charAt(firstLetterIndex).toLocaleUpperCase("es-MX") +
+    text.slice(firstLetterIndex + 1)
+  );
+}
+
+export function normalizeCapitalizedText(value) {
+  return capitalizeFirstLetter(String(value ?? "").trim());
+}

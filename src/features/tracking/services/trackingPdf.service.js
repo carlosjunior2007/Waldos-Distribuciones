@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import logoWaldo from '../../../assets/Logo.png';
 import {
   dateMX,
   getOrderDeliveries,
@@ -31,6 +32,14 @@ function quantityText(value) {
 
 function split(doc, text, width) {
   return doc.splitTextToSize(safeText(text), width);
+}
+
+function drawLogo(doc, x, y, w, h) {
+  try {
+    doc.addImage(logoWaldo, 'PNG', x, y, w, h);
+  } catch (error) {
+    console.warn('No se pudo cargar el logo en el PDF de tracking:', error);
+  }
 }
 
 export function generatePublicTrackingPDF(order) {
@@ -67,42 +76,51 @@ export function generatePublicTrackingPDF(order) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(...MUTED);
-    doc.text('Waldo Distribuciones', marginX, y);
+    doc.text('Waldo Distribución', marginX, y);
     doc.text(`Generado: ${dateMX(new Date(), true)}`, pageWidth - marginX, y, {
       align: 'right',
     });
   }
 
   function drawHeader() {
+    doc.setFillColor(...SOFT);
+    doc.setDrawColor(...BORDER);
+    doc.roundedRect(marginX, 10, contentWidth, 30, 4, 4, 'FD');
+
+    drawLogo(doc, marginX + 5, 17, 42, 13);
+
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(21);
+    doc.setFontSize(15.5);
     doc.setTextColor(...DARK);
-    doc.text('Seguimiento de pedido', marginX, 23);
+    doc.text('Seguimiento de pedido', marginX + 53, 21);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
+    doc.setFontSize(8.2);
     doc.setTextColor(...MUTED);
-    doc.text('Resumen público del pedido y entregas registradas', marginX, 30);
+    doc.text('Resumen público del pedido y entregas registradas', marginX + 53, 27);
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(...DARK);
-    doc.text(`Folio: ${safeText(order?.folio)}`, pageWidth - marginX, 22, {
+    doc.text(`Folio: ${safeText(order?.folio)}`, pageWidth - marginX - 5, 20, {
       align: 'right',
     });
-    doc.text(`Tracking: ${trackingToken}`, pageWidth - marginX, 29, {
+    doc.text(`Tracking: ${trackingToken}`, pageWidth - marginX - 5, 26, {
+      align: 'right',
+    });
+    doc.text(`Estado: ${publicOrderStatusLabel(order?.estado)}`, pageWidth - marginX - 5, 32, {
       align: 'right',
     });
 
-    doc.setDrawColor(...BORDER);
-    doc.setLineWidth(0.35);
-    doc.line(marginX, 39, pageWidth - marginX, 39);
+    doc.setDrawColor(...BRAND);
+    doc.setLineWidth(0.55);
+    doc.line(marginX, 46, pageWidth - marginX, 46);
   }
 
   function drawInfoCards(startY) {
     const gap = 7;
     const cardW = (contentWidth - gap) / 2;
-    const cardH = 34;
+    const cardH = 38;
     const leftX = marginX;
     const rightX = marginX + cardW + gap;
 
@@ -118,28 +136,28 @@ export function generatePublicTrackingPDF(order) {
     doc.text('Pedido', rightX + 5, startY + 8);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.1);
+    doc.setFontSize(7.4);
     doc.setTextColor(...DARK);
 
     let y = startY + 15;
     doc.text(`Nombre: ${safeText(order?.cliente_nombre || order?.cliente?.nombre)}`, leftX + 5, y);
-    y += 5.2;
+    y += 5.4;
     doc.text(`Teléfono: ${safeText(order?.cliente_telefono || order?.cliente?.telefono)}`, leftX + 5, y);
-    y += 5.2;
+    y += 5.4;
 
     const emailLines = split(doc, `Correo: ${safeText(order?.cliente_email || order?.cliente?.correo)}`, cardW - 10);
     doc.text(emailLines.slice(0, 2), leftX + 5, y);
 
     y = startY + 15;
     doc.text(`Estado: ${publicOrderStatusLabel(order?.estado)}`, rightX + 5, y);
-    y += 5.2;
+    y += 5.4;
     doc.text(`Inicio: ${dateMX(order?.fecha_inicio)}`, rightX + 5, y);
-    y += 5.2;
+    y += 5.4;
     doc.text(`Fin: ${dateMX(order?.fecha_fin)}`, rightX + 5, y);
-    y += 5.2;
+    y += 5.4;
     doc.text(`Entregas: ${deliveries.length}`, rightX + 5, y);
 
-    return startY + cardH + 10;
+    return startY + cardH + 12;
   }
 
   function drawSectionTitle(title, y) {
@@ -159,14 +177,14 @@ export function generatePublicTrackingPDF(order) {
     doc.addPage();
     drawHeader();
     drawFooter();
-    return 48;
+    return 55;
   }
 
   function drawTotalsBox(startY) {
     const boxW = 66;
     const hasDiscount = totals.hasDiscount || Number(totals.descuento || 0) > 0;
     const hasIsr = totals.hasIsr || Number(totals.isr || 0) > 0 || Number(totals.isrPorcentaje || 0) > 0;
-    const boxH = 32 + (hasDiscount ? 7 : 0) + (hasIsr ? 7 : 0);
+    const boxH = 39 + (hasDiscount ? 7 : 0) + (hasIsr ? 7 : 0);
     const boxX = pageWidth - marginX - boxW;
 
     let y = ensureSpace(startY, boxH + 4);
@@ -188,6 +206,7 @@ export function generatePublicTrackingPDF(order) {
 
     line('Subtotal', moneyMX(totals.subtotal));
     if (hasDiscount) line('Descuento', `-${moneyMX(totals.descuento)}`);
+    line('Base', moneyMX(totals.base));
     line(`IVA ${percentMX(totals.ivaPorcentaje)}%`, moneyMX(totals.iva));
     if (hasIsr) line(`ISR retenido ${percentMX(totals.isrPorcentaje)}%`, `-${moneyMX(totals.isr)}`);
 
@@ -205,7 +224,7 @@ export function generatePublicTrackingPDF(order) {
   drawHeader();
   drawFooter();
 
-  let y = drawInfoCards(48);
+  let y = drawInfoCards(55);
 
   drawSectionTitle('Productos del pedido', y);
 
@@ -239,8 +258,8 @@ export function generatePublicTrackingPDF(order) {
       overflow: 'linebreak',
     },
     headStyles: {
-      fillColor: [241, 245, 249],
-      textColor: [71, 85, 105],
+      fillColor: BRAND,
+      textColor: WHITE,
       fontStyle: 'bold',
       halign: 'left',
     },
@@ -256,7 +275,7 @@ export function generatePublicTrackingPDF(order) {
       5: { cellWidth: 24, halign: 'right' },
       6: { cellWidth: 28, halign: 'right' },
     },
-    margin: { left: marginX, right: marginX, bottom: 20 },
+    margin: { top: 55, left: marginX, right: marginX, bottom: 20 },
     didDrawPage: drawFooter,
   });
 
@@ -285,7 +304,7 @@ export function generatePublicTrackingPDF(order) {
       doc.text(safeText(delivery.folio, `Entrega ${index + 1}`), marginX + 4, y + 6);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.1);
+      doc.setFontSize(7.4);
       doc.setTextColor(...MUTED);
       doc.text(`${dateMX(delivery.fecha_entrega, true)}  ·  ${publicDeliveryStatusLabel(delivery.estado)}`, marginX + 4, y + 12);
       doc.text(`Recibe: ${receiver}`, marginX + 4, y + 16);
@@ -338,7 +357,7 @@ export function generatePublicTrackingPDF(order) {
           0: { cellWidth: contentWidth - 28 },
           1: { cellWidth: 28, halign: 'right' },
         },
-        margin: { left: marginX, right: marginX, bottom: 20 },
+        margin: { top: 55, left: marginX, right: marginX, bottom: 20 },
         didDrawPage: drawFooter,
       });
 

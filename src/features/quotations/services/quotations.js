@@ -645,6 +645,12 @@ export async function convertQuotationToOrder(quotationId, extra = {}) {
     throw new Error("La cotización no tiene productos.");
   }
 
+  if (!quotation.cliente_id) {
+    throw new Error(
+      "Para pasar esta cotización a pedido, primero tienes que asociar un cliente registrado en el sistema.",
+    );
+  }
+
   if (!quotation.cliente_nombre) {
     throw new Error("Falta el nombre del cliente.");
   }

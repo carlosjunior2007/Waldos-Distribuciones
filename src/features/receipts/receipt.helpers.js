@@ -1,3 +1,35 @@
+
+export function capitalizeFirstLetter(value = "") {
+  const text = String(value ?? "");
+  const firstLetterIndex = text.search(/\p{L}/u);
+
+  if (firstLetterIndex === -1) return text;
+
+  return (
+    text.slice(0, firstLetterIndex) +
+    text.charAt(firstLetterIndex).toLocaleUpperCase("es-MX") +
+    text.slice(firstLetterIndex + 1)
+  );
+}
+
+export function capitalizeReceiptHeader(header = {}) {
+  return {
+    ...header,
+    cliente_nombre: capitalizeFirstLetter(header.cliente_nombre),
+    cliente_direccion: capitalizeFirstLetter(header.cliente_direccion),
+    ciudad: capitalizeFirstLetter(header.ciudad),
+    notas: capitalizeFirstLetter(header.notas),
+  };
+}
+
+export function capitalizeReceiptItem(item = {}) {
+  return {
+    ...item,
+    descripcion: capitalizeFirstLetter(item.descripcion),
+    unidad: capitalizeFirstLetter(item.unidad),
+  };
+}
+
 export function createEmptyReceiptItem() {
   return {
     producto_id: null,

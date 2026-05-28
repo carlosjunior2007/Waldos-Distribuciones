@@ -10,6 +10,7 @@ import { INITIAL_LABEL_FORM } from "../label.constants";
 import {
   buildLabelFormFromRow,
   buildLabelPayload,
+  capitalizeFirstLetter,
 } from "../label.helpers";
 import {
   createLabel,
@@ -101,7 +102,11 @@ export default function LabelModal({
   }
 
   function updateForm(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    const formattedValue = key === "texto_extra"
+      ? capitalizeFirstLetter(value)
+      : value;
+
+    setForm((prev) => ({ ...prev, [key]: formattedValue }));
   }
 
   return (
@@ -243,7 +248,11 @@ function Input({ value, onChange, type = "text", ...props }) {
 
 function CompanyOptions({ companyOptions, setCompanyOptions }) {
   function updateField(key, value) {
-    setCompanyOptions((prev) => ({ ...prev, [key]: value }));
+    const formattedValue = key === "companyName"
+      ? capitalizeFirstLetter(value)
+      : value;
+
+    setCompanyOptions((prev) => ({ ...prev, [key]: formattedValue }));
   }
 
   return (

@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import logoWaldo from "../../../assets/Logo.png";
 
 function money(value) {
   return Number(value || 0).toLocaleString("es-MX", {
@@ -39,6 +40,57 @@ function finiteNumber(value, fallback = 0) {
 
 function hasValue(value) {
   return value !== null && value !== undefined && value !== "";
+}
+
+function drawLogo(doc, x, y, w, h) {
+  try {
+    doc.addImage(logoWaldo, "PNG", x, y, w, h);
+  } catch (error) {
+    console.warn("No se pudo cargar el logo en el PDF:", error);
+  }
+}
+
+function drawDocumentHeader(doc, options = {}) {
+  const {
+    title,
+    subtitle,
+    meta = [],
+    marginX,
+    pageWidth,
+    colors,
+    topY = 12,
+    height = 28,
+  } = options;
+
+  const contentWidth = pageWidth - marginX * 2;
+
+  doc.setFillColor(...colors.LIGHT);
+  doc.setDrawColor(...colors.BORDER);
+  doc.roundedRect(marginX, topY, contentWidth, height, 4, 4, "FD");
+
+  drawLogo(doc, marginX + 5, topY + 6, 42, 13);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(...colors.DARK);
+  doc.text(title, marginX + 53, topY + 11);
+
+  if (subtitle) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.2);
+    doc.setTextColor(...colors.MUTED);
+    doc.text(subtitle, marginX + 53, topY + 17);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.DARK);
+
+  meta.slice(0, 3).forEach((item, index) => {
+    doc.text(String(item), pageWidth - marginX - 5, topY + 9 + index * 6, {
+      align: "right",
+    });
+  });
 }
 
 function getOrderFinancialSummary(order, details = []) {
@@ -201,26 +253,25 @@ export function generateOrderPDF(order) {
   const trackingToken = text(order?.tracking_token, "Pendiente");
 
   function drawPageHeader() {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(19);
-    doc.setTextColor(...colors.DARK);
-    doc.text("PEDIDO", marginX, 18);
+    drawDocumentHeader(doc, {
+      title: "Pedido",
+      subtitle: "Resumen de pedido, productos y entregas",
+      meta: [
+        `Folio: ${text(order?.folio)}`,
+        `Tracking: ${trackingToken}`,
+        `Estado: ${statusText(order?.estado)}`,
+      ],
+      marginX,
+      pageWidth,
+      colors,
+      topY: 10,
+      height: 28,
+    });
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...colors.MUTED);
-    doc.text("Resumen de pedido, productos y entregas", marginX, 24);
+    doc.setDrawColor(...colors.RED);
+    doc.setLineWidth(0.55);
+    doc.line(marginX, 43, pageWidth - marginX, 43);
 
-    const metaX = pageWidth - marginX;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...colors.DARK);
-    doc.text(`Folio: ${text(order?.folio)}`, metaX, 18, { align: "right" });
-    doc.text(`Tracking: ${trackingToken}`, metaX, 25, { align: "right" });
-
-    doc.setDrawColor(...colors.BORDER);
-    doc.setLineWidth(0.35);
-    doc.line(marginX, 36, pageWidth - marginX, 36);
     drawFooter(doc, marginX, pageWidth, pageHeight, colors.MUTED);
   }
 
@@ -243,10 +294,10 @@ export function generateOrderPDF(order) {
 
   drawPageHeader();
 
-  const topY = 50;
+  const topY = 55;
   const cardGap = 8;
   const cardW = (contentWidth - cardGap) / 2;
-  const cardH = 50;
+  const cardH = 48;
 
   drawInfoCard("Cliente", marginX, topY, cardW, cardH);
   let y = topY + 17;
@@ -264,7 +315,7 @@ export function generateOrderPDF(order) {
   drawLabelValue(doc, "Pago", statusText(order?.estado_pago), orderX + 5, rightY, colW, colors);
   drawLabelValue(doc, "Método", text(order?.metodo_pago, "Sin definir"), orderX + 5 + colW + 6, rightY, colW, colors);
 
-  const productsStartY = topY + cardH + 14;
+  const productsStartY = topY + cardH + 12;
 
   autoTable(doc, {
     startY: productsStartY,
@@ -305,7 +356,7 @@ export function generateOrderPDF(order) {
       5: { cellWidth: 21, halign: "right" },
       6: { cellWidth: 20, halign: "right" },
     },
-    margin: { top: 48, left: marginX, right: marginX, bottom: 30 },
+    margin: { top: 52, left: marginX, right: marginX, bottom: 30 },
     didDrawPage: drawPageHeader,
   });
 
@@ -351,7 +402,7 @@ export function generateOrderPDF(order) {
         3: { cellWidth: 77 },
         4: { cellWidth: 20, halign: "right" },
       },
-      margin: { top: 48, left: marginX, right: marginX, bottom: 30 },
+      margin: { top: 52, left: marginX, right: marginX, bottom: 30 },
       didDrawPage: drawPageHeader,
     });
     finalY = doc.lastAutoTable?.finalY || finalY;
@@ -359,9 +410,14 @@ export function generateOrderPDF(order) {
 
   const totalLines = [
     { label: "Subtotal", value: money(totals.subtotal) },
-    ...(totals.hasDiscount ? [{ label: "Descuento", value: `-${money(totals.descuento)}` }] : []),
+    ...(totals.hasDiscount
+      ? [{ label: "Descuento", value: `-${money(totals.descuento)}` }]
+      : []),
+    { label: "Base", value: money(totals.base) },
     { label: `IVA ${percentText(totals.ivaPorcentaje)}%`, value: money(totals.iva) },
-    ...(totals.hasIsr ? [{ label: `ISR retenido ${percentText(totals.isrPorcentaje)}%`, value: `-${money(totals.isr)}` }] : []),
+    ...(totals.hasIsr
+      ? [{ label: `ISR retenido ${percentText(totals.isrPorcentaje)}%`, value: `-${money(totals.isr)}` }]
+      : []),
   ];
 
   const totalsH = 20 + totalLines.length * 8;
@@ -439,25 +495,45 @@ export function generateDeliveryReceiptPDF(order, delivery = null) {
   }));
 
   function header() {
-    doc.setFillColor(...LIGHT);
-    doc.roundedRect(marginX, 14, contentWidth, 28, 4, 4, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(17);
-    doc.setTextColor(...RED);
-    doc.text("CONTRA RECIBO DE ENTREGA", pageWidth / 2, 26, { align: "center" });
-    doc.setFontSize(8);
-    doc.setTextColor(...DARK);
-    doc.text(`Pedido: ${text(order?.folio)}`, pageWidth - marginX - 5, 35, { align: "right" });
-    doc.text(`Entrega: ${text(selectedDelivery?.folio, "Sin folio")}`, marginX + 5, 35);
+    const colors = {
+      RED,
+      DARK,
+      MUTED,
+      BORDER,
+      LIGHT,
+      WHITE,
+    };
+
+    drawDocumentHeader(doc, {
+      title: "Contra recibo",
+      subtitle: "Comprobante de entrega de mercancía",
+      meta: [
+        `Pedido: ${text(order?.folio)}`,
+        `Entrega: ${text(selectedDelivery?.folio, "Sin folio")}`,
+        `Estado: ${statusText(selectedDelivery?.estado || "Pendiente")}`,
+      ],
+      marginX,
+      pageWidth,
+      colors,
+      topY: 12,
+      height: 30,
+    });
+
+    doc.setDrawColor(...RED);
+    doc.setLineWidth(0.55);
+    doc.line(marginX, 47, pageWidth - marginX, 47);
+
     drawFooter(doc, marginX, pageWidth, pageHeight, MUTED);
   }
 
   header();
 
-  const y = 54;
+  const y = 60;
   doc.setDrawColor(...BORDER);
   doc.setFillColor(...WHITE);
   doc.roundedRect(marginX, y, contentWidth, 48, 4, 4, "FD");
+  doc.setDrawColor(...BORDER);
+  doc.line(pageWidth / 2 - 3, y + 10, pageWidth / 2 - 3, y + 42);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
@@ -480,7 +556,7 @@ export function generateDeliveryReceiptPDF(order, delivery = null) {
   doc.text(doc.splitTextToSize(`Dirección: ${addressLabel(address)}`, contentWidth / 2 - 8), rx, y + 34);
 
   autoTable(doc, {
-    startY: 112,
+    startY: 120,
     head: [["No.", "Código", "Producto", "Cantidad"]],
     body: details.map((item, index) => [String(item.orden || index + 1), text(item.codigo), text(item.nombre_producto), qty(item.cantidad_entregada)]),
     theme: "grid",
@@ -488,11 +564,11 @@ export function generateDeliveryReceiptPDF(order, delivery = null) {
     headStyles: { fillColor: RED, textColor: WHITE, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [252, 252, 252] },
     columnStyles: { 0: { cellWidth: 16, halign: "center" }, 1: { cellWidth: 28 }, 2: { cellWidth: contentWidth - 76 }, 3: { cellWidth: 32, halign: "right" } },
-    margin: { top: 54, left: marginX, right: marginX, bottom: 48 },
+    margin: { top: 58, left: marginX, right: marginX, bottom: 48 },
     didDrawPage: header,
   });
 
-  const lastY = doc.lastAutoTable?.finalY || 112;
+  const lastY = doc.lastAutoTable?.finalY || 120;
   if (lastY + 34 > pageHeight - 48) doc.addPage();
   const signY = Math.min(Math.max(lastY + 28, 230), pageHeight - 38);
   doc.setDrawColor(150, 150, 150);

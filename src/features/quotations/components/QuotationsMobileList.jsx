@@ -30,7 +30,7 @@ export default function QuotationsMobileList({
 function QuotationMobileCard({ item, onDownloadPdf, onEdit, onDelete, onConvertToOrder }) {
   const statusMeta = getStatusStyles(item.estado);
   const StatusIcon = statusMeta.icon;
-  const canConvert = ["aceptada", "enviada", "borrador"].includes(item.estado);
+  const canConvert = Boolean(item.cliente_id) && ["aceptada", "enviada", "borrador"].includes(item.estado);
 
   return (
     <article className="rounded-[24px] border border-border bg-surface p-4 shadow-[var(--shadow-soft)]">

@@ -1,5 +1,6 @@
 import { MapPin, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { capitalizeFirstLetter } from "../order.helpers";
 
 function createAddress() {
   return {
@@ -29,9 +30,20 @@ export default function OrderAddressesEditor({ initialAddresses = [] }) {
   }
 
   function updateAddress(id, key, value) {
+    const textFields = new Set([
+      "nombre",
+      "direccion",
+      "ciudad",
+      "estado",
+      "pais",
+      "contacto_nombre",
+      "notas",
+    ]);
+    const nextValue = textFields.has(key) ? capitalizeFirstLetter(value) : value;
+
     setAddresses((prev) =>
       prev.map((address) =>
-        address.id === id ? { ...address, [key]: value } : address,
+        address.id === id ? { ...address, [key]: nextValue } : address,
       ),
     );
   }

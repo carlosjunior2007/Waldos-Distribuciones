@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Image as ImageIcon,
   MapPin,
+  Pencil,
   Plus,
   Star,
   Trash2,
@@ -11,7 +12,41 @@ import {
 
 import Modal from "../../../components/ui/Modal";
 import { EMPTY_CLIENT_ADDRESS, INITIAL_CLIENT } from "../client.constants";
-import { buildClientPayload, sanitizeClientAddresses } from "../client.helpers";
+import {
+  buildClientPayload,
+  buildDeliveryAddress,
+  capitalizeFirstLetter,
+  sanitizeClientAddresses,
+} from "../client.helpers";
+
+const CLIENT_MODAL_CAPITALIZED_FIELDS = new Set([
+  "nombre",
+  "razon_social",
+  "regimen_fiscal",
+  "uso_cfdi",
+  "direccion",
+  "ciudad",
+  "estado",
+  "pais",
+  "notas",
+]);
+
+const ADDRESS_MODAL_CAPITALIZED_FIELDS = new Set([
+  "nombre",
+  "contacto_nombre",
+  "direccion",
+  "ciudad",
+  "estado",
+  "pais",
+  "notas",
+]);
+
+function capitalizeModalFields(values = {}, fields = new Set()) {
+  return Object.entries(values).reduce((next, [key, value]) => {
+    next[key] = fields.has(key) ? capitalizeFirstLetter(value) : value;
+    return next;
+  }, {});
+}
 
 export default function ClientModal({
   open,
@@ -28,16 +63,26 @@ export default function ClientModal({
   useEffect(() => {
     if (!open) return;
 
-    setForm({
-      ...INITIAL_CLIENT,
-      ...(editingClient || {}),
-    });
+    setForm(
+      capitalizeModalFields(
+        {
+          ...INITIAL_CLIENT,
+          ...(editingClient || {}),
+        },
+        CLIENT_MODAL_CAPITALIZED_FIELDS,
+      ),
+    );
 
     setAddresses(
-      (editingClient?.cliente_direcciones || []).map((address) => ({
-        ...EMPTY_CLIENT_ADDRESS,
-        ...address,
-      })),
+      (editingClient?.cliente_direcciones || []).map((address) =>
+        capitalizeModalFields(
+          {
+            ...EMPTY_CLIENT_ADDRESS,
+            ...address,
+          },
+          ADDRESS_MODAL_CAPITALIZED_FIELDS,
+        ),
+      ),
     );
 
     setLogoFile(null);
@@ -51,7 +96,11 @@ export default function ClientModal({
   }, [logoPreview]);
 
   function updateField(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    const nextValue = CLIENT_MODAL_CAPITALIZED_FIELDS.has(key)
+      ? capitalizeFirstLetter(value)
+      : value;
+
+    setForm((prev) => ({ ...prev, [key]: nextValue }));
   }
 
   function handleLogoChange(e) {
@@ -290,35 +339,94 @@ export default function ClientModal({
 }
 
 function ClientAddressesEditor({ addresses, setAddresses }) {
-  function addAddress() {
-    setAddresses((prev) => [
-      ...prev,
-      {
-        ...EMPTY_CLIENT_ADDRESS,
-        temp_id: crypto.randomUUID(),
-        es_principal: prev.length === 0,
-      },
-    ]);
+  const [addressForm, setAddressForm] = useState(EMPTY_CLIENT_ADDRESS);
+  const [editingKey, setEditingKey] = useState(null);
+
+  const isEditing = editingKey !== null;
+  const hasAddresses = addresses.length > 0;
+
+  function getAddressKey(address, index) {
+    return address.id || address.temp_id || `address-${index}`;
   }
 
-  function updateAddress(index, key, value) {
-    setAddresses((prev) => {
-      const next = [...prev];
+  function resetAddressForm() {
+    setAddressForm({ ...EMPTY_CLIENT_ADDRESS });
+    setEditingKey(null);
+  }
 
-      next[index] = {
-        ...next[index],
-        [key]: value,
+  function updateAddressForm(key, value) {
+    const nextValue = ADDRESS_MODAL_CAPITALIZED_FIELDS.has(key)
+      ? capitalizeFirstLetter(value)
+      : value;
+
+    setAddressForm((prev) => ({ ...prev, [key]: nextValue }));
+  }
+
+  function handleSaveAddress() {
+    const cleanName = (addressForm.nombre || "").trim();
+    const cleanAddress = (addressForm.direccion || "").trim();
+
+    if (!cleanName || !cleanAddress) {
+      alert("La dirección necesita nombre y dirección.");
+      return;
+    }
+
+    setAddresses((prev) => {
+      const normalizedAddress = {
+        ...EMPTY_CLIENT_ADDRESS,
+        ...addressForm,
+        nombre: cleanName,
+        direccion: cleanAddress,
+        pais: (addressForm.pais || "").trim() || "México",
+        temp_id: addressForm.temp_id || crypto.randomUUID(),
+        es_principal:
+          Boolean(addressForm.es_principal) || (!prev.length && !isEditing),
+        activo: addressForm.activo !== false,
       };
 
-      if (key === "es_principal" && value) {
-        return next.map((address, addressIndex) => ({
+      let next = [];
+
+      if (isEditing) {
+        next = prev.map((address, index) => {
+          const key = getAddressKey(address, index);
+          return key === editingKey ? normalizedAddress : address;
+        });
+      } else {
+        // La dirección recién creada queda arriba; las anteriores se mantienen abajo.
+        next = [normalizedAddress, ...prev];
+      }
+
+      if (normalizedAddress.es_principal) {
+        const normalizedKey = normalizedAddress.id || normalizedAddress.temp_id;
+
+        next = next.map((address) => ({
           ...address,
-          es_principal: addressIndex === index,
+          es_principal:
+            (address.id || address.temp_id) === normalizedKey,
         }));
+      }
+
+      if (next.length && !next.some((address) => address.es_principal)) {
+        next[0] = { ...next[0], es_principal: true };
       }
 
       return next;
     });
+
+    resetAddressForm();
+  }
+
+  function editAddress(address, index) {
+    setEditingKey(getAddressKey(address, index));
+    setAddressForm(
+      capitalizeModalFields(
+        {
+          ...EMPTY_CLIENT_ADDRESS,
+          ...address,
+        },
+        ADDRESS_MODAL_CAPITALIZED_FIELDS,
+      ),
+    );
   }
 
   function removeAddress(index) {
@@ -331,146 +439,221 @@ function ClientAddressesEditor({ addresses, setAddresses }) {
 
       return next;
     });
+
+    const removedKey = getAddressKey(addresses[index] || {}, index);
+    if (editingKey === removedKey) resetAddressForm();
+  }
+
+  function setMainAddress(index) {
+    setAddresses((prev) =>
+      prev.map((address, addressIndex) => ({
+        ...address,
+        es_principal: addressIndex === index,
+      })),
+    );
   }
 
   return (
     <section className="rounded-2xl border border-border bg-background p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SectionTitle
-          title="Direcciones de entrega"
-          description="Estas son las direcciones que aparecerán al programar entregas."
-        />
+      <SectionTitle
+        title="Direcciones de entrega"
+        description="Crea o edita una dirección arriba. Las direcciones guardadas se muestran abajo como tarjetas, no como inputs eternos esperando arruinarte la tarde."
+      />
 
-        <button
-          type="button"
-          onClick={addAddress}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-border bg-surface px-4 text-sm font-semibold text-text-primary transition hover:bg-surface-soft"
-        >
-          <Plus className="h-4 w-4" />
-          Agregar dirección
-        </button>
+      <div className="mt-4 rounded-2xl border border-border bg-surface p-4">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-text-primary">
+              {isEditing ? "Editar dirección" : "Nueva dirección"}
+            </p>
+            <p className="mt-1 text-xs text-text-muted">
+              {isEditing
+                ? "Guarda los cambios para actualizar esta dirección."
+                : "Al guardarla, aparecerá arriba de la lista de direcciones."}
+            </p>
+          </div>
+
+          {isEditing ? (
+            <button
+              type="button"
+              onClick={resetAddressForm}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-background px-3 text-sm font-semibold text-text-primary"
+            >
+              Cancelar edición
+            </button>
+          ) : null}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            label="Nombre"
+            value={addressForm.nombre || ""}
+            onChange={(value) => updateAddressForm("nombre", value)}
+            placeholder="Sucursal Centro, Almacén, Oficina..."
+          />
+
+          <Input
+            label="Contacto"
+            value={addressForm.contacto_nombre || ""}
+            onChange={(value) => updateAddressForm("contacto_nombre", value)}
+            placeholder="Persona que recibe"
+          />
+
+          <Input
+            label="Dirección"
+            value={addressForm.direccion || ""}
+            onChange={(value) => updateAddressForm("direccion", value)}
+            placeholder="Calle, número, colonia"
+            className="md:col-span-2"
+          />
+
+          <Input
+            label="Ciudad"
+            value={addressForm.ciudad || ""}
+            onChange={(value) => updateAddressForm("ciudad", value)}
+          />
+
+          <Input
+            label="Estado"
+            value={addressForm.estado || ""}
+            onChange={(value) => updateAddressForm("estado", value)}
+          />
+
+          <Input
+            label="Código postal"
+            value={addressForm.codigo_postal || ""}
+            onChange={(value) => updateAddressForm("codigo_postal", value)}
+          />
+
+          <Input
+            label="País"
+            value={addressForm.pais || ""}
+            onChange={(value) => updateAddressForm("pais", value)}
+          />
+
+          <Input
+            label="Teléfono de contacto"
+            value={addressForm.contacto_telefono || ""}
+            onChange={(value) => updateAddressForm("contacto_telefono", value)}
+            placeholder="664 000 0000"
+          />
+
+          <Input
+            label="Notas"
+            value={addressForm.notas || ""}
+            onChange={(value) => updateAddressForm("notas", value)}
+            placeholder="Horario, referencia o indicaciones"
+          />
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <label className="inline-flex items-center gap-2 text-sm font-semibold text-text-primary">
+            <input
+              type="checkbox"
+              checked={Boolean(addressForm.es_principal)}
+              onChange={(e) =>
+                updateAddressForm("es_principal", e.target.checked)
+              }
+              className="h-4 w-4 rounded border-border"
+            />
+            Usar como dirección principal
+          </label>
+
+          <button
+            type="button"
+            onClick={handleSaveAddress}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white"
+          >
+            <Plus className="h-4 w-4" />
+            {isEditing ? "Guardar cambios" : "Agregar dirección"}
+          </button>
+        </div>
       </div>
 
-      {!addresses.length ? (
+      {!hasAddresses ? (
         <div className="mt-4 rounded-2xl border border-dashed border-border bg-surface-soft p-5 text-sm text-text-secondary">
-          Sin direcciones de entrega. Agrégalas aquí para poder usarlas al programar entregas.
+          Sin direcciones de entrega. Agrégalas arriba para poder usarlas al programar entregas.
         </div>
       ) : (
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-3">
           {addresses.map((address, index) => (
             <article
-              key={address.id || address.temp_id || index}
-              className="rounded-2xl border border-border bg-surface p-4"
+              key={getAddressKey(address, index)}
+              className="rounded-2xl border border-border bg-background p-4"
             >
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-background text-text-secondary">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-surface text-text-secondary">
                     <MapPin className="h-4 w-4" />
                   </div>
 
                   <div>
-                    <p className="text-sm font-bold text-text-primary">
-                      Dirección {index + 1}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-bold text-text-primary">
+                        {address.nombre || `Dirección ${index + 1}`}
+                      </p>
+
+                      {address.es_principal ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2 py-1 text-xs font-semibold text-accent-700">
+                          <Star className="h-3 w-3" />
+                          Principal
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <p className="mt-2 text-sm text-text-secondary">
+                      {buildDeliveryAddress(address) || "Sin dirección"}
                     </p>
 
-                    {address.es_principal ? (
-                      <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-accent-50 px-2 py-1 text-xs font-semibold text-accent-700">
-                        <Star className="h-3 w-3" />
-                        Principal
+                    {[address.contacto_nombre, address.contacto_telefono]
+                      .filter(Boolean)
+                      .length ? (
+                      <p className="mt-2 text-xs text-text-muted">
+                        {[address.contacto_nombre, address.contacto_telefono]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    ) : null}
+
+                    {address.notas ? (
+                      <p className="mt-2 text-xs text-text-muted">
+                        {address.notas}
                       </p>
                     ) : null}
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => removeAddress(index)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-error-200 bg-error-50 px-3 text-sm font-semibold text-error-700"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Quitar
-                </button>
+                <div className="flex flex-wrap gap-2 md:justify-end">
+                  {!address.es_principal ? (
+                    <button
+                      type="button"
+                      onClick={() => setMainAddress(index)}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-text-primary"
+                    >
+                      <Star className="h-4 w-4" />
+                      Cambiar a principal
+                    </button>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => editAddress(address, index)}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-text-primary"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => removeAddress(index)}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-error-200 bg-error-50 px-3 text-sm font-semibold text-error-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Borrar
+                  </button>
+                </div>
               </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <Input
-                  label="Nombre"
-                  value={address.nombre || ""}
-                  onChange={(value) => updateAddress(index, "nombre", value)}
-                  placeholder="Sucursal Centro, Almacén, Oficina..."
-                />
-
-                <Input
-                  label="Contacto"
-                  value={address.contacto_nombre || ""}
-                  onChange={(value) =>
-                    updateAddress(index, "contacto_nombre", value)
-                  }
-                  placeholder="Persona que recibe"
-                />
-
-                <Input
-                  label="Dirección"
-                  value={address.direccion || ""}
-                  onChange={(value) => updateAddress(index, "direccion", value)}
-                  placeholder="Calle, número, colonia"
-                  className="md:col-span-2"
-                />
-
-                <Input
-                  label="Ciudad"
-                  value={address.ciudad || ""}
-                  onChange={(value) => updateAddress(index, "ciudad", value)}
-                />
-
-                <Input
-                  label="Estado"
-                  value={address.estado || ""}
-                  onChange={(value) => updateAddress(index, "estado", value)}
-                />
-
-                <Input
-                  label="Código postal"
-                  value={address.codigo_postal || ""}
-                  onChange={(value) =>
-                    updateAddress(index, "codigo_postal", value)
-                  }
-                />
-
-                <Input
-                  label="País"
-                  value={address.pais || ""}
-                  onChange={(value) => updateAddress(index, "pais", value)}
-                />
-
-                <Input
-                  label="Teléfono de contacto"
-                  value={address.contacto_telefono || ""}
-                  onChange={(value) =>
-                    updateAddress(index, "contacto_telefono", value)
-                  }
-                  placeholder="664 000 0000"
-                />
-
-                <Input
-                  label="Notas"
-                  value={address.notas || ""}
-                  onChange={(value) => updateAddress(index, "notas", value)}
-                  placeholder="Horario, referencia o indicaciones"
-                />
-              </div>
-
-              <label className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-text-primary">
-                <input
-                  type="checkbox"
-                  checked={Boolean(address.es_principal)}
-                  onChange={(e) =>
-                    updateAddress(index, "es_principal", e.target.checked)
-                  }
-                  className="h-4 w-4 rounded border-border"
-                />
-                Usar como dirección principal
-              </label>
             </article>
           ))}
         </div>

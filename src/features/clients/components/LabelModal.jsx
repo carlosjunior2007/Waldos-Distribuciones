@@ -7,6 +7,7 @@ import { generateLabelPDF } from "../../../utils/labelPdf";
 import LabelPreview from "./LabelPreview";
 
 import { INITIAL_LABEL_FORM } from "../label.constants";
+import { capitalizeFirstLetter } from "../client.helpers";
 import {
   buildLabelFormFromRow,
   buildLabelPayload,
@@ -102,7 +103,9 @@ export default function LabelModal({
   }
 
   function updateForm(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    const nextValue = key === "texto_extra" ? capitalizeFirstLetter(value) : value;
+
+    setForm((prev) => ({ ...prev, [key]: nextValue }));
   }
 
   return (

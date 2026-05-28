@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, CheckCircle2, CreditCard, FileText, PackageCheck, X } from "lucide-react";
 
 import { formatMoney } from "../../../utils/formatters";
+import { capitalizeFirstLetter, normalizeCapitalizedText } from "../quotation.helpers";
 
 const PAYMENT_METHODS = [
   { value: "", label: "Sin definir" },
@@ -56,7 +57,7 @@ export default function ConvertToOrderModal({
       fecha_fin: "",
       metodo_pago: "",
       estado_pago: "pendiente",
-      notas: quotation?.notas || "",
+      notas: capitalizeFirstLetter(quotation?.notas || ""),
     });
   }, [open, quotation]);
 
@@ -64,7 +65,9 @@ export default function ConvertToOrderModal({
   const unitCount = useMemo(() => sumProducts(quotation?.detalles || []), [quotation]);
 
   function updateField(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    const nextValue = field === "notas" ? capitalizeFirstLetter(value) : value;
+
+    setForm((prev) => ({ ...prev, [field]: nextValue }));
   }
 
   function handleSubmit(event) {
@@ -75,7 +78,7 @@ export default function ConvertToOrderModal({
       fecha_fin: toDateOrNull(form.fecha_fin),
       metodo_pago: form.metodo_pago || null,
       estado_pago: form.estado_pago || "pendiente",
-      notas: form.notas || null,
+      notas: normalizeCapitalizedText(form.notas) || null,
     });
   }
 

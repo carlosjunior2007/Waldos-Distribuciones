@@ -1,5 +1,21 @@
 import { LOGOS_BUCKET } from "./client.constants";
 
+export function capitalizeFirstLetter(value) {
+  if (typeof value !== "string" || !value) return value;
+
+  return value.replace(/([a-záéíóúüñ])/iu, (letter) => letter.toLocaleUpperCase("es-MX"));
+}
+
+export function capitalizeFormFields(form = {}, fields = []) {
+  return fields.reduce((next, field) => {
+    if (typeof next[field] === "string") {
+      next[field] = capitalizeFirstLetter(next[field]);
+    }
+
+    return next;
+  }, { ...form });
+}
+
 export function getStoragePathFromUrl(url, bucket = LOGOS_BUCKET) {
   if (!url) return null;
 
@@ -16,27 +32,51 @@ export function getStoragePathFromUrl(url, bucket = LOGOS_BUCKET) {
   }
 }
 
+const CLIENT_CAPITALIZED_FIELDS = [
+  "nombre",
+  "razon_social",
+  "regimen_fiscal",
+  "uso_cfdi",
+  "direccion",
+  "ciudad",
+  "estado",
+  "pais",
+  "notas",
+];
+
+const CLIENT_ADDRESS_CAPITALIZED_FIELDS = [
+  "nombre",
+  "direccion",
+  "ciudad",
+  "estado",
+  "pais",
+  "contacto_nombre",
+  "notas",
+];
+
 export function buildClientPayload(form = {}) {
+  const normalizedForm = capitalizeFormFields(form, CLIENT_CAPITALIZED_FIELDS);
+
   // IMPORTANTE:
   // No usamos "...form" porque cuando editas un cliente Supabase trae relaciones
   // como cliente_direcciones. Si mandamos esa relación dentro del update/insert
   // de clientes, Supabase intenta guardarla como si fuera una columna real y truena.
   // Las direcciones se guardan aparte en la tabla cliente_direcciones.
   const payload = {
-    nombre: (form.nombre || "").trim(),
-    razon_social: (form.razon_social || "").trim() || null,
+    nombre: (normalizedForm.nombre || "").trim(),
+    razon_social: (normalizedForm.razon_social || "").trim() || null,
     rfc: (form.rfc || "").trim().toUpperCase() || null,
-    regimen_fiscal: (form.regimen_fiscal || "").trim() || null,
-    uso_cfdi: (form.uso_cfdi || "").trim() || null,
+    regimen_fiscal: (normalizedForm.regimen_fiscal || "").trim() || null,
+    uso_cfdi: (normalizedForm.uso_cfdi || "").trim() || null,
     numero: (form.numero || "").trim() || null,
     correo: (form.correo || "").trim() || null,
-    direccion: (form.direccion || "").trim() || null,
-    ciudad: (form.ciudad || "").trim() || null,
-    estado: (form.estado || "").trim() || null,
+    direccion: (normalizedForm.direccion || "").trim() || null,
+    ciudad: (normalizedForm.ciudad || "").trim() || null,
+    estado: (normalizedForm.estado || "").trim() || null,
     codigo_postal: (form.codigo_postal || "").trim() || null,
-    pais: (form.pais || "").trim() || null,
+    pais: (normalizedForm.pais || "").trim() || null,
     logo: form.logo || null,
-    notas: (form.notas || "").trim() || null,
+    notas: (normalizedForm.notas || "").trim() || null,
   };
 
   if (form.id) {
@@ -71,17 +111,19 @@ export function buildDeliveryAddress(address = {}) {
 }
 
 export function buildClientAddressPayload(address = {}) {
+  const normalizedAddress = capitalizeFormFields(address, CLIENT_ADDRESS_CAPITALIZED_FIELDS);
+
   return {
     id: address.id,
-    nombre: (address.nombre || "").trim(),
-    direccion: (address.direccion || "").trim(),
-    ciudad: (address.ciudad || "").trim() || null,
-    estado: (address.estado || "").trim() || null,
+    nombre: (normalizedAddress.nombre || "").trim(),
+    direccion: (normalizedAddress.direccion || "").trim(),
+    ciudad: (normalizedAddress.ciudad || "").trim() || null,
+    estado: (normalizedAddress.estado || "").trim() || null,
     codigo_postal: (address.codigo_postal || "").trim() || null,
-    pais: (address.pais || "").trim() || "México",
-    contacto_nombre: (address.contacto_nombre || "").trim() || null,
+    pais: (normalizedAddress.pais || "").trim() || "México",
+    contacto_nombre: (normalizedAddress.contacto_nombre || "").trim() || null,
     contacto_telefono: (address.contacto_telefono || "").trim() || null,
-    notas: (address.notas || "").trim() || null,
+    notas: (normalizedAddress.notas || "").trim() || null,
     es_principal: Boolean(address.es_principal),
     activo: address.activo !== false,
   };

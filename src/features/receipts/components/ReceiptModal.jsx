@@ -33,6 +33,9 @@ import {
   createEmptyReceiptItem,
   buildClientAddress,
   normalizeReceiptItems,
+  capitalizeFirstLetter,
+  capitalizeReceiptHeader,
+  capitalizeReceiptItem,
 } from "../receipt.helpers";
 
 export default function ReceiptModal({ open, editingReceipt, onClose, onSaved }) {
@@ -55,7 +58,7 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
     if (!open) return;
 
     if (editingReceipt) {
-      setForm({
+      setForm(capitalizeReceiptHeader({
         cliente_id: editingReceipt.cliente_id || "",
         cotizacion_id: editingReceipt.cotizacion_id || "",
         cliente_nombre: editingReceipt.cliente_nombre || "",
@@ -66,9 +69,9 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
         ciudad: editingReceipt.ciudad || DEFAULT_CITY,
         estado: editingReceipt.estado || "emitido",
         notas: editingReceipt.notas || "",
-      });
+      }));
 
-      setItems(normalizeReceiptItems(editingReceipt.detalles || []));
+      setItems(normalizeReceiptItems(editingReceipt.detalles || []).map(capitalizeReceiptItem));
       setClientMode(editingReceipt.cliente_id ? "cliente" : "manual");
     } else {
       setForm({
@@ -137,17 +140,27 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
   }, [open, productQuery]);
 
   function updateForm(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    const shouldCapitalize = [
+      "cliente_nombre",
+      "cliente_direccion",
+      "ciudad",
+      "notas",
+    ].includes(key);
+
+    setForm((prev) => ({
+      ...prev,
+      [key]: shouldCapitalize ? capitalizeFirstLetter(value) : value,
+    }));
   }
 
   function applyClient(client) {
     setForm((prev) => ({
       ...prev,
       cliente_id: client.id,
-      cliente_nombre: client.razon_social || client.nombre || "",
+      cliente_nombre: capitalizeFirstLetter(client.razon_social || client.nombre || ""),
       cliente_rfc: client.rfc || "",
       cliente_telefono: client.numero || "",
-      cliente_direccion: buildClientAddress(client),
+      cliente_direccion: capitalizeFirstLetter(buildClientAddress(client)),
     }));
   }
 
@@ -164,19 +177,24 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
         ...prev,
         cotizacion_id: q.id || quotation.id,
         cliente_id: q.cliente_id || client?.id || "",
-        cliente_nombre:
+        cliente_nombre: capitalizeFirstLetter(
           q.cliente_razon_social ||
           client?.razon_social ||
           q.cliente_nombre ||
           "",
+        ),
         cliente_rfc: q.cliente_rfc || client?.rfc || "",
         cliente_telefono: q.cliente_telefono || client?.numero || "",
         cliente_direccion: client
-          ? buildClientAddress(client)
+          ? capitalizeFirstLetter(buildClientAddress(client))
           : prev.cliente_direccion,
       }));
 
-      setItems(rows.length ? normalizeReceiptItems(rows) : [createEmptyReceiptItem()]);
+      setItems(
+        rows.length
+          ? normalizeReceiptItems(rows).map(capitalizeReceiptItem)
+          : [createEmptyReceiptItem()],
+      );
     } catch (error) {
       console.error(error);
       alert(error.message || "No se pudo aplicar la cotización.");
@@ -221,17 +239,22 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
       {
         producto_id: product.id,
         orden: prev.length + 1,
-        descripcion: product.nombre || "",
+        descripcion: capitalizeFirstLetter(product.nombre || ""),
         cantidad: "1",
-        unidad: product.unidad || "pieza",
+        unidad: capitalizeFirstLetter(product.unidad || "pieza"),
       },
     ]);
   }
 
   function updateItem(index, key, value) {
+    const shouldCapitalize = ["descripcion", "unidad"].includes(key);
+
     setItems((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], [key]: value };
+      next[index] = {
+        ...next[index],
+        [key]: shouldCapitalize ? capitalizeFirstLetter(value) : value,
+      };
       return next;
     });
   }
@@ -263,12 +286,12 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
     try {
       setSaving(true);
 
-      const cleanItems = normalizeReceiptItems(items).filter((item) =>
-        String(item.descripcion || "").trim(),
-      );
+      const cleanItems = normalizeReceiptItems(items)
+        .map(capitalizeReceiptItem)
+        .filter((item) => String(item.descripcion || "").trim());
 
       const payload = {
-        header: form,
+        header: capitalizeReceiptHeader(form),
         items: cleanItems,
       };
 

@@ -6,6 +6,12 @@ import { formatInputDate } from "../../../utils/dates";
 import { parseNumberish } from "../../../utils/formatters";
 import { createExpense, updateExpense } from "../services/expenses.service";
 
+function capitalizeFirstLetter(value = "") {
+  return String(value).replace(/^(\s*)(\p{L})/u, (_, spaces, letter) =>
+    `${spaces}${letter.toLocaleUpperCase("es-MX")}`
+  );
+}
+
 export default function ExpenseModal({
   open,
   onClose,
@@ -32,8 +38,8 @@ export default function ExpenseModal({
     if (editingExpense) {
       setForm({
         pedido_id: editingExpense.pedido_id || "",
-        concepto: editingExpense.concepto || "",
-        descripcion: editingExpense.descripcion || "",
+        concepto: capitalizeFirstLetter(editingExpense.concepto || ""),
+        descripcion: capitalizeFirstLetter(editingExpense.descripcion || ""),
         monto: editingExpense.monto ?? "",
         fecha: formatInputDate(editingExpense.fecha),
         tipo: editingExpense.tipo || "extra",
@@ -72,8 +78,8 @@ export default function ExpenseModal({
       const payload = {
         pedido_id: form.pedido_id || null,
         cotizacion_id: null,
-        concepto: form.concepto.trim(),
-        descripcion: form.descripcion.trim() || null,
+        concepto: capitalizeFirstLetter(form.concepto).trim(),
+        descripcion: capitalizeFirstLetter(form.descripcion).trim() || null,
         monto: parseNumberish(form.monto),
         fecha: form.fecha || formatInputDate(new Date()),
         tipo: form.tipo,
@@ -129,7 +135,12 @@ export default function ExpenseModal({
           <Input
             label="Concepto"
             value={form.concepto}
-            onChange={(value) => setForm((prev) => ({ ...prev, concepto: value }))}
+            onChange={(value) =>
+              setForm((prev) => ({
+                ...prev,
+                concepto: capitalizeFirstLetter(value),
+              }))
+            }
             placeholder="Ej. Envío de mercancía"
           />
 
@@ -176,7 +187,10 @@ export default function ExpenseModal({
               rows={4}
               value={form.descripcion}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, descripcion: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  descripcion: capitalizeFirstLetter(e.target.value),
+                }))
               }
               placeholder="Opcional"
               className="min-h-[110px] w-full resize-y rounded-2xl border border-border bg-background px-4 py-3 text-sm text-text-primary outline-none"

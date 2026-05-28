@@ -9,6 +9,20 @@ import {
 
 import { parseBusinessDate, formatInputDate } from "../../utils/dates";
 
+
+export function capitalizeFirstLetter(value = "") {
+  if (value === null || value === undefined) return "";
+
+  return String(value).replace(/^(\s*)([a-záéíóúüñ])/u, (_, spaces, letter) => {
+    return `${spaces}${letter.toLocaleUpperCase("es-MX")}`;
+  });
+}
+
+export function normalizeCapitalizedText(value = "") {
+  const text = String(value || "").trim();
+  return text ? capitalizeFirstLetter(text) : "";
+}
+
 export function fromInputDate(value) {
   return value || null;
 }
@@ -192,7 +206,7 @@ export function calculateQuotationTotals(items = [], form = {}) {
 export function buildQuotationPayload({ form, totals }) {
   const cleanItems = totals.rows.map((item) => ({
     producto_id: item.producto_id,
-    nombre_producto: item.nombre_producto || null,
+    nombre_producto: normalizeCapitalizedText(item.nombre_producto) || null,
     codigo: item.codigo || null,
     cantidad: Number(item.cantidad || 0),
     precio_unitario: Number(item.precio_unitario || 0),
@@ -204,7 +218,7 @@ export function buildQuotationPayload({ form, totals }) {
   return {
     header: {
       cliente_id: form.cliente_id || null,
-      cliente_nombre: form.cliente_nombre.trim(),
+      cliente_nombre: normalizeCapitalizedText(form.cliente_nombre),
       cliente_telefono: form.cliente_telefono.trim() || null,
       cliente_email: form.cliente_email.trim() || null,
       estado: form.estado || "borrador",
@@ -216,7 +230,7 @@ export function buildQuotationPayload({ form, totals }) {
       isr_monto: Number(totals.isrMonto || 0),
       total: Number(totals.total || 0),
       fecha_vencimiento: form.fecha_vencimiento || null,
-      notas: form.notas || null,
+      notas: normalizeCapitalizedText(form.notas) || null,
     },
     items: cleanItems,
   };

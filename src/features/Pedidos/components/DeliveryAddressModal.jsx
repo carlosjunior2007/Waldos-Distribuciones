@@ -1,6 +1,6 @@
 import { MapPin, Save } from "lucide-react";
 import Modal from "../../../components/ui/Modal";
-import { getAddressLabel } from "../order.helpers";
+import { capitalizeFirstLetter, getAddressLabel } from "../order.helpers";
 
 export default function DeliveryAddressModal({ open, order, onClose }) {
   if (!order) return null;
@@ -69,11 +69,17 @@ export default function DeliveryAddressModal({ open, order, onClose }) {
 }
 
 function Input({ label, placeholder, className = "" }) {
+  const shouldCapitalize = !["Teléfono", "Código postal"].includes(label);
   return (
     <label className={`space-y-2 ${className}`}>
       <span className="text-sm font-semibold text-text-primary">{label}</span>
       <input
         placeholder={placeholder}
+        onChange={(event) => {
+          if (shouldCapitalize) {
+            event.currentTarget.value = capitalizeFirstLetter(event.currentTarget.value);
+          }
+        }}
         className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none focus:border-primary-400"
       />
     </label>

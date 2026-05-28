@@ -27,6 +27,14 @@ function safeText(value) {
   return value ? String(value) : "-";
 }
 
+function capitalizeFirstLetter(value) {
+  const text = safeText(value).trim();
+
+  if (!text || text === "-") return "-";
+
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function calculateBase({ subtotal, descuento }) {
   return Math.max(Number(subtotal || 0) - Number(descuento || 0), 0);
 }
@@ -106,9 +114,10 @@ export function generateQuotationPDF(quotation) {
   const totalsBoxBottomY = footerLineY - 8;
   const totalsBoxFixedY = totalsBoxBottomY - totalsBoxH;
 
-  const contentStartY = 104;
+  const firstPageContentStartY = 104;
+  const continuationContentStartY = 52;
 
-  function drawHeader() {
+  function drawHeader({ showQuotationInfo = false } = {}) {
     const contentWidth = pageWidth - marginX * 2;
     const headerY = 12;
     const headerH = 30;
@@ -120,6 +129,14 @@ export function generateQuotationPDF(quotation) {
       doc.addImage(logoWaldo, "PNG", 16, 17, 50, 16);
     } catch (error) {
       console.warn("No se pudo cargar el logo en el PDF:", error);
+    }
+
+    if (!showQuotationInfo) {
+      const compactDividerY = headerY + headerH + 6;
+      doc.setDrawColor(...BRAND_PRIMARY);
+      doc.setLineWidth(0.7);
+      doc.line(marginX, compactDividerY, pageWidth - marginX, compactDividerY);
+      return;
     }
 
     const infoY = 50;
@@ -293,12 +310,12 @@ export function generateQuotationPDF(quotation) {
   }
 
   autoTable(doc, {
-    startY: contentStartY,
+    startY: firstPageContentStartY,
     head: [["Código", "Producto", "Unidad", "Cantidad", "Precio", "Importe"]],
     body: detalles.map((item) => [
       item.codigo || "-",
       item.nombre_producto || "-",
-      item.unidad || "-",
+      capitalizeFirstLetter(item.unidad),
       Number(item.cantidad || 0).toString(),
       money(item.precio_unitario || 0),
       money(item.importe || 0),
@@ -323,22 +340,23 @@ export function generateQuotationPDF(quotation) {
       fillColor: [252, 252, 252],
     },
     columnStyles: {
-      0: { cellWidth: 26 },
-      1: { cellWidth: 67 },
+      // Más espacio para el código WALDO.
+      0: { cellWidth: 34 },
+      1: { cellWidth: 59 },
       2: { cellWidth: 20 },
       3: { cellWidth: 20, halign: "center" },
       4: { cellWidth: 26, halign: "right" },
       5: { cellWidth: 29, halign: "right" },
     },
     margin: {
-      top: contentStartY,
+      top: continuationContentStartY,
       left: marginX,
       right: marginX,
       bottom: footerReservedSpace,
     },
     rowPageBreak: "avoid",
-    didDrawPage: () => {
-      drawHeader();
+    didDrawPage: (data) => {
+      drawHeader({ showQuotationInfo: data.pageNumber === 1 });
       drawFooter();
     },
   });
@@ -346,7 +364,7 @@ export function generateQuotationPDF(quotation) {
   let currentPage = doc.getNumberOfPages();
   doc.setPage(currentPage);
 
-  const finalY = doc.lastAutoTable?.finalY || contentStartY;
+  const finalY = doc.lastAutoTable?.finalY || firstPageContentStartY;
   let afterTableY = finalY + 8;
 
   const hasNotes = Boolean(notas);
@@ -366,9 +384,9 @@ export function generateQuotationPDF(quotation) {
     doc.addPage();
     currentPage = doc.getNumberOfPages();
     doc.setPage(currentPage);
-    drawHeader();
+    drawHeader({ showQuotationInfo: false });
     drawFooter();
-    afterTableY = contentStartY;
+    afterTableY = continuationContentStartY;
   }
 
   if (hasNotes) {
@@ -380,9 +398,9 @@ export function generateQuotationPDF(quotation) {
       doc.addPage();
       currentPage = doc.getNumberOfPages();
       doc.setPage(currentPage);
-      drawHeader();
+      drawHeader({ showQuotationInfo: false });
       drawFooter();
-      drawNotesBox(contentStartY);
+      drawNotesBox(continuationContentStartY);
     }
   }
 

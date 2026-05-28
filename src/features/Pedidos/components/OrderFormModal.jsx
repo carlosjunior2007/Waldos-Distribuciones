@@ -2,7 +2,7 @@ import { Plus, Save, Search, Trash2, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Modal from "../../../components/ui/Modal";
 import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "../order.constants";
-import { calculateLineProfit, calculateOrderProfit, formatMoney } from "../order.helpers";
+import { calculateLineProfit, calculateOrderProfit, capitalizeFirstLetter, formatMoney, normalizeCapitalizedText } from "../order.helpers";
 
 const emptyForm = {
   cliente_id: "",
@@ -96,7 +96,10 @@ export default function OrderFormModal({
   }, [details, form.iva_porcentaje, form.isr_porcentaje]);
 
   function updateForm(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    const textFields = new Set(["notas"]);
+    const nextValue = textFields.has(field) ? capitalizeFirstLetter(value) : value;
+
+    setForm((current) => ({ ...current, [field]: nextValue }));
   }
 
   function addProduct(productId) {
@@ -177,7 +180,7 @@ export default function OrderFormModal({
         isr_porcentaje: Number(form.isr_porcentaje || 0),
         fecha_inicio: form.fecha_inicio || null,
         fecha_fin: form.fecha_fin || null,
-        notas: form.notas,
+        notas: normalizeCapitalizedText(form.notas),
       },
       details: validDetails,
     });

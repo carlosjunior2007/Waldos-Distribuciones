@@ -2,7 +2,7 @@ import { CalendarClock, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Modal from "../../../components/ui/Modal";
 import { DELIVERY_STATUS_OPTIONS } from "../order.constants";
-import { getAddressLabel } from "../order.helpers";
+import { capitalizeFirstLetter, getAddressLabel, normalizeCapitalizedText } from "../order.helpers";
 import DeliveryProductPicker from "./DeliveryProductPicker";
 
 function toDateTimeLocal(value) {
@@ -45,7 +45,10 @@ export default function DeliveryFormModal({ open, order, delivery = null, saving
   if (!order) return null;
 
   function updateForm(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    const textFields = new Set(["recibido_por", "notas"]);
+    const nextValue = textFields.has(field) ? capitalizeFirstLetter(value) : value;
+
+    setForm((current) => ({ ...current, [field]: nextValue }));
   }
 
   function handleAddressChange(value) {
@@ -53,7 +56,7 @@ export default function DeliveryFormModal({ open, order, delivery = null, saving
     setForm((current) => ({
       ...current,
       cliente_direccion_id: value,
-      recibido_por: address?.contacto_nombre || "",
+      recibido_por: capitalizeFirstLetter(address?.contacto_nombre || ""),
     }));
   }
 
@@ -61,7 +64,11 @@ export default function DeliveryFormModal({ open, order, delivery = null, saving
     event.preventDefault();
     onSave?.({
       order,
-      delivery: form,
+      delivery: {
+        ...form,
+        recibido_por: normalizeCapitalizedText(form.recibido_por),
+        notas: normalizeCapitalizedText(form.notas),
+      },
       products: rows,
     });
   }

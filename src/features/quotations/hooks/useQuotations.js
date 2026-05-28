@@ -152,6 +152,14 @@ export function useQuotations() {
     try {
       setConverting(false);
       const quotation = await fetchQuotationById(id);
+
+      if (!quotation?.cliente_id) {
+        alert(
+          "Para pasar esta cotización a pedido, primero tienes que asociar un cliente registrado en el sistema.",
+        );
+        return;
+      }
+
       setQuotationToConvert(quotation);
       setConvertModalOpen(true);
     } catch (error) {

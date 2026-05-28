@@ -29,8 +29,16 @@ export function buildLabelPayload(form, selectedClient) {
     producto_id: form.producto_id,
     codigo_barras: form.codigo_barras.trim() || null,
     codigo: form.codigo.trim() || null,
-    texto_extra: form.texto_extra.trim() || null,
+    texto_extra: capitalizeFirstLetter(form.texto_extra).trim() || null,
     ancho_mm: Number(form.ancho_mm || 100),
     alto_mm: Number(form.alto_mm || 75),
   };
+}
+
+export function capitalizeFirstLetter(value) {
+  if (typeof value !== "string") return value;
+
+  return value.replace(/^(\s*)(\S)/u, (_, spaces, firstChar) => (
+    `${spaces}${firstChar.toLocaleUpperCase("es-MX")}`
+  ));
 }

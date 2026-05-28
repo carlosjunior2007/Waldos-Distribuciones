@@ -75,7 +75,7 @@ function QuotationRow({
   const statusMeta = getStatusStyles(item.estado);
   const StatusIcon = statusMeta.icon;
 
-  const canConvert = ["aceptada", "enviada", "borrador"].includes(item.estado);
+  const canConvert = Boolean(item.cliente_id) && ["aceptada", "enviada", "borrador"].includes(item.estado);
 
   return (
     <tr className="border-t border-border transition hover:bg-surface-soft/70">

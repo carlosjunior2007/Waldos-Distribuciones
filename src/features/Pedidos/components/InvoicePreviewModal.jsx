@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import Modal from "../../../components/ui/Modal";
-import { formatMoney } from "../order.helpers";
+import { capitalizeFirstLetter, formatMoney } from "../order.helpers";
 
 const DEFAULT_SERIE = "F";
 const DEFAULT_CURRENCY = "MXN";
@@ -600,7 +600,10 @@ export default function InvoicePreviewModal({
   if (!open || !order) return null;
 
   function updateDraft(key, value) {
-    setDraft((current) => ({ ...(current || buildInvoiceDraft(order)), [key]: value }));
+    const capitalizeFields = new Set(["receiverName"]);
+    const nextValue = capitalizeFields.has(key) ? capitalizeFirstLetter(value) : value;
+
+    setDraft((current) => ({ ...(current || buildInvoiceDraft(order)), [key]: nextValue }));
     setResult(null);
   }
 

@@ -1,6 +1,23 @@
 import { Eye, EyeOff } from "lucide-react";
 import { CATEGORY_OPTIONS } from "./product.constants";
 
+export function capitalizeFirstLetter(value) {
+  const text = String(value ?? "");
+  const firstLetterIndex = text.search(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/);
+
+  if (firstLetterIndex === -1) return text;
+
+  return (
+    text.slice(0, firstLetterIndex) +
+    text.charAt(firstLetterIndex).toLocaleUpperCase("es-MX") +
+    text.slice(firstLetterIndex + 1)
+  );
+}
+
+export function normalizeProductTextField(value) {
+  return capitalizeFirstLetter(String(value ?? "").trim());
+}
+
 export function generateUUID() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();

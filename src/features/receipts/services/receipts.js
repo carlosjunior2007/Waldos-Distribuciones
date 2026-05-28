@@ -1,4 +1,5 @@
 import supabase from "../../../utils/supabase.js";
+import { capitalizeFirstLetter } from "../receipt.helpers.js";
 
 const PAGE_SIZE = 10;
 
@@ -334,14 +335,14 @@ function cleanReceiptPayload(header = {}, { includeFolio = false } = {}) {
   const payload = {
     cliente_id: header.cliente_id || null,
     cotizacion_id: header.cotizacion_id || null,
-    cliente_nombre: header.cliente_nombre?.trim() || "",
+    cliente_nombre: capitalizeFirstLetter(header.cliente_nombre?.trim() || ""),
     cliente_rfc: header.cliente_rfc?.trim().toUpperCase() || null,
-    cliente_direccion: header.cliente_direccion?.trim() || null,
+    cliente_direccion: capitalizeFirstLetter(header.cliente_direccion?.trim() || "") || null,
     cliente_telefono: header.cliente_telefono?.trim() || null,
     fecha: header.fecha || getTodayInputDate(),
-    ciudad: header.ciudad?.trim() || "TIJUANA, BAJA CALIFORNIA, MÉXICO",
+    ciudad: capitalizeFirstLetter(header.ciudad?.trim() || "TIJUANA, BAJA CALIFORNIA, MÉXICO"),
     estado: header.estado || "emitido",
-    notas: header.notas?.trim() || null,
+    notas: capitalizeFirstLetter(header.notas?.trim() || "") || null,
     updated_at: new Date().toISOString(),
   };
 
@@ -359,9 +360,9 @@ function cleanDetailPayload(items = [], receiptId) {
       contra_recibo_id: receiptId,
       producto_id: item.producto_id || null,
       orden: Number(item.orden || index + 1),
-      descripcion: String(item.descripcion || "").trim(),
+      descripcion: capitalizeFirstLetter(String(item.descripcion || "").trim()),
       cantidad: Number(item.cantidad || 0),
-      unidad: String(item.unidad || "").trim() || null,
+      unidad: capitalizeFirstLetter(String(item.unidad || "").trim()) || null,
     }));
 }
 

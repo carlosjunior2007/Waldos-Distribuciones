@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import Modal from "../../../components/ui/Modal";
+import ReceiptsMessageModal, { createMessageState } from "./ReceiptsMessageModal";
 import SearchInput from "../../../components/ui/SearchInput";
 import FilterPill from "../../../components/ui/FilterPill";
 
@@ -53,6 +54,7 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
 
   const [form, setForm] = useState(EMPTY_RECEIPT_FORM);
   const [items, setItems] = useState([]);
+  const [messageModal, setMessageModal] = useState(createMessageState());
 
   useEffect(() => {
     if (!open) return;
@@ -139,6 +141,15 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
     return () => clearTimeout(timer);
   }, [open, productQuery]);
 
+  function showMessage(title, message, tone = "warning") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
   function updateForm(key, value) {
     const shouldCapitalize = [
       "cliente_nombre",
@@ -197,7 +208,11 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
       );
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo aplicar la cotización.");
+      showMessage(
+        "No se pudo aplicar la cotización",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -274,12 +289,20 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
     e.preventDefault();
 
     if (!form.cliente_nombre.trim()) {
-      alert("El nombre o razón social es obligatorio.");
+      showMessage(
+        "Cliente requerido",
+        "El nombre o razón social es obligatorio.",
+        "warning",
+      );
       return;
     }
 
     if (!items.some((item) => String(item.descripcion || "").trim())) {
-      alert("Agrega al menos un producto o concepto.");
+      showMessage(
+        "Agrega productos",
+        "Agrega al menos un producto o concepto.",
+        "warning",
+      );
       return;
     }
 
@@ -303,7 +326,11 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
       onClose();
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo guardar el contra recibo.");
+      showMessage(
+        "No se pudo guardar el contra recibo",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setSaving(false);
     }
@@ -315,6 +342,15 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
   );
 
   return (
+    <>
+      <ReceiptsMessageModal
+        open={messageModal.open}
+        title={messageModal.title}
+        message={messageModal.message}
+        tone={messageModal.tone}
+        onClose={() => setMessageModal(createMessageState())}
+      />
+
     <Modal
       open={open}
       onClose={onClose}
@@ -595,6 +631,7 @@ export default function ReceiptModal({ open, editingReceipt, onClose, onSaved })
         </div>
       </form>
     </Modal>
+    </>
   );
 }
 

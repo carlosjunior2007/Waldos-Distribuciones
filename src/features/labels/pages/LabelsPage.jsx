@@ -10,12 +10,21 @@ import ClientSearchCard from "../components/ClientSearchCard";
 import LabelsPanel from "../components/LabelsPanel";
 import LabelModal from "../components/LabelModal";
 import { LabelPreviewContent } from "../components/LabelPreview";
+import LabelsMessageModal from "../components/LabelsMessageModal";
 
 export default function LabelsPage() {
   const labels = useLabels();
 
   return (
     <>
+      <LabelsMessageModal
+        open={labels.messageModal.open}
+        title={labels.messageModal.title}
+        message={labels.messageModal.message}
+        tone={labels.messageModal.tone}
+        onClose={labels.closeMessageModal}
+      />
+
       {labels.printPayload ? (
         <div
           style={{

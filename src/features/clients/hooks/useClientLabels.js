@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { generateLabelPDF } from "../../../utils/labelPdf";
+import { createMessageState } from "../components/ClientMessageModal";
 
 import {
   COMPANY_DEFAULTS,
@@ -27,6 +28,7 @@ export function useClientLabels(selectedClient) {
   const [deletingLabel, setDeletingLabel] = useState(false);
 
   const [printPayload, setPrintPayload] = useState(null);
+  const [messageModal, setMessageModal] = useState(createMessageState());
 
   const [companyOptions, setCompanyOptions] = useState(() => {
     try {
@@ -39,6 +41,19 @@ export function useClientLabels(selectedClient) {
     }
   });
 
+  function showMessage(title, message, tone = "info") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
+  function closeMessageModal() {
+    setMessageModal(createMessageState());
+  }
+
   useEffect(() => {
     localStorage.setItem(COMPANY_STORAGE_KEY, JSON.stringify(companyOptions));
   }, [companyOptions]);
@@ -50,7 +65,11 @@ export function useClientLabels(selectedClient) {
       setProducts(data);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron cargar los productos para etiquetas.");
+      showMessage(
+        "No se pudieron cargar los productos",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoadingProducts(false);
     }
@@ -68,7 +87,11 @@ export function useClientLabels(selectedClient) {
       setLabels(data);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron cargar las etiquetas del cliente.");
+      showMessage(
+        "No se pudieron cargar las etiquetas",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoadingLabels(false);
     }
@@ -84,7 +107,11 @@ export function useClientLabels(selectedClient) {
       await loadLabels(selectedClient?.id);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo eliminar la etiqueta.");
+      showMessage(
+        "No se pudo eliminar la etiqueta",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setDeletingLabel(false);
     }
@@ -125,7 +152,11 @@ export function useClientLabels(selectedClient) {
       });
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo generar el PDF de etiqueta.");
+      showMessage(
+        "No se pudo generar el PDF de etiqueta",
+        error.message || "Revisa la vista previa e intenta de nuevo.",
+        "error",
+      );
     } finally {
       setPrintPayload(null);
     }
@@ -133,7 +164,11 @@ export function useClientLabels(selectedClient) {
 
   function openCreateModal() {
     if (!selectedClient?.id) {
-      alert("Selecciona un cliente primero.");
+      showMessage(
+        "Selecciona un cliente",
+        "Necesitas seleccionar un cliente antes de crear una etiqueta.",
+        "warning",
+      );
       return;
     }
 
@@ -172,6 +207,9 @@ export function useClientLabels(selectedClient) {
     deletingLabel,
 
     printPayload,
+
+    messageModal,
+    closeMessageModal,
 
     companyOptions,
     setCompanyOptions,

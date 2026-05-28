@@ -13,12 +13,21 @@ import ExpensesChart from "../components/ExpensesChart";
 import ExpensesTable from "../components/ExpensesTable";
 import ExpensesMobileCards from "../components/ExpensesMobileCards";
 import ExpensesPagination from "../components/ExpensesPagination";
+import ExpensesMessageModal from "../components/ExpensesMessageModal";
 
 export default function ExpensesPage() {
   const expenses = useExpenses();
 
   return (
     <section className="space-y-6">
+      <ExpensesMessageModal
+        open={Boolean(expenses.messageModal?.open)}
+        title={expenses.messageModal?.title}
+        message={expenses.messageModal?.message}
+        tone={expenses.messageModal?.tone}
+        onClose={expenses.closeMessageModal}
+      />
+
       <ExpenseModal
         open={expenses.modalOpen}
         onClose={expenses.closeExpenseModal}

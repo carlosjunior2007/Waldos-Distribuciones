@@ -10,6 +10,7 @@ import { useProducts } from "../hooks/useProducts";
 import ProductsStats from "../components/ProductsStats";
 import ProductsToolbar from "../components/ProductsToolbar";
 import ProductModal from "../components/ProductModal";
+import ProductsMessageModal from "../components/ProductsMessageModal";
 import ProductsTable from "../components/ProductsTable";
 import ProductsMobileList from "../components/ProductsMobileList";
 import ProductsPagination from "../components/ProductsPagination";
@@ -57,10 +58,12 @@ export default function ProductsAdminPage() {
 
       setImportPreview(null);
 
-      alert(
+      products.showMessage(
+        "Importación aplicada",
         `Cambios aplicados correctamente.\nProductos actualizados: ${result.updated}${
           result.errors.length ? `\nErrores:\n${result.errors.join("\n")}` : ""
         }`,
+        result.errors.length ? "warning" : "success",
       );
     } finally {
       setImporting(false);
@@ -81,7 +84,11 @@ export default function ProductsAdminPage() {
       await downloadProductLabel(product);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo descargar la etiqueta del producto.");
+      products.showMessage(
+        "No se pudo descargar la etiqueta",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -90,6 +97,13 @@ export default function ProductsAdminPage() {
       setIsExportingPDF(true);
       await exportProductsToPDF(products.filteredProducts, options);
       setCatalogModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      products.showMessage(
+        "No se pudo exportar el PDF",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setIsExportingPDF(false);
     }
@@ -97,10 +111,18 @@ export default function ProductsAdminPage() {
 
   return (
     <section className="space-y-6">
+      <ProductsMessageModal
+        open={Boolean(products.messageModal?.open)}
+        title={products.messageModal?.title}
+        message={products.messageModal?.message}
+        tone={products.messageModal?.tone}
+        onClose={products.closeMessageModal}
+      />
       <ProductModal
         open={["create", "view", "edit"].includes(products.modalMode)}
         mode={products.modalMode}
         form={products.form}
+        suppliers={products.suppliers}
         saving={products.saving}
         onClose={products.closeModal}
         onChange={products.onInputChange}

@@ -3,7 +3,7 @@ export const INITIAL_QUOTATION_FORM = {
   cliente_nombre: "",
   cliente_telefono: "",
   cliente_email: "",
-  estado: "borrador",
+  estado: "enviada",
   descuento: "",
   fecha_vencimiento: "",
   iva_porcentaje: "8",

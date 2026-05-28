@@ -9,6 +9,7 @@ import RecentActivity from "../components/RecentActivity";
 import SimpleBarChart from "../components/SimpleBarChart";
 import ComparisonChart from "../components/ComparisonChart";
 import MovementDetailModal from "../components/MovementDetailModal";
+import DashboardMessageModal from "../components/DashboardMessageModal";
 
 export default function DashboardHome() {
   const dashboard = useDashboard();
@@ -21,20 +22,19 @@ export default function DashboardHome() {
     );
   }
 
-  if (dashboard.error) {
-    return (
-      <section className="rounded-[28px] border border-danger-200 bg-danger-50 p-6 shadow-[var(--shadow-soft)]">
-        <p className="text-sm font-semibold text-danger-700">
-          No se pudo cargar el dashboard
-        </p>
-
-        <p className="mt-2 text-sm text-danger-600">{dashboard.error}</p>
-      </section>
-    );
-  }
-
   return (
     <>
+      <DashboardMessageModal
+        open={Boolean(dashboard.error)}
+        title="No se pudo cargar el dashboard"
+        message={dashboard.error}
+        tone="error"
+        confirmText="Cerrar"
+        retryText="Reintentar"
+        onClose={dashboard.clearError}
+        onRetry={dashboard.retryLoad}
+      />
+
       <section className="space-y-6">
         <DashboardHeader
           range={dashboard.range}

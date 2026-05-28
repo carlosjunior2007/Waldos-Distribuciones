@@ -9,6 +9,8 @@ import {
   Repeat2,
   RotateCcw,
   Truck,
+  Trash2,
+  Users,
   XCircle,
 } from "lucide-react";
 
@@ -37,9 +39,11 @@ export default function OrdersTable({
   onViewDeliveries,
   onDownloadCounterReceipt,
   onDownloadPdf,
+  onDownloadSuppliersPdf,
   onOpenInvoice,
   onCancel,
   onRestore,
+  onDelete,
 }) {
   return (
     <div className="hidden xl:block">
@@ -80,9 +84,11 @@ export default function OrdersTable({
                 onViewDeliveries={onViewDeliveries}
                 onDownloadCounterReceipt={onDownloadCounterReceipt}
                 onDownloadPdf={onDownloadPdf}
+                onDownloadSuppliersPdf={onDownloadSuppliersPdf}
                 onOpenInvoice={onOpenInvoice}
                 onCancel={onCancel}
                 onRestore={onRestore}
+                onDelete={onDelete}
               />
             ))}
           </tbody>
@@ -102,9 +108,11 @@ function OrderRow({
   onViewDeliveries,
   onDownloadCounterReceipt,
   onDownloadPdf,
+  onDownloadSuppliersPdf,
   onOpenInvoice,
   onCancel,
   onRestore,
+  onDelete,
 }) {
   const status = getOrderStatusMeta(calculateDerivedOrderStatus(order));
   const payment = getPaymentStatusMeta(order.estado_pago);
@@ -148,6 +156,11 @@ function OrderRow({
     },
     { label: "PDF del pedido", icon: Download, onClick: () => onDownloadPdf(order) },
     {
+      label: "PDF proveedores",
+      icon: Users,
+      onClick: () => onDownloadSuppliersPdf?.(order),
+    },
+    {
       label: "Factura",
       icon: ReceiptText,
       disabled: invoiceDisabled,
@@ -164,6 +177,12 @@ function OrderRow({
             label: "Descancelar pedido",
             icon: RotateCcw,
             onClick: () => onRestore?.(order),
+          },
+          {
+            label: "Eliminar pedido",
+            icon: Trash2,
+            danger: true,
+            onClick: () => onDelete?.(order),
           },
         ]
       : [
@@ -202,6 +221,16 @@ function OrderRow({
         </p>
 
         <p className="mt-1 text-xs text-text-muted">{order.cliente_telefono}</p>
+
+        {order.quotation ? (
+          <p className="mt-2 text-xs font-bold text-info-700">
+            Asociado a {order.quotation.folio}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs font-semibold text-text-muted">
+            Sin cotización asociada
+          </p>
+        )}
       </td>
 
       <td className="px-4 py-4 align-top">

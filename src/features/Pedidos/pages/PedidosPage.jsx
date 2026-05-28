@@ -1,4 +1,5 @@
 import { Package } from "lucide-react";
+import { createPortal } from "react-dom";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -26,6 +27,23 @@ export default function PedidosPage() {
       <OperationOverlay
         loadingLabel={orders.operationLabel}
         feedback={orders.operationFeedback}
+      />
+      <DeleteOrderModal
+        dialog={orders.deleteOrderDialog}
+        saving={orders.saving}
+        onClose={orders.closeDeleteOrderDialog}
+        onConfirm={orders.confirmDeleteCancelledOrder}
+      />
+      <MessageDialog
+        dialog={orders.messageDialog}
+        onClose={orders.closeMessageDialog}
+      />
+
+      <ConfirmActionModal
+        dialog={orders.confirmDialog}
+        saving={orders.saving}
+        onClose={orders.closeConfirmDialog}
+        onConfirm={orders.confirmGenericAction}
       />
       <OrderDetailsModal
         open={orders.modal === "details"}
@@ -110,6 +128,13 @@ export default function PedidosPage() {
           setSearch={orders.setSearch}
           statusFilter={orders.statusFilter}
           setStatusFilter={orders.setStatusFilter}
+          monthFilter={orders.monthFilter}
+          setMonthFilter={orders.setMonthFilter}
+          monthOptions={orders.monthOptions}
+          paymentFilter={orders.paymentFilter}
+          setPaymentFilter={orders.setPaymentFilter}
+          quotationFilter={orders.quotationFilter}
+          setQuotationFilter={orders.setQuotationFilter}
           onCreateManualOrder={() => orders.openModal("form")}
         />
 
@@ -132,9 +157,11 @@ export default function PedidosPage() {
               onViewDeliveries={(order) => orders.openModal("deliveries", order)}
               onDownloadCounterReceipt={orders.downloadCounterReceipt}
               onDownloadPdf={orders.downloadOrderPdf}
+              onDownloadSuppliersPdf={orders.downloadOrderSuppliersPdf}
               onOpenInvoice={(order) => orders.openModal("invoice", order)}
               onCancel={orders.cancelSelectedOrder}
               onRestore={orders.restoreSelectedOrder}
+              onDelete={orders.requestDeleteCancelledOrder}
             />
 
             <OrdersMobileList
@@ -147,9 +174,11 @@ export default function PedidosPage() {
               onViewDeliveries={(order) => orders.openModal("deliveries", order)}
               onDownloadCounterReceipt={orders.downloadCounterReceipt}
               onDownloadPdf={orders.downloadOrderPdf}
+              onDownloadSuppliersPdf={orders.downloadOrderSuppliersPdf}
               onOpenInvoice={(order) => orders.openModal("invoice", order)}
               onCancel={orders.cancelSelectedOrder}
               onRestore={orders.restoreSelectedOrder}
+              onDelete={orders.requestDeleteCancelledOrder}
             />
 
             <OrdersPagination
@@ -167,3 +196,165 @@ export default function PedidosPage() {
     </section>
   );
 }
+
+
+
+function DialogPortal({ children }) {
+  if (typeof document === "undefined") return null;
+
+  return createPortal(children, document.body);
+}
+
+function DeleteOrderModal({ dialog, saving, onClose, onConfirm }) {
+  if (!dialog?.open) return null;
+
+  const order = dialog.order;
+  const blocked = Boolean(dialog.blocked);
+
+  return (
+    <DialogPortal>
+      <div className="fixed inset-0 z-[99999] flex min-h-screen w-screen items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <section className="w-full max-w-md rounded-[28px] border border-border bg-surface p-6 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+          <div
+            className={`mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl ${
+              blocked ? "bg-warning-50 text-warning-700" : "bg-error-50 text-error-700"
+            }`}
+          >
+            <Package className="h-6 w-6" />
+          </div>
+
+          <h3 className="text-lg font-black text-text-primary">
+            {blocked ? "No se puede eliminar" : "Eliminar pedido cancelado"}
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            {blocked
+              ? dialog.message
+              : `¿Seguro que quieres eliminar permanentemente el pedido ${order?.folio || ""}? ${dialog.message}`}
+          </p>
+
+          {order?.cotizacion_id ? (
+            <div className="mt-4 rounded-2xl border border-warning-100 bg-warning-50 px-4 py-3 text-sm font-semibold text-warning-800">
+              Este pedido está enlazado a una cotización.
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="h-11 rounded-2xl border border-border px-4 text-sm font-bold text-text-primary transition hover:bg-surface-soft disabled:opacity-60"
+            >
+              {blocked ? "Entendido" : "Cancelar"}
+            </button>
+
+            {!blocked ? (
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={saving}
+                className="h-11 rounded-2xl bg-error-600 px-4 text-sm font-bold text-white transition hover:bg-error-700 disabled:opacity-60"
+              >
+                {saving ? "Eliminando..." : "Sí, eliminar pedido"}
+              </button>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </DialogPortal>
+  );
+}
+
+function MessageDialog({ dialog, onClose }) {
+  if (!dialog?.open) return null;
+
+  const isWarning = dialog.tone === "warning";
+
+  return (
+    <DialogPortal>
+      <div className="fixed inset-0 z-[99999] flex min-h-screen w-screen items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <section className="w-full max-w-md rounded-[28px] border border-border bg-surface p-6 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+          <div
+            className={`mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl ${
+              isWarning ? "bg-warning-50 text-warning-700" : "bg-error-50 text-error-700"
+            }`}
+          >
+            <Package className="h-6 w-6" />
+          </div>
+
+          <h3 className="text-lg font-black text-text-primary">
+            {dialog.title || "Aviso"}
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            {dialog.message || "Ocurrió un problema."}
+          </p>
+
+          <div className="mt-6 flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-11 rounded-2xl border border-border px-4 text-sm font-bold text-text-primary transition hover:bg-surface-soft"
+            >
+              Entendido
+            </button>
+          </div>
+        </section>
+      </div>
+    </DialogPortal>
+  );
+}
+
+function ConfirmActionModal({ dialog, saving, onClose, onConfirm }) {
+  if (!dialog?.open) return null;
+
+  return (
+    <DialogPortal>
+      <div className="fixed inset-0 z-[99999] flex min-h-screen w-screen items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <section className="w-full max-w-md rounded-[28px] border border-border bg-surface p-6 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+          <div
+            className={`mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl ${
+              dialog.danger ? "bg-error-50 text-error-700" : "bg-primary-50 text-primary-700"
+            }`}
+          >
+            <Package className="h-6 w-6" />
+          </div>
+
+          <h3 className="text-lg font-black text-text-primary">
+            {dialog.title || "Confirmar acción"}
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            {dialog.message || "Confirma si quieres continuar."}
+          </p>
+
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="h-11 rounded-2xl border border-border px-4 text-sm font-bold text-text-primary transition hover:bg-surface-soft disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={saving}
+              className={`h-11 rounded-2xl px-4 text-sm font-bold text-white transition disabled:opacity-60 ${
+                dialog.danger
+                  ? "bg-error-600 hover:bg-error-700"
+                  : "bg-primary-600 hover:bg-primary-700"
+              }`}
+            >
+              {saving ? "Procesando..." : dialog.confirmLabel || "Confirmar"}
+            </button>
+          </div>
+        </section>
+      </div>
+    </DialogPortal>
+  );
+}
+

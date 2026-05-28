@@ -1,5 +1,6 @@
 import { Plus, Save, Search, Trash2, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Modal from "../../../components/ui/Modal";
 import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "../order.constants";
 import { calculateLineProfit, calculateOrderProfit, capitalizeFirstLetter, formatMoney, normalizeCapitalizedText } from "../order.helpers";
@@ -14,6 +15,32 @@ const emptyForm = {
   fecha_fin: "",
   notas: "",
 };
+
+const DEFAULT_DELIVERY_DAYS = 15;
+
+function toLocalDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDateInputDaysFromToday(daysToAdd = 0) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + daysToAdd);
+
+  return toLocalDateInput(date);
+}
+
+function getDefaultOrderForm() {
+  return {
+    ...emptyForm,
+    fecha_inicio: getDateInputDaysFromToday(0),
+    fecha_fin: getDateInputDaysFromToday(DEFAULT_DELIVERY_DAYS),
+  };
+}
 
 function onlyDigits(value) {
   return String(value ?? "").replace(/[^0-9]/g, "");
@@ -35,8 +62,13 @@ export default function OrderFormModal({
   onSave,
 }) {
   const isEdit = Boolean(order?.id);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => getDefaultOrderForm());
   const [details, setDetails] = useState([]);
+  const [formMessage, setFormMessage] = useState({
+    open: false,
+    title: "",
+    message: "",
+  });
   const selectedClient = clients.find((client) => client.id === form.cliente_id);
 
   useEffect(() => {
@@ -70,7 +102,7 @@ export default function OrderFormModal({
         })),
       );
     } else {
-      setForm(emptyForm);
+      setForm(getDefaultOrderForm());
       setDetails([]);
     }
   }, [open, order]);
@@ -94,6 +126,22 @@ export default function OrderFormModal({
       ...profit,
     };
   }, [details, form.iva_porcentaje, form.isr_porcentaje]);
+
+  function showFormMessage(title, message) {
+    setFormMessage({
+      open: true,
+      title,
+      message,
+    });
+  }
+
+  function closeFormMessage() {
+    setFormMessage({
+      open: false,
+      title: "",
+      message: "",
+    });
+  }
 
   function updateForm(field, value) {
     const textFields = new Set(["notas"]);
@@ -146,7 +194,7 @@ export default function OrderFormModal({
   function removeDetail(index) {
     const item = details[index];
     if (Number(item?.cantidad_entregada || 0) > 0) {
-      alert("No puedes quitar un producto que ya tiene entregas registradas.");
+      showFormMessage("No se puede quitar el producto", "Este producto ya tiene entregas registradas.");
       return;
     }
     setDetails((current) => current.filter((_, itemIndex) => itemIndex !== index));
@@ -156,14 +204,14 @@ export default function OrderFormModal({
     event.preventDefault();
 
     if (!form.cliente_id) {
-      alert("Selecciona un cliente.");
+      showFormMessage("Selecciona un cliente", "Necesitas asociar el pedido a un cliente antes de guardarlo.");
       return;
     }
 
     const validDetails = details.filter((item) => item.producto_id && Number(item.cantidad_pedida || 0) > 0);
 
     if (!validDetails.length) {
-      alert("Agrega al menos un producto.");
+      showFormMessage("Agrega productos", "Agrega al menos un producto al pedido.");
       return;
     }
 
@@ -194,6 +242,7 @@ export default function OrderFormModal({
       subtitle="Selecciona cliente y productos. Las entregas se programan después."
       width="max-w-6xl"
     >
+      <FormMessageModal dialog={formMessage} onClose={closeFormMessage} />
       <form onSubmit={handleSubmit} className="space-y-5 p-5 md:p-6">
         <section className="rounded-[24px] border border-border bg-background p-4">
           <div className="mb-4 flex items-start gap-3">
@@ -435,6 +484,36 @@ function ProductQuickAdd({ products, selectedDetails, onAdd }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+
+function FormMessageModal({ dialog, onClose }) {
+  if (!dialog?.open || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex min-h-screen w-screen items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <section className="w-full max-w-md rounded-[28px] border border-border bg-surface p-6 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+        <h3 className="text-lg font-black text-text-primary">
+          {dialog.title || "Revisa el formulario"}
+        </h3>
+
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          {dialog.message || "Hay información pendiente."}
+        </p>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-11 rounded-2xl border border-border px-4 text-sm font-bold text-text-primary transition hover:bg-surface-soft"
+          >
+            Entendido
+          </button>
+        </div>
+      </section>
+    </div>,
+    document.body,
   );
 }
 

@@ -323,7 +323,7 @@ export function useOrdersMock() {
   }
 
   function downloadCounterReceipt(order, delivery = null) {
-    alert(
+    console.info(
       `Aquí se descargaría el contra recibo de ${
         delivery?.folio || order?.folio || "la entrega"
       }.`,
@@ -331,7 +331,7 @@ export function useOrdersMock() {
   }
 
   function downloadOrderPdf(order) {
-    alert(`Aquí se descargaría el PDF del pedido ${order?.folio}.`);
+    console.info(`Aquí se descargaría el PDF del pedido ${order?.folio}.`);
   }
 
   return {

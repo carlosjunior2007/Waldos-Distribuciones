@@ -28,6 +28,7 @@ export function useDashboard() {
   const [error, setError] = useState("");
 
   const [range, setRange] = useState("month");
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [cotizaciones, setCotizaciones] = useState([]);
   const [pedidos, setPedidos] = useState([]);
@@ -72,7 +73,7 @@ export function useDashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const rangeDates = useMemo(() => getRangeDates(range), [range]);
 
@@ -206,9 +207,19 @@ export function useDashboard() {
     [periodData],
   );
 
+  function clearError() {
+    setError("");
+  }
+
+  function retryLoad() {
+    setReloadKey((prev) => prev + 1);
+  }
+
   return {
     loading,
     error,
+    clearError,
+    retryLoad,
 
     range,
     setRange,

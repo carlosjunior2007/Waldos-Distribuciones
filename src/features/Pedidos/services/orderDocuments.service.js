@@ -588,3 +588,332 @@ export function generateDeliveryReceiptPDF(order, delivery = null) {
   addPageNumbers(doc, MUTED);
   doc.save(`${selectedDelivery?.folio || order?.folio || "contra-recibo"}.pdf`);
 }
+
+function supplierContact(supplier = {}) {
+  return [
+    supplier.contacto_nombre,
+    supplier.telefono,
+    supplier.correo,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function normalizeDetailSuppliers(detail = {}) {
+  return (detail.proveedores_asociados || []).map((item) => ({
+    ...item,
+    proveedor: item.proveedor || {
+      nombre: item.nombre,
+      correo: item.correo,
+      telefono: item.telefono,
+      contacto_nombre: item.contacto_nombre,
+      rfc: item.rfc,
+    },
+  }));
+}
+
+function getOrderProductName(detail = {}) {
+  return detail.nombre_producto || detail.producto?.nombre || "Producto sin nombre";
+}
+
+function getOrderProductCode(detail = {}) {
+  return detail.codigo || detail.producto?.codigo || "-";
+}
+
+function buildOrderSupplierRows(order = {}) {
+  const details = order.details || [];
+
+  return details.flatMap((detail) => {
+    const suppliers = normalizeDetailSuppliers(detail);
+
+    if (!suppliers.length) {
+      return [
+        {
+          product: detail,
+          supplier: null,
+        },
+      ];
+    }
+
+    return suppliers.map((supplier) => ({
+      product: detail,
+      supplier,
+    }));
+  });
+}
+
+export function generateOrderSuppliersPDF(order = {}) {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const BRAND_PRIMARY = [178, 0, 32];
+  const BRAND_DARK = [24, 31, 42];
+  const BRAND_MUTED = [107, 114, 128];
+  const BRAND_LIGHT = [246, 247, 250];
+  const BRAND_BORDER = [221, 226, 232];
+  const BRAND_WARNING = [146, 64, 14];
+  const WHITE = [255, 255, 255];
+
+  const marginX = 12;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const details = order.details || [];
+  const rows = buildOrderSupplierRows(order);
+  const productsWithoutSuppliers = rows.filter((row) => !row.supplier).length;
+  const supplierCount = rows.filter((row) => row.supplier).length;
+
+  function drawHeader() {
+    const contentWidth = pageWidth - marginX * 2;
+    const headerY = 12;
+    const headerH = 31;
+
+    doc.setFillColor(...BRAND_LIGHT);
+    doc.setDrawColor(...BRAND_BORDER);
+    doc.roundedRect(marginX, headerY, contentWidth, headerH, 4, 4, "FD");
+
+    try {
+      doc.addImage(logoWaldo, "PNG", 16, 18, 48, 15);
+    } catch (error) {
+      console.warn("No se pudo cargar el logo en el PDF:", error);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(...BRAND_PRIMARY);
+    doc.text("Proveedores del pedido", pageWidth - marginX - 4, 24, {
+      align: "right",
+    });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...BRAND_MUTED);
+    doc.text(`Pedido: ${text(order.folio)}`, pageWidth - marginX - 4, 31, {
+      align: "right",
+    });
+    doc.text(`Generado: ${dateMX(new Date())}`, pageWidth - marginX - 4, 37, {
+      align: "right",
+    });
+
+    doc.setDrawColor(...BRAND_PRIMARY);
+    doc.setLineWidth(0.7);
+    doc.line(marginX, 49, pageWidth - marginX, 49);
+  }
+
+  function drawInfoBoxes() {
+    const boxY = 56;
+    const gap = 6;
+    const boxW = (pageWidth - marginX * 2 - gap) / 2;
+    const boxH = 37;
+
+    doc.setDrawColor(...BRAND_BORDER);
+    doc.setFillColor(...WHITE);
+    doc.roundedRect(marginX, boxY, boxW, boxH, 3, 3, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...BRAND_PRIMARY);
+    doc.text("Pedido", marginX + 4, boxY + 7);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...BRAND_DARK);
+    doc.text(`Folio: ${text(order.folio)}`, marginX + 4, boxY + 15);
+    doc.text(`Tracking: ${text(order.tracking_token, "Pendiente")}`, marginX + 4, boxY + 22);
+    doc.text(`Total: ${money(order.total)}`, marginX + 4, boxY + 29);
+
+    const rightX = marginX + boxW + gap;
+    doc.setDrawColor(...BRAND_BORDER);
+    doc.setFillColor(...WHITE);
+    doc.roundedRect(rightX, boxY, boxW, boxH, 3, 3, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...BRAND_PRIMARY);
+    doc.text("Cliente", rightX + 4, boxY + 7);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...BRAND_DARK);
+
+    const clientLines = doc.splitTextToSize(
+      text(order.cliente_nombre),
+      boxW - 8,
+    );
+    doc.text(clientLines, rightX + 4, boxY + 15);
+
+    let y = boxY + 15 + clientLines.length * 4.5;
+    doc.text(`Tel: ${text(order.cliente_telefono)}`, rightX + 4, y);
+    y += 6;
+    doc.text(`Email: ${text(order.cliente_email)}`, rightX + 4, y);
+  }
+
+  function drawSummary() {
+    const y = 101;
+    const cardW = (pageWidth - marginX * 2 - 8) / 3;
+    const values = [
+      ["Productos", String(details.length)],
+      ["Proveedores encontrados", String(supplierCount)],
+      ["Sin proveedor", String(productsWithoutSuppliers)],
+    ];
+
+    values.forEach(([label, value], index) => {
+      const x = marginX + index * (cardW + 4);
+      const warning = index === 2 && Number(value) > 0;
+
+      doc.setFillColor(...(warning ? [255, 247, 237] : BRAND_LIGHT));
+      doc.setDrawColor(...(warning ? [253, 186, 116] : BRAND_BORDER));
+      doc.roundedRect(x, y, cardW, 22, 3, 3, "FD");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.8);
+      doc.setTextColor(...BRAND_MUTED);
+      doc.text(label, x + 4, y + 7);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(...(warning ? BRAND_WARNING : BRAND_DARK));
+      doc.text(value, x + 4, y + 16);
+    });
+  }
+
+  function drawFooter() {
+    const footerY = pageHeight - 13;
+    doc.setDrawColor(...BRAND_BORDER);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, pageHeight - 20, pageWidth - marginX, pageHeight - 20);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...BRAND_MUTED);
+    doc.text("Documento interno de proveedores por pedido.", marginX, footerY);
+    doc.text(`Página ${doc.internal.getNumberOfPages()}`, pageWidth - marginX, footerY, {
+      align: "right",
+    });
+  }
+
+  drawHeader();
+  drawInfoBoxes();
+  drawSummary();
+
+  autoTable(doc, {
+    startY: 132,
+    margin: { top: 58, left: marginX, right: marginX, bottom: 24 },
+    head: [[
+      "Producto",
+      "Proveedor",
+      "Contacto",
+      "SKU / Costo",
+      "Entrega / Notas",
+    ]],
+    body: rows.map(({ product, supplier }) => {
+      const productText = [
+        getOrderProductName(product),
+        `Código: ${getOrderProductCode(product)}`,
+        `Cantidad: ${qty(product.cantidad_pedida)}`,
+      ].join("\n");
+
+      if (!supplier) {
+        return [
+          productText,
+          "Sin proveedor asociado",
+          "-",
+          `Costo pedido: ${money(product.costo_unitario)}`,
+          "Revisar antes de comprar o surtir.",
+        ];
+      }
+
+      const provider = supplier.proveedor || {};
+
+      const supplierText = [
+        provider.nombre || supplier.nombre || "Proveedor sin nombre",
+        supplier.es_principal ? "Principal" : "Alternativo",
+        provider.rfc ? `RFC: ${provider.rfc}` : "",
+      ].filter(Boolean).join("\n");
+
+      const contactText = [
+        provider.contacto_nombre ? `Contacto: ${provider.contacto_nombre}` : "",
+        provider.telefono ? `Tel: ${provider.telefono}` : "",
+        provider.correo ? `Email: ${provider.correo}` : "",
+      ].filter(Boolean).join("\n") || supplierContact(provider) || "-";
+
+      const costText = [
+        supplier.sku_proveedor ? `SKU: ${supplier.sku_proveedor}` : "SKU: -",
+        `Costo prov.: ${
+          supplier.precio_compra !== "" && supplier.precio_compra !== null
+            ? money(supplier.precio_compra)
+            : "-"
+        }`,
+        `Moneda: ${supplier.moneda || "MXN"}`,
+        `Costo pedido: ${money(product.costo_unitario)}`,
+      ].join("\n");
+
+      const deliveryText = [
+        supplier.tiempo_entrega_dias !== "" && supplier.tiempo_entrega_dias !== null
+          ? `Entrega: ${supplier.tiempo_entrega_dias} días`
+          : "Entrega: -",
+        supplier.notas ? `Notas: ${supplier.notas}` : "",
+      ].filter(Boolean).join("\n") || "-";
+
+      return [productText, supplierText, contactText, costText, deliveryText];
+    }),
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 6.8,
+      cellPadding: 2.1,
+      textColor: BRAND_DARK,
+      lineColor: BRAND_BORDER,
+      lineWidth: 0.2,
+      valign: "top",
+      overflow: "linebreak",
+    },
+    headStyles: {
+      fillColor: BRAND_PRIMARY,
+      textColor: WHITE,
+      fontStyle: "bold",
+      fontSize: 7,
+    },
+    alternateRowStyles: {
+      fillColor: [250, 251, 253],
+    },
+    tableWidth: pageWidth - marginX * 2,
+    columnStyles: {
+      0: { cellWidth: 36 },
+      1: { cellWidth: 31 },
+      2: { cellWidth: 38 },
+      3: { cellWidth: 38 },
+      4: { cellWidth: 35 },
+    },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 1) {
+        const raw = Array.isArray(data.cell.raw)
+          ? data.cell.raw.join(" ")
+          : String(data.cell.raw || "");
+
+        if (raw.includes("Sin proveedor")) {
+          data.cell.styles.textColor = BRAND_WARNING;
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = [255, 247, 237];
+        }
+      }
+    },
+    didDrawPage: () => {
+      drawFooter();
+    },
+  });
+
+  const pageCount = doc.internal.getNumberOfPages();
+
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    if (page > 1) {
+      drawHeader();
+    }
+  }
+
+  doc.save(`proveedores-${text(order.folio, "pedido")}.pdf`);
+}
+

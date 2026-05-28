@@ -11,8 +11,7 @@ export async function downloadProductLabel(product) {
   const productName = String(product.nombre || "Producto").trim();
 
   if (!productCode) {
-    alert("Este producto no tiene código. Agrega un código antes de descargar la etiqueta.");
-    return;
+    throw new Error("Este producto no tiene código. Agrega un código antes de descargar la etiqueta.");
   }
 
   const pdf = new jsPDF({

@@ -235,3 +235,44 @@ export function getClientOrderTotals(orders = []) {
     },
   );
 }
+
+
+export function validateClientData(form = {}, addresses = []) {
+  if (!String(form.nombre || "").trim()) {
+    return "El nombre comercial es obligatorio.";
+  }
+
+  const email = String(form.correo || "").trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return "El correo del cliente no tiene un formato válido.";
+  }
+
+  const rfc = String(form.rfc || "").trim().toUpperCase();
+  if (rfc && !/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(rfc)) {
+    return "El RFC no tiene un formato válido.";
+  }
+
+  const postalCode = String(form.codigo_postal || "").trim();
+  if (postalCode && !/^\d{5}$/.test(postalCode)) {
+    return "El código postal fiscal debe tener 5 dígitos.";
+  }
+
+  const incompleteAddress = addresses.find(
+    (address) => !address.nombre || !address.direccion,
+  );
+
+  if (incompleteAddress) {
+    return "Cada dirección de entrega necesita nombre y dirección.";
+  }
+
+  const invalidAddressZip = addresses.find((address) => {
+    const zip = String(address.codigo_postal || "").trim();
+    return zip && !/^\d{5}$/.test(zip);
+  });
+
+  if (invalidAddressZip) {
+    return "Los códigos postales de entrega deben tener 5 dígitos.";
+  }
+
+  return null;
+}

@@ -21,6 +21,7 @@ import TrackingPage from "./features/tracking/pages/TrackingPage.jsx";
 import PlaygroundPage from "./features/playground/pages/PlaygroundPage.jsx";
 import PlaygroundListPage from "./features/playground/pages/PlaygroundListPage.jsx";
 import PublicPlaygroundPage from "./features/playground/pages/PublicPlaygroundPage.jsx";
+import ProvedoresPage from "./features/proveedores/pages/ProveedoresAdminPage.jsx";
 
 export default function App() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="contrarecibo" element={<ReceiptsPage />} />
         <Route path="pedidos" element={<Pedidos />} />
         <Route path="playground" element={<PlaygroundListPage  />} />
+        <Route path="provedores" element={<ProvedoresPage />} />
         <Route path="playground/:playgroundId" element={<PlaygroundPage  />} />
       </Route>
 

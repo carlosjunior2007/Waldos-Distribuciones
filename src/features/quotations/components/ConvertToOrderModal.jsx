@@ -21,9 +21,29 @@ const PAYMENT_STATUS = [
   { value: "pagado", label: "Pagado" },
 ];
 
-function todayInput() {
+const DEFAULT_ORDER_DAYS = 15;
+
+function toLocalDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDateInputDaysFromToday(daysToAdd = 0) {
   const date = new Date();
-  return date.toISOString().slice(0, 10);
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + daysToAdd);
+
+  return toLocalDateInput(date);
+}
+
+function getDefaultOrderDates() {
+  return {
+    fecha_inicio: getDateInputDaysFromToday(0),
+    fecha_fin: getDateInputDaysFromToday(DEFAULT_ORDER_DAYS),
+  };
 }
 
 function toDateOrNull(value) {
@@ -41,20 +61,18 @@ export default function ConvertToOrderModal({
   onClose,
   onConfirm,
 }) {
-  const [form, setForm] = useState({
-    fecha_inicio: "",
-    fecha_fin: "",
+  const [form, setForm] = useState(() => ({
+    ...getDefaultOrderDates(),
     metodo_pago: "",
     estado_pago: "pendiente",
     notas: "",
-  });
+  }));
 
   useEffect(() => {
     if (!open) return;
 
     setForm({
-      fecha_inicio: "",
-      fecha_fin: "",
+      ...getDefaultOrderDates(),
       metodo_pago: "",
       estado_pago: "pendiente",
       notas: capitalizeFirstLetter(quotation?.notas || ""),

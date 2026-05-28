@@ -26,6 +26,16 @@ export default function ProductsMobileList({
   );
 }
 
+function getSuppliersLabel(item) {
+  const suppliers = item.proveedores_asociados || [];
+  if (!suppliers.length) return "Sin proveedores";
+
+  const main = suppliers.find((supplier) => supplier.es_principal) || suppliers[0];
+  const name = main?.nombre || main?.proveedor?.nombre || "Proveedor";
+
+  return suppliers.length === 1 ? name : `${name} +${suppliers.length - 1}`;
+}
+
 function ProductMobileCard({ item, onView, onEdit, onDelete, onDownloadLabel }) {
   const status = getInventoryStatus(item);
   const StatusIcon = status.icon;
@@ -42,6 +52,7 @@ function ProductMobileCard({ item, onView, onEdit, onDelete, onDownloadLabel }) 
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <MiniInfo label="Categoría" value={getCategoryLabel(item.categoria)} />
+        <MiniInfo label="Proveedores" value={getSuppliersLabel(item)} />
         <MiniInfo label="Compra" value={formatMoney(item.precio_compra)} />
         <MiniInfo label="Utilidad" value={formatUtilityPercent(item)} />
         <MiniInfo label="Precio" value={formatMoney(item.precio)} strong />

@@ -40,10 +40,7 @@ export async function exportProductsToPDF(filteredProducts = [], options = {}) {
   );
 
   if (!dataToExport.length) {
-    alert(
-      "No hay productos visibles en web y disponibles para exportar en PDF.",
-    );
-    return;
+    throw new Error("No hay productos visibles en web y disponibles para exportar en PDF.");
   }
 
   const pdf = new jsPDF({

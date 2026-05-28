@@ -77,6 +77,25 @@ export default function OrderDetailsModal({
         </section>
 
         <section className="rounded-[24px] border border-border bg-background p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+            Cotización asociada
+          </p>
+
+          {order.quotation ? (
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+              <InfoCard label="Folio" value={order.quotation.folio} />
+              <InfoCard label="Estado" value={order.quotation.estado || "Sin estado"} />
+              <InfoCard label="Total" value={formatMoney(order.quotation.total || 0)} />
+              <InfoCard label="Creada" value={formatDate(order.quotation.created_at)} />
+            </div>
+          ) : (
+            <p className="mt-3 rounded-2xl border border-dashed border-border bg-surface-soft p-4 text-sm text-text-muted">
+              Este pedido no está asociado a una cotización.
+            </p>
+          )}
+        </section>
+
+        <section className="rounded-[24px] border border-border bg-background p-4">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h4 className="text-sm font-bold text-text-primary">Productos del pedido</h4>
             <Package className="h-5 w-5 text-text-muted" />

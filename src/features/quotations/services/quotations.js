@@ -374,7 +374,36 @@ export async function fetchQuotationById(id) {
     const { data: products, error: pError } = await supabase
       .from("productos")
       .select(
-        "id, nombre, codigo, unidad, descripcion, precio, precio_compra",
+        `
+        id,
+        nombre,
+        codigo,
+        unidad,
+        descripcion,
+        precio,
+        precio_compra,
+        producto_proveedores (
+          id,
+          proveedor_id,
+          sku_proveedor,
+          precio_compra,
+          moneda,
+          tiempo_entrega_dias,
+          es_principal,
+          notas,
+          activo,
+          proveedores (
+            id,
+            nombre,
+            razon_social,
+            rfc,
+            telefono,
+            correo,
+            contacto_nombre,
+            activo
+          )
+        )
+      `,
       )
       .in("id", productoIds);
 
@@ -459,7 +488,7 @@ function buildQuotationHeader({ header, detailsPayload, folio = null }) {
     cliente_telefono: header.cliente_telefono || null,
     cliente_email: header.cliente_email || null,
 
-    estado: header.estado || "borrador",
+    estado: header.estado || "enviada",
     subtotal: totals.subtotal,
     descuento: totals.descuento,
     iva_porcentaje: totals.iva_porcentaje,

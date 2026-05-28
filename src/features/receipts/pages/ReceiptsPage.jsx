@@ -10,12 +10,20 @@ import { useReceipts } from "../hooks/useReceipts";
 import ReceiptModal from "../components/ReceiptModal";
 import ReceiptsTable from "../components/ReceiptsTable";
 import ReceiptsPagination from "../components/ReceiptsPagination";
+import ReceiptsMessageModal from "../components/ReceiptsMessageModal";
 
 export default function ReceiptsPage() {
   const receipts = useReceipts();
 
   return (
     <section className="space-y-6">
+      <ReceiptsMessageModal
+        open={receipts.messageModal.open}
+        title={receipts.messageModal.title}
+        message={receipts.messageModal.message}
+        tone={receipts.messageModal.tone}
+        onClose={receipts.closeMessageModal}
+      />
       <ReceiptModal
         open={receipts.modalOpen}
         editingReceipt={receipts.editingReceipt}

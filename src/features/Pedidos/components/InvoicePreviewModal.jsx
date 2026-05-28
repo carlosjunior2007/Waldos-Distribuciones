@@ -10,6 +10,7 @@ import {
   Pencil,
   ReceiptText,
   Save,
+  Search,
   Send,
   ShieldCheck,
   Trash2,
@@ -19,6 +20,14 @@ import {
 
 import Modal from "../../../components/ui/Modal";
 import { capitalizeFirstLetter, formatMoney } from "../order.helpers";
+import {
+  searchCfdiUses,
+  searchCurrencies,
+  searchFiscalRegimes,
+  searchPaymentForms,
+  searchPaymentMethods,
+  searchPostalCodes,
+} from "../services/facturamaCatalogs.service";
 
 const DEFAULT_SERIE = "F";
 const DEFAULT_CURRENCY = "MXN";
@@ -357,14 +366,223 @@ function FieldSelect({ label, value, onChange, options }) {
   );
 }
 
-function EditableFiscalField({ editing, type = "input", label, value, onChange, options, placeholder }) {
+function EditableFiscalField({
+  editing,
+  type = "input",
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  searchFn,
+  defaultQuery = "",
+  helper = "",
+}) {
   if (editing) {
-    if (type === "select") return <FieldSelect label={label} value={value} onChange={onChange} options={options} />;
-    return <FieldInput label={label} value={value} onChange={onChange} placeholder={placeholder} />;
+    if (type === "catalog") {
+      return (
+        <CatalogFiscalInput
+          label={label}
+          value={value}
+          onChange={onChange}
+          searchFn={searchFn}
+          defaultQuery={defaultQuery}
+          placeholder={placeholder}
+          helper={helper}
+        />
+      );
+    }
+
+    if (type === "select") {
+      return (
+        <FieldSelect
+          label={label}
+          value={value}
+          onChange={onChange}
+          options={options}
+        />
+      );
+    }
+
+    return (
+      <FieldInput
+        label={label}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+      />
+    );
   }
 
-  const labelText = type === "select" ? options?.find((option) => option.value === value)?.label || value : value;
+  const labelText =
+    type === "select"
+      ? options?.find((option) => option.value === value)?.label || value
+      : value;
+
   return <FieldView label={label} value={labelText} />;
+}
+
+function CatalogFiscalInput({
+  label,
+  value,
+  onChange,
+  searchFn,
+  defaultQuery = "",
+  placeholder = "Buscar en catálogo...",
+  helper = "",
+}) {
+  const [inputValue, setInputValue] = useState(value || "");
+  const [selected, setSelected] = useState(Boolean(value));
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    setInputValue(value || "");
+    setSelected(Boolean(value));
+  }, [value]);
+
+  const effectiveQuery = selected
+    ? ""
+    : String(inputValue || defaultQuery || "").trim();
+
+  useEffect(() => {
+    if (selected || !searchFn || effectiveQuery.length < 2) {
+      setResults([]);
+      setErrorMessage("");
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+
+        const rows = await searchFn(effectiveQuery);
+
+        if (!cancelled) setResults(rows || []);
+      } catch (error) {
+        console.error("Error consultando catálogo:", error);
+
+        if (!cancelled) {
+          setResults([]);
+          setErrorMessage(
+            error.message || "No se pudo consultar el catálogo fiscal.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [effectiveQuery, selected, searchFn]);
+
+  function handleInputChange(nextValue) {
+    setInputValue(nextValue);
+    setSelected(false);
+    onChange(nextValue);
+  }
+
+  function selectItem(item) {
+    const code = item.clave || item.codigoPostal || "";
+    const description = item.descripcion || item.estado || item.municipio || "";
+    const labelText = [code, description].filter(Boolean).join(" - ");
+    const nextValue = code || labelText;
+
+    setInputValue(labelText || nextValue);
+    setSelected(true);
+    setResults([]);
+    onChange(nextValue);
+  }
+
+  function clearSelection() {
+    setInputValue("");
+    setSelected(false);
+    setResults([]);
+    onChange("");
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="space-y-2">
+        <span className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
+          {label}
+        </span>
+
+        <div className="rounded-2xl border border-border bg-background px-3 py-2 focus-within:border-primary-400">
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 shrink-0 text-text-muted" />
+
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(event) => handleInputChange(event.target.value)}
+              placeholder={placeholder}
+              className="h-9 min-w-0 flex-1 bg-transparent text-sm font-bold text-text-primary outline-none"
+            />
+
+            {selected && inputValue ? (
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="shrink-0 rounded-xl bg-surface-soft px-2.5 py-1.5 text-xs font-bold text-text-secondary transition hover:bg-surface"
+              >
+                Cambiar
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </label>
+
+      {!selected && helper ? (
+        <p className="text-xs text-text-muted">{helper}</p>
+      ) : null}
+
+      {selected && inputValue ? (
+        <p className="rounded-xl border border-success-100 bg-success-50 px-3 py-2 text-xs font-semibold text-success-700">
+          Seleccionado
+        </p>
+      ) : null}
+
+      {loading ? (
+        <p className="text-xs font-semibold text-primary-600">
+          Buscando en catálogo...
+        </p>
+      ) : null}
+
+      {!selected && errorMessage ? (
+        <p className="rounded-xl border border-warning-100 bg-warning-50 px-3 py-2 text-xs font-medium text-warning-800">
+          {errorMessage}
+        </p>
+      ) : null}
+
+      {!selected && !loading && !errorMessage && results.length ? (
+        <div className="max-h-44 overflow-y-auto rounded-2xl border border-border bg-surface p-1">
+          {results.map((item, index) => (
+            <button
+              key={`${item.clave}-${item.descripcion}-${item.codigoPostal}-${index}`}
+              type="button"
+              onClick={() => selectItem(item)}
+              className="w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-surface-soft"
+            >
+              <p className="text-sm font-bold text-text-primary">
+                {[item.clave, item.codigoPostal].filter(Boolean)[0] || "Sin clave"}
+              </p>
+              <p className="mt-1 text-xs text-text-secondary">
+                {item.descripcion || item.estado || item.municipio || "Sin descripción"}
+              </p>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function ActionButton({ icon: Icon, title, description, onClick, disabled, tone = "default" }) {
@@ -851,7 +1069,7 @@ export default function InvoicePreviewModal({
           </div>
 
           {activeTab === "datos" ? (
-            <div className="grid grid-cols-1 gap-5 2xl:grid-cols-[1fr_1fr]">
+            <div className="grid grid-cols-1 gap-5">
               <Section
                 title="Cliente receptor"
                 icon={ShieldCheck}
@@ -866,12 +1084,45 @@ export default function InvoicePreviewModal({
                   />
                 }
               >
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <EditableFiscalField editing={editingSection === "receiver"} label="Razón social" value={invoiceData.receiver.name} onChange={(value) => updateDraft("receiverName", value)} placeholder="Razón social" />
                   <EditableFiscalField editing={editingSection === "receiver"} label="RFC" value={invoiceData.receiver.rfc} onChange={(value) => updateDraft("receiverRfc", value.toUpperCase())} placeholder="RFC" />
-                  <EditableFiscalField editing={editingSection === "receiver"} type="select" label="Régimen fiscal" value={invoiceData.receiver.fiscalRegime} options={REGIMEN_FISCAL_OPTIONS} onChange={(value) => updateDraft("receiverFiscalRegime", value)} />
-                  <EditableFiscalField editing={editingSection === "receiver"} type="select" label="Uso CFDI" value={invoiceData.receiver.cfdiUse} options={USO_CFDI_OPTIONS} onChange={(value) => updateDraft("receiverCfdiUse", value)} />
-                  <EditableFiscalField editing={editingSection === "receiver"} label="CP fiscal" value={invoiceData.receiver.taxZipCode} onChange={(value) => updateDraft("receiverTaxZipCode", value.replace(/[^0-9]/g, "").slice(0, 5))} placeholder="00000" />
+                  <EditableFiscalField
+                    editing={editingSection === "receiver"}
+                    type="catalog"
+                    label="Régimen fiscal"
+                    value={invoiceData.receiver.fiscalRegime}
+                    onChange={(value) => updateDraft("receiverFiscalRegime", value)}
+                    searchFn={searchFiscalRegimes}
+                    defaultQuery={invoiceData.receiver.rfc}
+                    placeholder="Captura RFC para sugerir régimen"
+                    helper="Consulta regímenes aplicables usando el RFC del receptor."
+                  />
+                  <EditableFiscalField
+                    editing={editingSection === "receiver"}
+                    type="catalog"
+                    label="Uso CFDI"
+                    value={invoiceData.receiver.cfdiUse}
+                    onChange={(value) => updateDraft("receiverCfdiUse", value)}
+                    searchFn={searchCfdiUses}
+                    defaultQuery="G03"
+                    placeholder="Busca uso CFDI, ej. G03"
+                  />
+                  <EditableFiscalField
+                    editing={editingSection === "receiver"}
+                    type="catalog"
+                    label="CP fiscal"
+                    value={invoiceData.receiver.taxZipCode}
+                    onChange={(value) =>
+                      updateDraft(
+                        "receiverTaxZipCode",
+                        value.replace(/[^0-9]/g, "").slice(0, 5),
+                      )
+                    }
+                    searchFn={searchPostalCodes}
+                    defaultQuery={invoiceData.receiver.taxZipCode}
+                    placeholder="Busca código postal"
+                  />
                   <EditableFiscalField editing={editingSection === "receiver"} label="Correo" value={invoiceData.receiver.email} onChange={(value) => updateDraft("receiverEmail", value)} placeholder="correo@cliente.com" />
                 </div>
               </Section>
@@ -890,13 +1141,40 @@ export default function InvoicePreviewModal({
                   />
                 }
               >
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <FieldView label="Tipo CFDI" value="I - Ingreso" />
-                  <EditableFiscalField editing={editingSection === "header"} label="Serie" value={invoiceData.header.serie} onChange={(value) => updateDraft("serie", value.toUpperCase())} placeholder="F" />
-                  <EditableFiscalField editing={editingSection === "header"} label="Folio" value={invoiceData.header.folio} onChange={(value) => updateDraft("folio", value)} placeholder="Folio" />
-                  <EditableFiscalField editing={editingSection === "header"} type="select" label="Moneda" value={invoiceData.header.currency} options={CURRENCY_OPTIONS} onChange={(value) => updateDraft("currency", value)} />
-                  <EditableFiscalField editing={editingSection === "header"} type="select" label="Forma de pago" value={invoiceData.header.paymentForm} options={PAYMENT_FORM_OPTIONS} onChange={(value) => updateDraft("paymentForm", value)} />
-                  <EditableFiscalField editing={editingSection === "header"} type="select" label="Método de pago" value={invoiceData.header.paymentMethod} options={PAYMENT_METHOD_OPTIONS} onChange={(value) => updateDraft("paymentMethod", value)} />
+                  <FieldView label="Serie" value={invoiceData.header.serie || "-"} />
+                  <FieldView label="Folio" value={invoiceData.header.folio || "-"} />
+                  <EditableFiscalField
+                    editing={editingSection === "header"}
+                    type="catalog"
+                    label="Moneda"
+                    value={invoiceData.header.currency}
+                    onChange={(value) => updateDraft("currency", value)}
+                    searchFn={searchCurrencies}
+                    defaultQuery="MXN"
+                    placeholder="Busca moneda, ej. MXN"
+                  />
+                  <EditableFiscalField
+                    editing={editingSection === "header"}
+                    type="catalog"
+                    label="Forma de pago"
+                    value={invoiceData.header.paymentForm}
+                    onChange={(value) => updateDraft("paymentForm", value)}
+                    searchFn={searchPaymentForms}
+                    defaultQuery={invoiceData.header.paymentMethod === "PPD" ? "99" : "03"}
+                    placeholder="Busca forma de pago, ej. transferencia"
+                  />
+                  <EditableFiscalField
+                    editing={editingSection === "header"}
+                    type="catalog"
+                    label="Método de pago"
+                    value={invoiceData.header.paymentMethod}
+                    onChange={(value) => updateDraft("paymentMethod", value)}
+                    searchFn={searchPaymentMethods}
+                    defaultQuery="PUE"
+                    placeholder="Busca método de pago, ej. PUE"
+                  />
                   <FieldView label="Exportación" value="01 - No aplica" />
                 </div>
               </Section>

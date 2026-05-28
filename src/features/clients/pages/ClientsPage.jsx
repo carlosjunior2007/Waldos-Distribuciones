@@ -13,6 +13,7 @@ import ClientListCard from "../components/ClientListCard";
 import ClientDetail from "../components/ClientDetail";
 import LabelModal from "../components/LabelModal";
 import { LabelPreviewContent } from "../components/LabelPreview";
+import ClientMessageModal from "../components/ClientMessageModal";
 
 export default function ClientsPage() {
   const clients = useClients();
@@ -20,6 +21,22 @@ export default function ClientsPage() {
 
   return (
     <section className="space-y-6">
+      <ClientMessageModal
+        open={clients.messageModal.open}
+        title={clients.messageModal.title}
+        message={clients.messageModal.message}
+        tone={clients.messageModal.tone}
+        onClose={clients.closeMessageModal}
+      />
+
+      <ClientMessageModal
+        open={labels.messageModal.open}
+        title={labels.messageModal.title}
+        message={labels.messageModal.message}
+        tone={labels.messageModal.tone}
+        onClose={labels.closeMessageModal}
+      />
+
 
       {labels.printPayload ? (
         <div

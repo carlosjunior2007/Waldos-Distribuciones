@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FileSpreadsheet, Globe2, Loader2, Plus, Trash2 } from 'lucide-react';
 import PlaygroundCreateModal from '../components/PlaygroundCreateModal';
+import PlaygroundConfirmModal from '../components/PlaygroundConfirmModal';
 import { createPlayground, deletePlayground, getPlaygrounds } from '../services/playground.service';
 
 export default function PlaygroundListPage() {
@@ -11,6 +12,7 @@ export default function PlaygroundListPage() {
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
   const [error, setError] = useState('');
 
   async function load() {
@@ -49,19 +51,22 @@ export default function PlaygroundListPage() {
   }
 
 
-  async function handleDelete(event, item) {
+  function handleDelete(event, item) {
     event.preventDefault();
     event.stopPropagation();
+    setItemToDelete(item);
+  }
 
-    const confirmed = window.confirm(`¿Eliminar "${item.name}"? Esta acción no se puede deshacer.`);
-    if (!confirmed) return;
+  async function confirmDeletePlayground() {
+    if (!itemToDelete?.id) return;
 
-    setDeletingId(item.id);
+    setDeletingId(itemToDelete.id);
     setError('');
 
     try {
-      await deletePlayground(item.id);
-      setItems((prev) => prev.filter((playground) => playground.id !== item.id));
+      await deletePlayground(itemToDelete.id);
+      setItems((prev) => prev.filter((playground) => playground.id !== itemToDelete.id));
+      setItemToDelete(null);
     } catch (deleteError) {
       console.error('Error eliminando playground:', deleteError);
       setError('No se pudo eliminar el playground. Revisa permisos de Supabase.');
@@ -72,6 +77,16 @@ export default function PlaygroundListPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 px-4 py-8 md:px-8">
+      <PlaygroundConfirmModal
+        open={Boolean(itemToDelete)}
+        title="Eliminar playground"
+        message="Esta acción no se puede deshacer. Se eliminará el playground completo."
+        itemName={itemToDelete?.name}
+        loading={deletingId === itemToDelete?.id}
+        confirmText="Sí, eliminar playground"
+        onClose={() => setItemToDelete(null)}
+        onConfirm={confirmDeletePlayground}
+      />
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>

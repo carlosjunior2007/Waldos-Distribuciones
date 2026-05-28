@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Download, Search } from "lucide-react";
 
 import Modal from "../../../components/ui/Modal";
+import ClientMessageModal, { createMessageState } from "./ClientMessageModal";
 import { generateLabelPDF } from "../../../utils/labelPdf";
 
 import LabelPreview from "./LabelPreview";
@@ -30,6 +31,7 @@ export default function LabelModal({
 }) {
   const [form, setForm] = useState(INITIAL_LABEL_FORM);
   const [saving, setSaving] = useState(false);
+  const [messageModal, setMessageModal] = useState(createMessageState());
 
   useEffect(() => {
     if (!open) return;
@@ -52,16 +54,25 @@ export default function LabelModal({
     }));
   }, [selectedProduct]);
 
+  function showMessage(title, message, tone = "warning") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
 
     if (!selectedClient?.id) {
-      alert("Selecciona un cliente.");
+      showMessage("Selecciona un cliente", "Necesitas seleccionar un cliente antes de guardar la etiqueta.", "warning");
       return;
     }
 
     if (!form.producto_id) {
-      alert("Selecciona un producto.");
+      showMessage("Selecciona un producto", "Necesitas seleccionar un producto para generar la etiqueta.", "warning");
       return;
     }
 
@@ -80,7 +91,11 @@ export default function LabelModal({
       onClose();
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo guardar la etiqueta.");
+      showMessage(
+        "No se pudo guardar la etiqueta",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setSaving(false);
     }
@@ -98,7 +113,11 @@ export default function LabelModal({
       });
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo generar el PDF.");
+      showMessage(
+        "No se pudo generar el PDF",
+        error.message || "Revisa la vista previa de la etiqueta.",
+        "error",
+      );
     }
   }
 
@@ -109,6 +128,15 @@ export default function LabelModal({
   }
 
   return (
+    <>
+      <ClientMessageModal
+        open={messageModal.open}
+        title={messageModal.title}
+        message={messageModal.message}
+        tone={messageModal.tone}
+        onClose={() => setMessageModal(createMessageState())}
+      />
+
     <Modal
       open={open}
       onClose={onClose}
@@ -219,6 +247,7 @@ export default function LabelModal({
         </div>
       </div>
     </Modal>
+    </>
   );
 }
 

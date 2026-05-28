@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useDebouncedValue } from "../../../hook/useDebouncedValue";
+import { createMessageState } from "../components/LabelsMessageModal";
 import { generateLabelPDF } from "../../../utils/labelPdf";
 
 import {
@@ -33,6 +34,7 @@ export function useLabels() {
   const [labelToDelete, setLabelToDelete] = useState(null);
 
   const [printPayload, setPrintPayload] = useState(null);
+  const [messageModal, setMessageModal] = useState(createMessageState());
 
   const [companyOptions, setCompanyOptions] = useState(() => {
     try {
@@ -42,6 +44,20 @@ export function useLabels() {
       return COMPANY_DEFAULTS;
     }
   });
+
+  function showMessage(title, message, tone = "info") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
+  function closeMessageModal() {
+    setMessageModal(createMessageState());
+  }
+
 
   useEffect(() => {
     localStorage.setItem(COMPANY_STORAGE_KEY, JSON.stringify(companyOptions));
@@ -53,7 +69,11 @@ export function useLabels() {
       setProducts(data);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron cargar los productos.");
+      showMessage(
+        "No se pudieron cargar los productos",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -64,7 +84,11 @@ export function useLabels() {
       setClients(data);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron buscar clientes.");
+      showMessage(
+        "No se pudieron buscar clientes",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoadingClients(false);
     }
@@ -82,7 +106,11 @@ export function useLabels() {
       setLabels(data);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron cargar las etiquetas.");
+      showMessage(
+        "No se pudieron cargar las etiquetas",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoadingLabels(false);
     }
@@ -97,7 +125,11 @@ export function useLabels() {
       await loadLabels(selectedClient?.id);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo eliminar la etiqueta.");
+      showMessage(
+        "No se pudo eliminar la etiqueta",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -136,7 +168,11 @@ export function useLabels() {
       });
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo generar el PDF.");
+      showMessage(
+        "No se pudo generar el PDF",
+        error.message || "Revisa la vista previa e intenta de nuevo.",
+        "error",
+      );
     } finally {
       setPrintPayload(null);
     }
@@ -188,6 +224,9 @@ export function useLabels() {
     setLabelToDelete,
 
     printPayload,
+
+    messageModal,
+    closeMessageModal,
 
     companyOptions,
     setCompanyOptions,

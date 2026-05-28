@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createMessageState } from "../components/QuotationsMessageModal";
 
 import {
   fetchQuotations,
@@ -10,6 +11,7 @@ import {
 } from "../services/quotations.js";
 
 import { generateQuotationPDF } from "../../../utils/quotationPdf";
+import { generateQuotationSuppliersPDF } from "../services/quotationSuppliersPdf";
 import { buildLastMonthsOptions } from "../quotation.helpers";
 
 export function useQuotations() {
@@ -46,6 +48,7 @@ export function useQuotations() {
   const [quotationToConvert, setQuotationToConvert] = useState(null);
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [messageModal, setMessageModal] = useState(createMessageState());
 
   const monthOptions = useMemo(() => buildLastMonthsOptions(18), []);
 
@@ -57,6 +60,19 @@ export function useQuotations() {
 
     return () => clearTimeout(timer);
   }, [searchInput]);
+
+  function showMessage(title, message, tone = "info") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
+  function closeMessageModal() {
+    setMessageModal(createMessageState());
+  }
 
   async function loadData() {
     try {
@@ -81,7 +97,11 @@ export function useQuotations() {
       setSummary(summaryRes);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron cargar las cotizaciones.");
+      showMessage(
+        "No se pudieron cargar las cotizaciones",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -108,7 +128,11 @@ export function useQuotations() {
       setModalOpen(true);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo cargar la cotización.");
+      showMessage(
+        "No se pudo cargar la cotización",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -122,7 +146,11 @@ export function useQuotations() {
       await loadData();
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo eliminar la cotización.");
+      showMessage(
+        "No se pudo eliminar la cotización",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setDeleting(false);
     }
@@ -134,7 +162,26 @@ export function useQuotations() {
       generateQuotationPDF(quotation);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo generar el PDF.");
+      showMessage(
+        "No se pudo generar el PDF",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
+    }
+  }
+
+
+  async function downloadSuppliersPdf(id) {
+    try {
+      const quotation = await fetchQuotationById(id);
+      generateQuotationSuppliersPDF(quotation);
+    } catch (error) {
+      console.error(error);
+      showMessage(
+        "No se pudo generar el PDF de proveedores",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -154,8 +201,10 @@ export function useQuotations() {
       const quotation = await fetchQuotationById(id);
 
       if (!quotation?.cliente_id) {
-        alert(
+        showMessage(
+          "Cliente no asociado",
           "Para pasar esta cotización a pedido, primero tienes que asociar un cliente registrado en el sistema.",
+          "warning",
         );
         return;
       }
@@ -164,7 +213,11 @@ export function useQuotations() {
       setConvertModalOpen(true);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo cargar la cotización.");
+      showMessage(
+        "No se pudo cargar la cotización",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -186,10 +239,18 @@ export function useQuotations() {
       setConvertModalOpen(false);
       setQuotationToConvert(null);
       await loadData();
-      alert("Cotización convertida a pedido.");
+      showMessage(
+        "Cotización convertida a pedido",
+        "El pedido se creó correctamente desde la cotización.",
+        "success",
+      );
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo convertir a pedido.");
+      showMessage(
+        "No se pudo convertir a pedido",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setConverting(false);
     }
@@ -227,10 +288,16 @@ export function useQuotations() {
 
     loadData,
     downloadPdf,
+    downloadSuppliersPdf,
 
     quotationToConvert,
     convertModalOpen,
     converting,
+
+    messageModal,
+    closeMessageModal,
+    showMessage,
+
     openConvertModal,
     closeConvertModal,
     confirmConvertToOrder,

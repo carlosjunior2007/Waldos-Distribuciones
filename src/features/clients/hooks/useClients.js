@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useDebouncedValue } from "../../../hook/useDebouncedValue";
+import { createMessageState } from "../components/ClientMessageModal";
 
 import {
   createClient,
@@ -34,6 +35,20 @@ export function useClients() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
+  const [messageModal, setMessageModal] = useState(createMessageState());
+
+  function showMessage(title, message, tone = "info") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
+  function closeMessageModal() {
+    setMessageModal(createMessageState());
+  }
 
   async function loadClients() {
     try {
@@ -53,7 +68,11 @@ export function useClients() {
       }
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron cargar los clientes.");
+      showMessage(
+        "No se pudieron cargar los clientes",
+        error.message || "Revisa tu conexión o intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -121,7 +140,11 @@ export function useClients() {
       setClients(updatedClients);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo guardar el cliente.");
+      showMessage(
+        "No se pudo guardar el cliente",
+        error.message || "Revisa la información e intenta de nuevo.",
+        "error",
+      );
     } finally {
       setSaving(false);
     }
@@ -157,13 +180,19 @@ export function useClients() {
       console.error(error);
 
       if (String(error.message || "").toLowerCase().includes("foreign key")) {
-        alert(
-          "No puedes borrar este cliente porque tiene etiquetas o pedidos asociados.",
+        showMessage(
+          "No puedes borrar este cliente",
+          "Este cliente tiene etiquetas o pedidos asociados. Conserva el registro para no romper el historial.",
+          "warning",
         );
         return;
       }
 
-      alert(error.message || "No se pudo eliminar el cliente.");
+      showMessage(
+        "No se pudo eliminar el cliente",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setDeleting(false);
     }
@@ -200,6 +229,9 @@ export function useClients() {
 
     clientToDelete,
     setClientToDelete,
+
+    messageModal,
+    closeMessageModal,
 
     saveClient,
     removeClient,

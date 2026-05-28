@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createMessageState } from "../components/ReceiptsMessageModal";
 
 import {
   fetchReceipts,
@@ -23,6 +24,20 @@ export function useReceipts() {
 
   const [receiptToDelete, setReceiptToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [messageModal, setMessageModal] = useState(createMessageState());
+
+  function showMessage(title, message, tone = "info") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
+  function closeMessageModal() {
+    setMessageModal(createMessageState());
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -43,7 +58,11 @@ export function useReceipts() {
       setTotalPages(res.totalPages);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudieron cargar los contra recibos.");
+      showMessage(
+        "No se pudieron cargar los contra recibos",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -65,7 +84,11 @@ export function useReceipts() {
       setModalOpen(true);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo cargar el contra recibo.");
+      showMessage(
+        "No se pudo cargar el contra recibo",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -80,7 +103,11 @@ export function useReceipts() {
       generateReceiptPDF(receipt);
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo generar el PDF.");
+      showMessage(
+        "No se pudo generar el PDF",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     }
   }
 
@@ -94,7 +121,11 @@ export function useReceipts() {
       await loadData();
     } catch (error) {
       console.error(error);
-      alert(error.message || "No se pudo eliminar el contra recibo.");
+      showMessage(
+        "No se pudo eliminar el contra recibo",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setDeleting(false);
     }
@@ -121,6 +152,10 @@ export function useReceipts() {
     setReceiptToDelete,
     deleting,
     removeReceipt,
+
+    messageModal,
+    closeMessageModal,
+    showMessage,
 
     loadData,
     downloadReceipt,

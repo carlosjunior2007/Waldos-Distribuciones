@@ -17,6 +17,7 @@ import {
 } from "../services/quotations.js";
 
 import Modal from "../../../components/ui/Modal";
+import QuotationsMessageModal, { createMessageState } from "./QuotationsMessageModal";
 import SearchInput from "../../../components/ui/SearchInput";
 import ActionIconButton from "../../../components/ui/ActionIconButton";
 
@@ -63,6 +64,7 @@ export default function QuotationFormModal({
   const [form, setForm] = useState(INITIAL_QUOTATION_FORM);
   const [items, setItems] = useState([]);
   const [activeTab, setActiveTab] = useState("quotation");
+  const [messageModal, setMessageModal] = useState(createMessageState());
 
   useEffect(() => {
     if (!open) return;
@@ -109,7 +111,7 @@ export default function QuotationFormModal({
       setClientMode("manual");
       setForm({
         ...INITIAL_QUOTATION_FORM,
-        estado: "borrador",
+        estado: "enviada",
         fecha_vencimiento: formatInputDate(defaultDate),
       });
 
@@ -187,6 +189,15 @@ export default function QuotationFormModal({
   const totals = useMemo(() => {
     return calculateQuotationTotals(items, form);
   }, [items, form.descuento, form.iva_porcentaje, form.isr_porcentaje]);
+
+  function showMessage(title, message, tone = "warning") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
 
   function updateFormField(key, value) {
     const nextValue = CAPITALIZED_FORM_FIELDS.has(key)
@@ -358,12 +369,20 @@ export default function QuotationFormModal({
     e.preventDefault();
 
     if (!form.cliente_nombre.trim()) {
-      alert("El nombre del cliente es obligatorio.");
+      showMessage(
+        "Cliente requerido",
+        "El nombre del cliente es obligatorio.",
+        "warning",
+      );
       return;
     }
 
     if (!items.length) {
-      alert("Agrega al menos un producto.");
+      showMessage(
+        "Agrega productos",
+        "Agrega al menos un producto antes de guardar la cotización.",
+        "warning",
+      );
       return;
     }
 
@@ -391,13 +410,26 @@ export default function QuotationFormModal({
       onClose();
     } catch (error) {
       console.error("Error guardando cotización:", error);
-      alert(error.message || "No se pudo guardar la cotización.");
+      showMessage(
+        "No se pudo guardar la cotización",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
   }
 
   return (
+    <>
+      <QuotationsMessageModal
+        open={messageModal.open}
+        title={messageModal.title}
+        message={messageModal.message}
+        tone={messageModal.tone}
+        onClose={() => setMessageModal(createMessageState())}
+      />
+
     <Modal
       open={open}
       onClose={onClose}
@@ -430,7 +462,7 @@ export default function QuotationFormModal({
               />
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="grid min-h-[560px] gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.35fr)]">
               <ProductSearchSection
                 productQuery={productQuery}
                 setProductQuery={setProductQuery}
@@ -452,6 +484,7 @@ export default function QuotationFormModal({
         <CompactFooter form={form} totals={totals} loading={loading} />
       </form>
     </Modal>
+    </>
   );
 }
 
@@ -867,6 +900,10 @@ function SegmentButton({ active, children, onClick }) {
   );
 }
 
+function isFinalQuotationStatus(status) {
+  return ["aceptada", "convertida"].includes(String(status || "").toLowerCase());
+}
+
 function QuoteConfigSection({ form, updateFormField }) {
   return (
     <section className="rounded-[24px] border border-border bg-background p-5 shadow-[var(--shadow-soft)]">
@@ -878,27 +915,44 @@ function QuoteConfigSection({ form, updateFormField }) {
       </div>
 
       <div className="mt-5 grid gap-4">
-        <Field label="Estado">
+        <Field
+          label="Estado"
+          helper={
+            form.estado === "convertida"
+              ? "Esta cotización ya fue convertida a pedido. El estado se mantiene bloqueado para evitar regresarla a borrador por accidente."
+              : undefined
+          }
+        >
           <select
             value={form.estado}
+            disabled={form.estado === "convertida"}
             onChange={(e) => updateFormField("estado", e.target.value)}
-            className={inputClass}
+            className={`${inputClass} disabled:bg-surface-soft disabled:text-text-muted`}
           >
             <option value="borrador">Borrador</option>
             <option value="enviada">Enviada</option>
             <option value="aceptada">Aceptada</option>
             <option value="rechazada">Rechazada</option>
+            <option value="convertida">Convertida</option>
           </select>
         </Field>
 
-        <Field label="Fecha de vencimiento">
+        <Field
+          label="Fecha de vencimiento"
+          helper={
+            isFinalQuotationStatus(form.estado)
+              ? "La fecha de vencimiento ya no se toma en cuenta cuando la cotización está aceptada o convertida."
+              : undefined
+          }
+        >
           <input
             type="date"
             value={form.fecha_vencimiento}
+            disabled={isFinalQuotationStatus(form.estado)}
             onChange={(e) =>
               updateFormField("fecha_vencimiento", e.target.value)
             }
-            className={inputClass}
+            className={`${inputClass} disabled:bg-surface-soft disabled:text-text-muted`}
           />
         </Field>
 
@@ -1066,7 +1120,7 @@ function ProductSearchSection({
   addProduct,
 }) {
   return (
-    <section className="min-w-0 rounded-[24px] border border-border bg-background p-5 shadow-[var(--shadow-soft)]">
+    <section className="min-w-0 self-start rounded-[24px] border border-border bg-background p-5 shadow-[var(--shadow-soft)] xl:sticky xl:top-0">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h4 className="text-base font-bold text-text-primary">
@@ -1085,7 +1139,7 @@ function ProductSearchSection({
         className="mt-4 bg-surface"
       />
 
-      <div className="mt-4 max-h-72 space-y-2 overflow-y-auto pr-1">
+      <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1 xl:max-h-[430px]">
         {productResults.length ? (
           productResults.map((product) => (
             <button
@@ -1135,22 +1189,28 @@ function AddedProductsSection({
   removeItem,
 }) {
   return (
-    <section className="min-w-0 rounded-[24px] border border-border bg-background p-5 shadow-[var(--shadow-soft)]">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <section className="min-w-0 self-start rounded-[24px] border border-border bg-background p-5 shadow-[var(--shadow-soft)] xl:min-h-[560px]">
+      <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h4 className="text-base font-bold text-text-primary">
             Productos agregados
           </h4>
           <p className="mt-1 text-sm text-text-secondary">
-            Aquí ajustas cantidades, costo, utilidad y precio.
+            Edita cada producto sin pelearte con una tabla apretada.
           </p>
         </div>
 
-        {rows.length ? (
-          <span className="inline-flex w-fit rounded-full bg-surface-soft px-3 py-1 text-xs font-semibold text-text-muted">
-            Los más recientes quedan arriba
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex w-fit rounded-full bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700">
+            {rows.length} {rows.length === 1 ? "producto" : "productos"}
           </span>
-        ) : null}
+
+          {rows.length ? (
+            <span className="inline-flex w-fit rounded-full bg-surface-soft px-3 py-1 text-xs font-semibold text-text-muted">
+              Recientes arriba
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {!rows.length ? (
@@ -1162,203 +1222,105 @@ function AddedProductsSection({
           />
         </div>
       ) : (
-        <>
-          <div className="mt-5 hidden max-w-full xl:block">
-            <table className="w-full table-fixed">
-              <thead>
-                <tr className="border-b border-border">
-                  {[
-                    "Producto",
-                    "Cantidad",
-                    "Costo",
-                    "Utilidad %",
-                    "Precio",
-                    "Importe",
-                    "Ganancia",
-                    "Acción",
-                  ].map((header) => (
-                    <th
-                      key={header}
-                      className={`px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted ${
-                        header === "Acción" ? "text-right" : ""
-                      }`}
-                    >
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+        <div className="mt-5 max-h-[520px] overflow-y-auto pr-1">
+          <div className="grid gap-4">
+          {rows.map((item, index) => (
+            <article
+              key={`${item.producto_id}-${index}`}
+              className="rounded-[22px] border border-border bg-surface p-4"
+            >
+              <div className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <p className="text-base font-black text-text-primary">
+                    {item.nombre_producto}
+                  </p>
 
-              <tbody>
-                {rows.map((item, index) => (
-                  <tr
-                    key={`${item.producto_id}-${index}`}
-                    className="border-b border-border"
-                  >
-                    <td className="w-[30%] px-3 py-4">
-                      <p className="text-sm font-semibold text-text-primary">
-                        {item.nombre_producto}
-                      </p>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    {item.codigo || "Sin código"} · {item.unidad || "-"}
+                  </p>
+                </div>
 
-                      <p className="text-xs text-text-muted">
-                        {item.codigo || "Sin código"} · Stock:{" "}
-                        {Number(item.stock_disponible || 0)}
-                      </p>
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <NumberInput
-                        value={item.cantidad}
-                        onChange={(value) =>
-                          updateItem(index, "cantidad", value)
-                        }
-                        className="w-full"
-                      />
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <MoneyMiniInput
-                        value={item.costo_unitario}
-                        onChange={(value) =>
-                          updateItem(index, "costo_unitario", value)
-                        }
-                        className="w-full"
-                      />
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <PercentMiniInput
-                        value={item.utilidad_porcentaje}
-                        onChange={(value) =>
-                          updateItemRaw(index, "utilidad_porcentaje", value)
-                        }
-                        onBlur={() =>
-                          recalculateItem(index, "utilidad_porcentaje")
-                        }
-                        className="w-full"
-                      />
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <MoneyMiniInput
-                        value={item.precio_unitario}
-                        onChange={(value) =>
-                          updateItemRaw(index, "precio_unitario", value)
-                        }
-                        onBlur={() => recalculateItem(index, "precio_unitario")}
-                        className="w-full"
-                      />
-                    </td>
-
-                    <td className="w-[11%] px-3 py-4 text-sm font-semibold text-text-primary">
-                      {formatMoney(item.importe)}
-                    </td>
-
-                    <td className="w-[11%] px-3 py-4 text-sm font-semibold text-success-700">
-                      {formatMoney(item.ganancia_linea)}
-                    </td>
-
-                    <td className="px-3 py-4 text-right">
-                      <ActionIconButton
-                        icon={Trash2}
-                        label="Eliminar"
-                        tone="danger"
-                        onClick={() => removeItem(index)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-5 grid gap-3 xl:hidden">
-            {rows.map((item, index) => (
-              <div
-                key={`${item.producto_id}-${index}`}
-                className="rounded-2xl border border-border bg-surface p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-text-primary">
-                      {item.nombre_producto}
-                    </p>
-
-                    <p className="mt-1 text-xs text-text-muted">
-                      {item.codigo || "Sin código"} · Stock:{" "}
-                      {Number(item.stock_disponible || 0)}
-                    </p>
-                  </div>
-
-                  <ActionIconButton
-                    icon={Trash2}
-                    label="Eliminar"
-                    tone="danger"
-                    onClick={() => removeItem(index)}
+                <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                  <MiniTotal label="Importe" value={formatMoney(item.importe)} />
+                  <MiniTotal
+                    label="Ganancia"
+                    value={formatMoney(item.ganancia_linea)}
+                    success
                   />
-                </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <FieldGroup label="Cantidad">
-                    <NumberInput
-                      value={item.cantidad}
-                      onChange={(value) => updateItem(index, "cantidad", value)}
-                    />
-                  </FieldGroup>
-
-                  <FieldGroup label="Costo">
-                    <MoneyMiniInput
-                      value={item.costo_unitario}
-                      onChange={(value) =>
-                        updateItem(index, "costo_unitario", value)
-                      }
-                    />
-                  </FieldGroup>
-
-                  <FieldGroup label="Utilidad %">
-                    <PercentMiniInput
-                      value={item.utilidad_porcentaje}
-                      onChange={(value) =>
-                        updateItemRaw(index, "utilidad_porcentaje", value)
-                      }
-                      onBlur={() =>
-                        recalculateItem(index, "utilidad_porcentaje")
-                      }
-                    />
-                  </FieldGroup>
-
-                  <FieldGroup label="Precio">
-                    <MoneyMiniInput
-                      value={item.precio_unitario}
-                      onChange={(value) =>
-                        updateItemRaw(index, "precio_unitario", value)
-                      }
-                      onBlur={() => recalculateItem(index, "precio_unitario")}
-                    />
-                  </FieldGroup>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-xl bg-background p-3">
-                    <p className="text-xs text-text-muted">Importe</p>
-                    <p className="font-bold text-text-primary">
-                      {formatMoney(item.importe)}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl bg-success-50 p-3">
-                    <p className="text-xs text-success-700">Ganancia</p>
-                    <p className="font-bold text-success-700">
-                      {formatMoney(item.ganancia_linea)}
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(index)}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-error-100 bg-error-50 px-3 text-sm font-bold text-error-700 transition hover:bg-error-100 sm:col-span-1"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Quitar
+                  </button>
                 </div>
               </div>
-            ))}
+
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                <Field label="Cantidad">
+                  <NumberInput
+                    value={item.cantidad}
+                    onChange={(value) => updateItem(index, "cantidad", value)}
+                    className="w-full"
+                  />
+                </Field>
+
+                <Field label="Costo">
+                  <MoneyMiniInput
+                    value={item.costo_unitario}
+                    onChange={(value) =>
+                      updateItem(index, "costo_unitario", value)
+                    }
+                    className="w-full"
+                  />
+                </Field>
+
+                <Field label="Utilidad %">
+                  <PercentMiniInput
+                    value={item.utilidad_porcentaje}
+                    onChange={(value) =>
+                      updateItemRaw(index, "utilidad_porcentaje", value)
+                    }
+                    onBlur={() => recalculateItem(index, "utilidad_porcentaje")}
+                    className="w-full"
+                  />
+                </Field>
+
+                <Field label="Precio">
+                  <MoneyMiniInput
+                    value={item.precio_unitario}
+                    onChange={(value) =>
+                      updateItemRaw(index, "precio_unitario", value)
+                    }
+                    onBlur={() => recalculateItem(index, "precio_unitario")}
+                    className="w-full"
+                  />
+                </Field>
+              </div>
+            </article>
+          ))}
           </div>
-        </>
+        </div>
       )}
     </section>
+  );
+}
+
+function MiniTotal({ label, value, success = false }) {
+  return (
+    <div
+      className={`rounded-2xl px-3 py-2 ${
+        success ? "bg-success-50 text-success-700" : "bg-background text-text-primary"
+      }`}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-black">{value}</p>
+    </div>
   );
 }
 

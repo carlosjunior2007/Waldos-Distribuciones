@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import PlaygroundRenameSheetModal from './PlaygroundRenameSheetModal';
+import PlaygroundConfirmModal from './PlaygroundConfirmModal';
 
 export default function PlaygroundSheetsTabs({
   sheets,
@@ -12,6 +13,8 @@ export default function PlaygroundSheetsTabs({
   disabled,
 }) {
   const [renameSheet, setRenameSheet] = useState(null);
+  const [sheetToDelete, setSheetToDelete] = useState(null);
+  const [deletingSheet, setDeletingSheet] = useState(false);
 
   async function handleRename(nextName) {
     if (!renameSheet || !onRenameSheet) return;
@@ -19,21 +22,41 @@ export default function PlaygroundSheetsTabs({
     setRenameSheet(null);
   }
 
-  async function handleDeleteSheet(sheet) {
+  function handleDeleteSheet(sheet) {
     if (!sheet || disabled) return;
 
     if (sheets.length <= 1) {
       return;
     }
 
-    const confirmed = window.confirm(`¿Eliminar la hoja "${sheet.name}"?`);
-    if (!confirmed) return;
+    setSheetToDelete(sheet);
+  }
 
-    await onDeleteSheet?.(sheet.id);
+  async function confirmDeleteSheet() {
+    if (!sheetToDelete?.id) return;
+
+    try {
+      setDeletingSheet(true);
+      await onDeleteSheet?.(sheetToDelete.id);
+      setSheetToDelete(null);
+    } finally {
+      setDeletingSheet(false);
+    }
   }
 
   return (
     <>
+      <PlaygroundConfirmModal
+        open={Boolean(sheetToDelete)}
+        title="Eliminar hoja"
+        message="Esta hoja se eliminará del playground. Esta acción no se puede deshacer."
+        itemName={sheetToDelete?.name}
+        loading={deletingSheet}
+        confirmText="Sí, eliminar hoja"
+        onClose={() => setSheetToDelete(null)}
+        onConfirm={confirmDeleteSheet}
+      />
+
       <div className="flex max-w-full items-end gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 pt-2">
         {sheets.map((sheet) => {
           const active = sheet.id === activeSheetId;

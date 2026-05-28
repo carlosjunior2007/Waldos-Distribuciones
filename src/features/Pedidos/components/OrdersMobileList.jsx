@@ -8,6 +8,8 @@ import {
   Repeat2,
   RotateCcw,
   Truck,
+  Trash2,
+  Users,
   XCircle,
 } from "lucide-react";
 
@@ -36,9 +38,11 @@ export default function OrdersMobileList({
   onViewDeliveries,
   onDownloadCounterReceipt,
   onDownloadPdf,
+  onDownloadSuppliersPdf,
   onOpenInvoice,
   onCancel,
   onRestore,
+  onDelete,
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 p-4 md:p-5 xl:hidden">
@@ -54,9 +58,11 @@ export default function OrdersMobileList({
           onViewDeliveries={onViewDeliveries}
           onDownloadCounterReceipt={onDownloadCounterReceipt}
           onDownloadPdf={onDownloadPdf}
+          onDownloadSuppliersPdf={onDownloadSuppliersPdf}
           onOpenInvoice={onOpenInvoice}
           onCancel={onCancel}
           onRestore={onRestore}
+          onDelete={onDelete}
         />
       ))}
     </div>
@@ -73,9 +79,11 @@ function OrderMobileCard({
   onViewDeliveries,
   onDownloadCounterReceipt,
   onDownloadPdf,
+  onDownloadSuppliersPdf,
   onOpenInvoice,
   onCancel,
   onRestore,
+  onDelete,
 }) {
   const status = getOrderStatusMeta(calculateDerivedOrderStatus(order));
   const payment = getPaymentStatusMeta(order.estado_pago);
@@ -120,6 +128,11 @@ function OrderMobileCard({
     },
     { label: "PDF del pedido", icon: Download, onClick: () => onDownloadPdf(order) },
     {
+      label: "PDF proveedores",
+      icon: Users,
+      onClick: () => onDownloadSuppliersPdf?.(order),
+    },
+    {
       label: "Factura",
       icon: ReceiptText,
       disabled: invoiceDisabled,
@@ -136,6 +149,12 @@ function OrderMobileCard({
             label: "Descancelar pedido",
             icon: RotateCcw,
             onClick: () => onRestore?.(order),
+          },
+          {
+            label: "Eliminar pedido",
+            icon: Trash2,
+            danger: true,
+            onClick: () => onDelete?.(order),
           },
         ]
       : [
@@ -161,6 +180,12 @@ function OrderMobileCard({
           <p className="mt-1 truncate text-xs text-text-muted">
             {order.tracking_token || "Sin tracking"}
           </p>
+
+          {order.quotation ? (
+            <p className="mt-2 text-xs font-bold text-info-700">
+              Asociado a {order.quotation.folio}
+            </p>
+          ) : null}
 
           {order.is_recurrent ? (
             <span className="mt-2 inline-flex rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-[11px] font-bold text-primary-700">

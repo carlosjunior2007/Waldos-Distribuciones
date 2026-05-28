@@ -13,12 +13,20 @@ import QuotationsTable from "../components/QuotationsTable";
 import QuotationsMobileList from "../components/QuotationsMobileList";
 import QuotationsPagination from "../components/QuotationsPagination";
 import ConvertToOrderModal from "../components/ConvertToOrderModal";
+import QuotationsMessageModal from "../components/QuotationsMessageModal";
 
 export default function QuotationsPage() {
   const quotations = useQuotations();
 
   return (
     <section className="space-y-6">
+      <QuotationsMessageModal
+        open={Boolean(quotations.messageModal?.open)}
+        title={quotations.messageModal?.title}
+        message={quotations.messageModal?.message}
+        tone={quotations.messageModal?.tone}
+        onClose={quotations.closeMessageModal}
+      />
       <QuotationFormModal
         open={quotations.modalOpen}
         onClose={quotations.closeModal}
@@ -86,6 +94,7 @@ export default function QuotationsPage() {
             <QuotationsTable
               rows={quotations.rows}
               onDownloadPdf={quotations.downloadPdf}
+              onDownloadSuppliersPdf={quotations.downloadSuppliersPdf}
               onEdit={quotations.openEditModal}
               onDelete={quotations.setQuotationToDelete}
               onConvertToOrder={quotations.openConvertModal}
@@ -94,6 +103,7 @@ export default function QuotationsPage() {
             <QuotationsMobileList
               rows={quotations.rows}
               onDownloadPdf={quotations.downloadPdf}
+              onDownloadSuppliersPdf={quotations.downloadSuppliersPdf}
               onEdit={quotations.openEditModal}
               onDelete={quotations.setQuotationToDelete}
               onConvertToOrder={quotations.openConvertModal}

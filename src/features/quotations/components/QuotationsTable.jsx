@@ -4,6 +4,7 @@ import {
   Clock3,
   Download,
   FileCheck2,
+  FileText,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -13,9 +14,14 @@ import { formatMoney } from "../../../utils/formatters";
 import { formatDateTimeTijuana } from "../../../utils/dates";
 import { getStatusStyles } from "../quotation.helpers";
 
+function shouldShowExpiration(status) {
+  return !["aceptada", "convertida"].includes(String(status || "").toLowerCase());
+}
+
 export default function QuotationsTable({
   rows,
   onDownloadPdf,
+  onDownloadSuppliersPdf,
   onEdit,
   onDelete,
   onConvertToOrder,
@@ -53,6 +59,7 @@ export default function QuotationsTable({
                 key={item.id}
                 item={item}
                 onDownloadPdf={onDownloadPdf}
+                onDownloadSuppliersPdf={onDownloadSuppliersPdf}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onConvertToOrder={onConvertToOrder}
@@ -68,6 +75,7 @@ export default function QuotationsTable({
 function QuotationRow({
   item,
   onDownloadPdf,
+  onDownloadSuppliersPdf,
   onEdit,
   onDelete,
   onConvertToOrder,
@@ -97,11 +105,18 @@ function QuotationRow({
             label={`Creada: ${formatDateTimeTijuana(item.created_at)}`}
           />
 
-          <DateBadge
-            icon={Clock3}
-            label={`Vence: ${formatDateTimeTijuana(item.fecha_vencimiento)}`}
-            accent
-          />
+          {shouldShowExpiration(item.estado) ? (
+            <DateBadge
+              icon={Clock3}
+              label={`Vence: ${formatDateTimeTijuana(item.fecha_vencimiento)}`}
+              accent
+            />
+          ) : (
+            <DateBadge
+              icon={Clock3}
+              label="Vencimiento no aplica"
+            />
+          )}
         </div>
       </td>
 
@@ -138,6 +153,13 @@ function QuotationRow({
             label="Descargar PDF"
             tone="default"
             onClick={() => onDownloadPdf(item.id)}
+          />
+
+          <ActionIconButton
+            icon={FileText}
+            label="PDF proveedores"
+            tone="default"
+            onClick={() => onDownloadSuppliersPdf(item.id)}
           />
 
           <ActionIconButton

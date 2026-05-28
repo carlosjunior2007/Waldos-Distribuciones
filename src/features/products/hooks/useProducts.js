@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createMessageState } from "../components/ProductsMessageModal";
 import { generarCodigoProducto } from "../../../utils/CodeGenerator";
 import { normalizeText } from "../../../utils/formatters";
 
@@ -7,6 +8,7 @@ import {
   deleteProduct,
   deleteProductImage,
   fetchProducts,
+  fetchSuppliers,
   getAuthUserEmail,
   getCurrentUser,
   getCurrentUserId,
@@ -31,6 +33,7 @@ import { INITIAL_PRODUCT_FORM, ITEMS_PER_PAGE } from "../product.constants";
 
 export function useProducts() {
   const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [saving, setSaving] = useState(false);
@@ -46,9 +49,23 @@ export function useProducts() {
   const [modalMode, setModalMode] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [form, setForm] = useState(INITIAL_PRODUCT_FORM);
+  const [messageModal, setMessageModal] = useState(createMessageState());
 
   const [authUser, setAuthUser] = useState(null);
   const [userLabels, setUserLabels] = useState({});
+
+  function showMessage(title, message, tone = "info") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
+  function closeMessageModal() {
+    setMessageModal(createMessageState());
+  }
 
   async function loadProducts() {
     try {
@@ -60,6 +77,16 @@ export function useProducts() {
       setProducts([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadSuppliers() {
+    try {
+      const data = await fetchSuppliers();
+      setSuppliers(data);
+    } catch (error) {
+      console.error("Error al cargar proveedores:", error);
+      setSuppliers([]);
     }
   }
 
@@ -106,6 +133,7 @@ export function useProducts() {
   useEffect(() => {
     loadCurrentUser();
     loadProducts();
+    loadSuppliers();
   }, []);
 
   useEffect(() => {
@@ -182,6 +210,15 @@ export function useProducts() {
 
   function onInputChange(e) {
     const { name, value, type, checked, files } = e.target;
+
+    if (type === "custom") {
+      setForm((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+
+      return;
+    }
 
     if (type === "file") {
       const file = files?.[0] || null;
@@ -261,7 +298,7 @@ export function useProducts() {
     const validationError = validateProductForm(form);
 
     if (validationError) {
-      alert(validationError);
+      showMessage("Revisa la información del producto", validationError, "warning");
       return;
     }
 
@@ -286,12 +323,20 @@ export function useProducts() {
         const maxSize = 2 * 1024 * 1024;
 
         if (!validTypes.includes(form.imagenFile.type)) {
-          alert("La imagen debe ser PNG, JPG o WEBP.");
+          showMessage(
+            "Formato de imagen no válido",
+            "La imagen debe ser PNG, JPG o WEBP.",
+            "warning",
+          );
           return;
         }
 
         if (form.imagenFile.size > maxSize) {
-          alert("La imagen no debe superar los 2MB.");
+          showMessage(
+            "Imagen demasiado pesada",
+            "La imagen no debe superar los 2MB.",
+            "warning",
+          );
           return;
         }
 
@@ -323,23 +368,30 @@ export function useProducts() {
       };
 
       if (isEdit) {
-        await updateProduct(productId, payload);
+        await updateProduct(productId, payload, form.proveedores);
       } else {
-        await createProduct({
-          id: productId,
-          ...payload,
-          codigo,
-          created_by: userId,
-          modified_by: userId,
-          created_at: new Date().toISOString(),
-        });
+        await createProduct(
+          {
+            id: productId,
+            ...payload,
+            codigo,
+            created_by: userId,
+            modified_by: userId,
+            created_at: new Date().toISOString(),
+          },
+          form.proveedores,
+        );
       }
 
       await loadProducts();
       closeModal();
     } catch (error) {
       console.error("Error al guardar producto:", error);
-      alert(error.message || "No se pudo guardar el producto.");
+      showMessage(
+        "No se pudo guardar el producto",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setSaving(false);
       setUploadingImage(false);
@@ -369,7 +421,11 @@ export function useProducts() {
       closeModal();
     } catch (error) {
       console.error("Error al eliminar producto:", error);
-      alert(error.message || "No se pudo eliminar el producto.");
+      showMessage(
+        "No se pudo eliminar el producto",
+        error.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setDeleting(false);
     }
@@ -388,6 +444,9 @@ export function useProducts() {
         normalizeText(item.nombre),
         normalizeText(item.codigo),
         normalizeText(item.categoria),
+        ...(item.proveedores_asociados || []).map((supplier) =>
+          normalizeText(supplier.nombre || supplier.proveedor?.nombre),
+        ),
       ];
 
       const matchesSearch =
@@ -471,6 +530,7 @@ export function useProducts() {
 
   return {
     products,
+    suppliers,
     loading,
     saving,
     deleting,
@@ -484,6 +544,9 @@ export function useProducts() {
     modalMode,
     selectedProduct,
     form,
+    messageModal,
+    closeMessageModal,
+    showMessage,
     localImagePreview,
     authUser,
     userLabels,
@@ -508,6 +571,7 @@ export function useProducts() {
     removeProduct,
     removeCurrentImage,
     loadProducts,
+    loadSuppliers,
     onPriceBlur,
 
     goToPreviousPage: () => setCurrentPage((prev) => Math.max(prev - 1, 1)),

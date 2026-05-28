@@ -1,12 +1,17 @@
-import { Eye, FileCheck2, Pencil, Trash2 } from "lucide-react";
+import { Eye, FileCheck2, FileText, Pencil, Trash2 } from "lucide-react";
 
 import { formatMoney } from "../../../utils/formatters";
 import { formatDateTimeTijuana } from "../../../utils/dates";
 import { getStatusStyles } from "../quotation.helpers";
 
+function shouldShowExpiration(status) {
+  return !["aceptada", "convertida"].includes(String(status || "").toLowerCase());
+}
+
 export default function QuotationsMobileList({
   rows,
   onDownloadPdf,
+  onDownloadSuppliersPdf,
   onEdit,
   onDelete,
   onConvertToOrder,
@@ -18,6 +23,7 @@ export default function QuotationsMobileList({
           key={item.id}
           item={item}
           onDownloadPdf={onDownloadPdf}
+          onDownloadSuppliersPdf={onDownloadSuppliersPdf}
           onEdit={onEdit}
           onDelete={onDelete}
           onConvertToOrder={onConvertToOrder}
@@ -27,7 +33,14 @@ export default function QuotationsMobileList({
   );
 }
 
-function QuotationMobileCard({ item, onDownloadPdf, onEdit, onDelete, onConvertToOrder }) {
+function QuotationMobileCard({
+  item,
+  onDownloadPdf,
+  onDownloadSuppliersPdf,
+  onEdit,
+  onDelete,
+  onConvertToOrder,
+}) {
   const statusMeta = getStatusStyles(item.estado);
   const StatusIcon = statusMeta.icon;
   const canConvert = Boolean(item.cliente_id) && ["aceptada", "enviada", "borrador"].includes(item.estado);
@@ -57,7 +70,11 @@ function QuotationMobileCard({ item, onDownloadPdf, onEdit, onDelete, onConvertT
         />
         <MiniInfo
           label="Vence"
-          value={formatDateTimeTijuana(item.fecha_vencimiento)}
+          value={
+            shouldShowExpiration(item.estado)
+              ? formatDateTimeTijuana(item.fecha_vencimiento)
+              : "No aplica"
+          }
         />
         <MiniInfo label="Subtotal" value={formatMoney(item.subtotal || 0)} />
         <MiniInfo
@@ -84,6 +101,12 @@ function QuotationMobileCard({ item, onDownloadPdf, onEdit, onDelete, onConvertT
           icon={Eye}
           label="PDF"
           onClick={() => onDownloadPdf(item.id)}
+        />
+
+        <MobileAction
+          icon={FileText}
+          label="Proveedores"
+          onClick={() => onDownloadSuppliersPdf(item.id)}
         />
 
         <MobileAction

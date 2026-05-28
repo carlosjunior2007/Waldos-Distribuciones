@@ -48,7 +48,34 @@ const ORDER_SELECT = `
     importe,
     estado,
     created_at,
-    updated_at
+    updated_at,
+    productos:producto_id (
+      id,
+      nombre,
+      codigo,
+      producto_proveedores (
+        id,
+        producto_id,
+        proveedor_id,
+        sku_proveedor,
+        precio_compra,
+        moneda,
+        tiempo_entrega_dias,
+        es_principal,
+        notas,
+        activo,
+        proveedores (
+          id,
+          nombre,
+          razon_social,
+          rfc,
+          telefono,
+          correo,
+          contacto_nombre,
+          activo
+        )
+      )
+    )
   ),
   entregas (
     id,
@@ -90,6 +117,14 @@ const ORDER_SELECT = `
     accion,
     activo,
     created_at
+  ),
+  cotizaciones:cotizacion_id (
+    id,
+    folio,
+    estado,
+    total,
+    created_at,
+    fecha_vencimiento
   ),
   facturas (
     id,
@@ -367,6 +402,102 @@ export async function restoreOrder(orderId) {
   if (error) throw error;
 
   return fetchOrderById(orderId);
+}
+
+
+export async function deleteCancelledOrder(orderId) {
+  if (!orderId) throw new Error("Pedido inválido.");
+
+  const { data: order, error: orderError } = await supabase
+    .from("pedidos")
+    .select("id, folio, estado, cotizacion_id")
+    .eq("id", orderId)
+    .single();
+
+  if (orderError) throw orderError;
+  if (!order) throw new Error("No se encontró el pedido.");
+
+  if (String(order.estado || "").toLowerCase() !== "cancelado") {
+    throw new Error("Solo puedes eliminar pedidos cancelados.");
+  }
+
+  if (order.cotizacion_id) {
+    throw new Error("No se puede eliminar este pedido porque está enlazado a una cotización. Conserva el registro para no romper el historial.");
+  }
+
+  const { data: deliveries, error: deliveriesError } = await supabase
+    .from("entregas")
+    .select("id")
+    .eq("pedido_id", orderId);
+
+  if (deliveriesError) throw deliveriesError;
+
+  const deliveryIds = (deliveries || [])
+    .map((delivery) => delivery.id)
+    .filter(Boolean);
+
+  if (deliveryIds.length) {
+    const { error: deliveryDetailsError } = await supabase
+      .from("entrega_detalles")
+      .delete()
+      .in("entrega_id", deliveryIds);
+
+    if (deliveryDetailsError) throw deliveryDetailsError;
+  }
+
+  const { error: deliveriesDeleteError } = await supabase
+    .from("entregas")
+    .delete()
+    .eq("pedido_id", orderId);
+
+  if (deliveriesDeleteError) throw deliveriesDeleteError;
+
+  const { data: recurrences, error: recurrencesError } = await supabase
+    .from("pedido_recurrencias")
+    .select("id")
+    .eq("pedido_id", orderId);
+
+  if (recurrencesError) throw recurrencesError;
+
+  const recurrenceIds = (recurrences || [])
+    .map((recurrence) => recurrence.id)
+    .filter(Boolean);
+
+  if (recurrenceIds.length) {
+    const { error: recurrenceProductsError } = await supabase
+      .from("pedido_recurrencia_productos")
+      .delete()
+      .in("recurrencia_id", recurrenceIds);
+
+    if (recurrenceProductsError) throw recurrenceProductsError;
+  }
+
+  const { error: recurrencesDeleteError } = await supabase
+    .from("pedido_recurrencias")
+    .delete()
+    .eq("pedido_id", orderId);
+
+  if (recurrencesDeleteError) throw recurrencesDeleteError;
+
+  const relatedDeletes = [
+    supabase.from("facturas").delete().eq("pedido_id", orderId),
+    supabase.from("pedido_tracking").delete().eq("pedido_id", orderId),
+    supabase.from("pedido_detalles").delete().eq("pedido_id", orderId),
+  ];
+
+  for (const request of relatedDeletes) {
+    const { error } = await request;
+    if (error) throw error;
+  }
+
+  const { error: deleteOrderError } = await supabase
+    .from("pedidos")
+    .delete()
+    .eq("id", orderId);
+
+  if (deleteOrderError) throw deleteOrderError;
+
+  return true;
 }
 
 export async function createDelivery({ order, delivery, products }) {
@@ -920,6 +1051,29 @@ function getDeliveredQuantitiesFromCompletedDeliveries(deliveries = []) {
   }, {});
 }
 
+function normalizeProductSuppliers(rows = []) {
+  return (rows || [])
+    .filter((row) => row.activo !== false)
+    .map((row) => ({
+      id: row.id,
+      producto_id: row.producto_id,
+      proveedor_id: row.proveedor_id,
+      sku_proveedor: row.sku_proveedor || "",
+      precio_compra: row.precio_compra ?? "",
+      moneda: row.moneda || "MXN",
+      tiempo_entrega_dias: row.tiempo_entrega_dias ?? "",
+      es_principal: Boolean(row.es_principal),
+      notas: row.notas || "",
+      proveedor: row.proveedores || null,
+      nombre: row.proveedores?.nombre || "Proveedor",
+      correo: row.proveedores?.correo || "",
+      telefono: row.proveedores?.telefono || "",
+      contacto_nombre: row.proveedores?.contacto_nombre || "",
+      rfc: row.proveedores?.rfc || "",
+    }))
+    .sort((a, b) => Number(b.es_principal) - Number(a.es_principal));
+}
+
 function normalizeOrders(orders) {
   return orders.map(normalizeOrder);
 }
@@ -934,6 +1088,10 @@ function normalizeOrder(order) {
   const activeRecurrence = Array.isArray(order.pedido_recurrencias)
     ? order.pedido_recurrencias.find((item) => item.activo) || null
     : order.pedido_recurrencias?.activo ? order.pedido_recurrencias : null;
+
+  const quote = Array.isArray(order.cotizaciones)
+    ? order.cotizaciones[0] || null
+    : order.cotizaciones || null;
 
   const rawDetails = (order.pedido_detalles || [])
     .map((item) => ({
@@ -954,6 +1112,8 @@ function normalizeOrder(order) {
 
     return {
       ...item,
+      proveedores_asociados: normalizeProductSuppliers(item.productos?.producto_proveedores),
+      producto: item.productos || null,
       cantidad_pedida: ordered,
       cantidad_entregada: delivered,
       cantidad_reservada: reserved,
@@ -994,6 +1154,7 @@ function normalizeOrder(order) {
     tracking_token: tracking?.token || order.tracking_token || "",
     active_recurrence: activeRecurrence,
     is_recurrent: Boolean(activeRecurrence),
+    quotation: quote,
     facturas: (order.facturas || []).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)),
     details,
     deliveries,

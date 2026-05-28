@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createMessageState } from "../components/ExpensesMessageModal";
 import * as XLSX from "xlsx";
 
 import { parseBusinessDate, parseTimestampDate } from "../../../utils/dates";
@@ -55,6 +56,20 @@ export function useExpenses() {
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [selectedDeleteExpense, setSelectedDeleteExpense] = useState(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState(null);
+  const [messageModal, setMessageModal] = useState(createMessageState());
+
+  function showMessage(title, message, tone = "info") {
+    setMessageModal({
+      open: true,
+      title,
+      message,
+      tone,
+    });
+  }
+
+  function closeMessageModal() {
+    setMessageModal(createMessageState());
+  }
 
   async function loadData(showRefresh = false) {
     try {
@@ -69,7 +84,11 @@ export function useExpenses() {
       console.error("Error cargando ganancias y gastos:", err);
       setOrderRows([]);
       setExpenseRows([]);
-      alert(err.message || "No se pudieron cargar los datos financieros.");
+      showMessage(
+        "No se pudieron cargar los datos financieros",
+        err.message || "Revisa tu conexión o intenta de nuevo.",
+        "error",
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -104,7 +123,11 @@ export function useExpenses() {
       await loadData(true);
     } catch (err) {
       console.error("Error eliminando gasto:", err);
-      alert(err.message || "No se pudo eliminar el gasto.");
+      showMessage(
+        "No se pudo eliminar el gasto",
+        err.message || "Intenta de nuevo.",
+        "error",
+      );
     } finally {
       setDeletingExpenseId(null);
     }
@@ -420,6 +443,8 @@ export function useExpenses() {
     selectedDetail,
     selectedDeleteExpense,
     deletingExpenseId,
+    messageModal,
+    closeMessageModal,
 
     setSelectedDetail,
     setSelectedDeleteExpense,

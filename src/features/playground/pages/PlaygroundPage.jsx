@@ -35,6 +35,7 @@ import PlaygroundShareModal from '../components/PlaygroundShareModal';
 import PlaygroundImportDataModal from '../components/PlaygroundImportDataModal';
 import PlaygroundBulkProductChangesModal from '../components/PlaygroundBulkProductChangesModal';
 import PlaygroundSheetsTabs from '../components/PlaygroundSheetsTabs';
+import PlaygroundConfirmModal from '../components/PlaygroundConfirmModal';
 import ExcelHelpModal from '../excelModule/components/ExcelHelpModal';
 import { usePlaygroundPresence } from '../hooks/usePlaygroundPresence';
 import { usePlaygroundWorkbook } from '../hooks/usePlaygroundWorkbook';
@@ -181,6 +182,8 @@ export default function PlaygroundPage() {
   const [bgOpacity, setBgOpacity] = useState(100);
   const [openMenu, setOpenMenu] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
+  const [deleteWorkbookOpen, setDeleteWorkbookOpen] = useState(false);
+  const [deletingWorkbook, setDeletingWorkbook] = useState(false);
 
   const {
     workbook,
@@ -292,12 +295,20 @@ export default function PlaygroundPage() {
     setBulkOpen(false);
   }
 
-  async function handleDelete() {
-    const confirmed = window.confirm('¿Eliminar este playground? Esta acción no se puede deshacer.');
-    if (!confirmed) return;
+  function handleDelete() {
+    setDeleteWorkbookOpen(true);
+    setOpenMenu('');
+  }
 
-    await removeWorkbook();
-    navigate('/dashboard/playground');
+  async function confirmDeleteWorkbook() {
+    try {
+      setDeletingWorkbook(true);
+      await removeWorkbook();
+      navigate('/dashboard/playground');
+    } finally {
+      setDeletingWorkbook(false);
+      setDeleteWorkbookOpen(false);
+    }
   }
 
   function applyStyle(nextStyle) {
@@ -493,6 +504,16 @@ export default function PlaygroundPage() {
 
   return (
     <div className={pageClass}>
+      <PlaygroundConfirmModal
+        open={deleteWorkbookOpen}
+        title="Eliminar playground"
+        message="Esta acción no se puede deshacer. Se eliminará el playground completo."
+        itemName={workbook?.name || 'Playground'}
+        loading={deletingWorkbook}
+        confirmText="Sí, eliminar playground"
+        onClose={() => setDeleteWorkbookOpen(false)}
+        onConfirm={confirmDeleteWorkbook}
+      />
       <div className={fullscreen ? 'flex min-h-0 flex-1 flex-col p-3' : 'mx-auto flex min-h-screen max-w-[1800px] flex-col px-4 py-4'}>
         <div className="mb-3 overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">

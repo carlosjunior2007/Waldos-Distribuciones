@@ -221,7 +221,7 @@ export function buildQuotationPayload({ form, totals }) {
       cliente_nombre: normalizeCapitalizedText(form.cliente_nombre),
       cliente_telefono: form.cliente_telefono.trim() || null,
       cliente_email: form.cliente_email.trim() || null,
-      estado: form.estado || "borrador",
+      estado: form.estado || "enviada",
       subtotal: Number(totals.subtotal || 0),
       descuento: Number(totals.descuento || 0),
       iva_porcentaje: Number(form.iva_porcentaje || 0),

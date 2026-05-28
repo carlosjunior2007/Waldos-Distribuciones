@@ -170,7 +170,24 @@ export function buildProductForm(product) {
     clave_sat: product.clave_sat || "",
     clave_unidad_sat: product.clave_unidad_sat || "",
     iva_porcentaje: product.iva_porcentaje ?? "8",
+
+    proveedores: normalizeProductSuppliersForForm(product.proveedores_asociados),
   };
+}
+
+export function normalizeProductSuppliersForForm(suppliers = []) {
+  return (suppliers || []).map((item) => ({
+    id: item.id || "",
+    proveedor_id: item.proveedor_id || item.proveedor?.id || "",
+    sku_proveedor: item.sku_proveedor || "",
+    precio_compra: item.precio_compra ?? "",
+    moneda: item.moneda || "MXN",
+    tiempo_entrega_dias: item.tiempo_entrega_dias ?? "",
+    es_principal: Boolean(item.es_principal),
+    notas: item.notas || "",
+    proveedor: item.proveedor || null,
+    nombre: item.nombre || item.proveedor?.nombre || "",
+  }));
 }
 
 export function validateProductForm(form) {
@@ -184,6 +201,22 @@ export function validateProductForm(form) {
   if (!form.clave_sat?.trim()) return "La clave SAT es obligatoria.";
   if (!form.clave_unidad_sat?.trim()) return "La clave de unidad SAT es obligatoria.";
   if (form.iva_porcentaje === "" || Number(form.iva_porcentaje) < 0) return "El IVA debe ser válido.";
+
+  const supplierIds = (form.proveedores || [])
+    .map((supplier) => supplier.proveedor_id)
+    .filter(Boolean);
+
+  if (new Set(supplierIds).size !== supplierIds.length) {
+    return "No puedes agregar el mismo proveedor más de una vez.";
+  }
+
+  const mainSuppliers = (form.proveedores || []).filter(
+    (supplier) => supplier.es_principal,
+  );
+
+  if (mainSuppliers.length > 1) {
+    return "Solo puede haber un proveedor principal.";
+  }
 
   return null;
 }

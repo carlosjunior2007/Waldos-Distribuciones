@@ -29,6 +29,7 @@ export default function ProductsTable({
                 "Producto",
                 "Código",
                 "Categoría",
+                "Proveedores",
                 "Compra",
                 "Utilidad",
                 "Venta",
@@ -81,6 +82,10 @@ function ProductTableRow({ item, onView, onEdit, onDelete, onDownloadLabel }) {
 
       <td className="px-6 py-5">
         <Badge icon={Tag}>{getCategoryLabel(item.categoria)}</Badge>
+      </td>
+
+      <td className="px-6 py-5">
+        <SuppliersSummary item={item} />
       </td>
 
       <td className="px-6 py-5 text-sm font-medium text-text-primary">
@@ -158,6 +163,26 @@ function ProductIdentity({ item }) {
           {item.descripcion || "Producto registrado en catálogo"}
         </p>
       </div>
+    </div>
+  );
+}
+
+function SuppliersSummary({ item }) {
+  const suppliers = item.proveedores_asociados || [];
+  const main = suppliers.find((supplier) => supplier.es_principal) || suppliers[0];
+
+  if (!suppliers.length) {
+    return <span className="text-sm text-text-muted">Sin proveedores</span>;
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-bold text-text-primary">
+        {main?.nombre || main?.proveedor?.nombre || "Proveedor"}
+      </p>
+      <p className="mt-1 text-xs text-text-muted">
+        {suppliers.length === 1 ? "1 proveedor" : `${suppliers.length} proveedores`}
+      </p>
     </div>
   );
 }

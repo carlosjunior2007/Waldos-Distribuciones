@@ -350,7 +350,7 @@ export default function Hero() {
             "
           >
             Tenemos productos de limpieza, papelería, cafetería, desechables,
-            mascotas y más. Tú pides, nosotros conseguimos y entregamos.
+            mascotas y más. Tú pides, nosotros te entregamos y entregamos.
           </p>
 
           <div className="hero-ctas mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">

@@ -1,94 +1,125 @@
 import { Link } from "react-router-dom";
 import {
   Mail,
-  Phone,
   MapPin,
+  Clock,
+  PackageSearch,
+  Truck,
+  ShieldCheck,
 } from "lucide-react";
 
 export default function Footer() {
+  const year = new Date().getFullYear();
+
+  const sectionLinks = [
+    { label: "Categorías", href: "#categorias" },
+    { label: "Cómo trabajamos", href: "#como-trabajamos" },
+    { label: "Cobertura", href: "#cobertura" },
+    { label: "Contacto", href: "#contacto" },
+  ];
+
+  const pageLinks = [
+    { label: "Catálogo", to: "/catalogo" },
+    { label: "Rastrear pedido", to: "/tracking" },
+  ];
+
+  const highlights = [
+    {
+      icon: PackageSearch,
+      title: "Varios productos",
+      text: "Limpieza, higiene, papelería y más.",
+    },
+    {
+      icon: Truck,
+      title: "Entregas",
+      text: "Pedidos organizados por ubicación.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "Atención clara",
+      text: "Te ayudamos a cotizar sin vueltas.",
+    },
+  ];
+
   return (
-    <footer className="mt-14 border-t border-slate-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-        <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-between">
-          
-          {/* Marca */}
-          <div className="max-w-sm">
-            <Link
-              to="/"
-              className="inline-flex items-center"
-            >
-              <img
-                src="/Logo.png"
-                alt="Waldo Distribuciones"
-                className="h-11 w-auto object-contain"
-              />
+    <footer className="relative overflow-hidden bg-transparent text-[#0e3467]">
+      <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="grid gap-8 lg:grid-cols-[1.15fr_0.78fr_1fr]">
+          <div>
+            <Link to="/" className="inline-flex items-center">
+              <div className="rounded-2xl bg-white px-4 py-2.5 shadow-[0_10px_24px_rgba(14,52,103,0.08)] ring-1 ring-[#0e3467]/8">
+                <img
+                  src="/Logo.png"
+                  alt="Waldo Distribuciones"
+                  className="h-10 w-auto object-contain"
+                />
+              </div>
             </Link>
 
-            <p className="mt-4 text-sm leading-relaxed text-slate-500">
-              Distribución de productos de limpieza, higiene,
-              desechables y suministros para negocios.
+            <p className="mt-4 max-w-md text-sm leading-7 text-slate-600">
+              Suministro y distribución de productos para negocios en Tijuana.
+              Reunimos varias categorías para que compres de forma más simple.
             </p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <ContactItem
+                icon={Mail}
+                text="contacto@waldodistribuciones.com"
+              />
+              <ContactItem icon={MapPin} text="Tijuana, Baja California" />
+              <ContactItem icon={Clock} text="Atención en horario comercial" />
+            </div>
           </div>
 
-          {/* Información */}
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
-            
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-slate-900">
-                Contacto
-              </h3>
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+              Navegación
+            </h3>
 
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <Mail className="h-4 w-4 text-[#081f3a]" />
-                  <span>contacto@waldodistribuciones.com</span>
-                </div>
-
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <MapPin className="h-4 w-4 text-[#081f3a]" />
-                  <span>Tijuana, Baja California</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-slate-900">
-                Navegación
-              </h3>
-
-              <div className="mt-4 flex flex-col gap-3">
-                <Link
-                  to="/catalogo"
-                  className="text-sm text-slate-600 transition hover:text-[#081f3a]"
-                >
-                  Catálogo
-                </Link>
-
-                <a
-                  href="#contacto"
-                  className="text-sm text-slate-600 transition hover:text-[#081f3a]"
-                >
-                  Contacto
+            <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 lg:grid-cols-1">
+              {sectionLinks.map((link) => (
+                <a key={link.label} href={link.href} className={footerLinkClass}>
+                  {link.label}
                 </a>
-              </div>
+              ))}
+
+              {pageLinks.map((link) => (
+                <Link key={link.label} to={link.to} className={footerLinkClass}>
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+              Lo que hacemos
+            </h3>
+
+            <div className="mt-4 grid gap-3">
+              {highlights.map((item) => (
+                <HighlightItem key={item.title} {...item} />
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Bottom */}
-        <div className="mt-10 flex flex-col gap-3 border-t border-slate-100 pt-5 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-          <p className="text-sm text-slate-500">
-            © {new Date().getFullYear()} Waldo Distribuciones. Todos los
-            derechos reservados.
-          </p>
+        <div
+          className="
+            mt-8 flex flex-col gap-3 border-t border-[#0e3467]/10 pt-5
+            text-sm text-slate-500
+            sm:flex-row sm:items-center sm:justify-between
+          "
+        >
+          <p>© {year} Waldo Distribuciones. Todos los derechos reservados.</p>
 
-          <p className="text-sm text-slate-500">
+          <p>
             Sitio desarrollado por{" "}
             <a
               href="https://jumalancers.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold text-[#081f3a] transition hover:text-emerald-700"
+              className="font-black text-[#0e3467] transition hover:text-[#c70f25]"
             >
               Jumalancers
             </a>
@@ -98,3 +129,53 @@ export default function Footer() {
     </footer>
   );
 }
+
+function ContactItem({ icon: Icon, text }) {
+  return (
+    <div className="flex items-center gap-3 text-sm text-slate-600">
+      <div
+        className="
+          flex h-8 w-8 shrink-0 items-center justify-center
+          rounded-xl bg-white text-[#0e3467]
+          ring-1 ring-[#0e3467]/10 shadow-[0_8px_16px_rgba(14,52,103,0.05)]
+        "
+      >
+        <Icon size={15} />
+      </div>
+
+      <span className="leading-5">{text}</span>
+    </div>
+  );
+}
+
+function HighlightItem({ icon: Icon, title, text }) {
+  return (
+    <div
+      className="
+        rounded-2xl border border-[#0e3467]/10 bg-white/80
+        p-3.5 shadow-[0_12px_26px_rgba(14,52,103,0.05)] backdrop-blur-xl
+      "
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="
+            flex h-9 w-9 shrink-0 items-center justify-center
+            rounded-xl bg-[#0e3467]/6 text-[#0e3467] ring-1 ring-[#0e3467]/10
+          "
+        >
+          <Icon size={16} />
+        </div>
+
+        <div>
+          <h4 className="text-sm font-black text-[#0e3467]">{title}</h4>
+          <p className="mt-1 text-sm leading-5 text-slate-600">{text}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const footerLinkClass = `
+  w-fit text-sm font-semibold text-slate-600
+  transition hover:text-[#0e3467]
+`;

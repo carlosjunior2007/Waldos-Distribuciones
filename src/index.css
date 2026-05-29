@@ -109,6 +109,13 @@
   transition: background 0.3s ease;
 }
 
+html{
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-primary-500) transparent;
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px; /* Ajusta según el tamaño de tu header */
+}
+
 /* Base page */
 html,
 body {

@@ -6,7 +6,9 @@ export default function ImageZoomAmazon({
   zoom = 3.2,
   heightClass = "h-[420px] md:h-[520px]",
 }) {
+  const wrapperRef = useRef(null);
   const boxRef = useRef(null);
+
   const [active, setActive] = useState(false);
   const [pos, setPos] = useState({ x: 50, y: 50 });
   const [isDesktop, setIsDesktop] = useState(false);
@@ -17,18 +19,59 @@ export default function ImageZoomAmazon({
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
-    const handler = () => setIsDesktop(mq.matches);
+
+    const handler = () => {
+      setIsDesktop(mq.matches);
+
+      if (!mq.matches) {
+        setActive(false);
+      }
+    };
+
     handler();
+
     mq.addEventListener?.("change", handler);
-    return () => mq.removeEventListener?.("change", handler);
+
+    return () => {
+      mq.removeEventListener?.("change", handler);
+    };
   }, []);
 
-  const updatePosition = (e) => {
+  useEffect(() => {
+    if (!active) return;
+
+    const handlePointerDownOutside = (event) => {
+      if (!wrapperRef.current) return;
+
+      const clickedInside = wrapperRef.current.contains(event.target);
+
+      if (!clickedInside) {
+        setActive(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setActive(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDownOutside);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDownOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [active]);
+
+  const updatePosition = (event) => {
     if (!boxRef.current) return;
 
     const rect = boxRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
 
     setPos({
       x: Math.max(0, Math.min(100, x)),
@@ -36,23 +79,27 @@ export default function ImageZoomAmazon({
     });
   };
 
-  const handleClick = (e) => {
+  const handleClick = (event) => {
     if (!isDesktop || !hasImg) return;
 
-    updatePosition(e);
+    updatePosition(event);
     setActive((prev) => !prev);
   };
 
-  const handleMove = (e) => {
+  const handleMove = (event) => {
     if (!isDesktop || !active) return;
-    updatePosition(e);
+
+    updatePosition(event);
   };
 
   const lensSize = 150;
   const lensHalf = lensSize / 2;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+    <div
+      ref={wrapperRef}
+      className="grid grid-cols-1 items-start gap-4 md:grid-cols-12"
+    >
       {/* Imagen principal */}
       <div className={active && isDesktop ? "md:col-span-5" : "md:col-span-12"}>
         <div
@@ -60,7 +107,7 @@ export default function ImageZoomAmazon({
           onClick={handleClick}
           onMouseMove={handleMove}
           className={[
-            "relative rounded-xl border border-border bg-surface overflow-hidden",
+            "relative overflow-hidden rounded-xl border border-border bg-surface",
             heightClass,
             hasImg && isDesktop ? "cursor-zoom-in" : "",
             active ? "ring-1 ring-primary-200" : "",
@@ -73,13 +120,17 @@ export default function ImageZoomAmazon({
               <img
                 src={src}
                 alt={alt}
-                className="relative z-10 h-full w-full object-contain p-6 select-none"
+                className="relative z-10 h-full w-full select-none object-contain p-6"
                 draggable={false}
               />
 
               {isDesktop && active ? (
                 <div
-                  className="absolute z-20 pointer-events-none rounded-xl border border-white/70 bg-white/20 backdrop-blur-[1px] shadow-lg"
+                  className="
+                    pointer-events-none absolute z-20 rounded-xl
+                    border border-white/70 bg-white/20
+                    shadow-lg backdrop-blur-[1px]
+                  "
                   style={{
                     left: `clamp(0px, calc(${pos.x}% - ${lensHalf}px), calc(100% - ${lensSize}px))`,
                     top: `clamp(0px, calc(${pos.y}% - ${lensHalf}px), calc(100% - ${lensSize}px))`,
@@ -90,12 +141,26 @@ export default function ImageZoomAmazon({
               ) : null}
 
               {!active ? (
-                <div className="absolute bottom-3 left-3 z-20 rounded-md border border-border/70 bg-surface/90 px-2.5 py-1 text-[11px] text-text-muted backdrop-blur-sm">
-                  {isDesktop ? "Haz click para abrir zoom" : "Zoom disponible en escritorio"}
+                <div
+                  className="
+                    absolute bottom-3 left-3 z-20 rounded-md
+                    border border-border/70 bg-surface/90 px-2.5 py-1
+                    text-[11px] text-text-muted backdrop-blur-sm
+                  "
+                >
+                  {isDesktop
+                    ? "Haz click para abrir zoom"
+                    : "Zoom disponible en escritorio"}
                 </div>
               ) : (
-                <div className="absolute bottom-3 left-3 z-20 rounded-md border border-border/70 bg-surface/90 px-2.5 py-1 text-[11px] text-text-muted backdrop-blur-sm">
-                  Haz click de nuevo para cerrar
+                <div
+                  className="
+                    absolute bottom-3 left-3 z-20 rounded-md
+                    border border-border/70 bg-surface/90 px-2.5 py-1
+                    text-[11px] text-text-muted backdrop-blur-sm
+                  "
+                >
+                  Haz click de nuevo o fuera para cerrar
                 </div>
               )}
             </>
@@ -112,7 +177,7 @@ export default function ImageZoomAmazon({
         <div className="hidden md:block md:col-span-7">
           <div
             className={[
-              "relative rounded-xl border border-border bg-surface overflow-hidden",
+              "relative overflow-hidden rounded-xl border border-border bg-surface",
               heightClass,
             ].join(" ")}
           >

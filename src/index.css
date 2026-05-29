@@ -146,3 +146,12 @@ h4 {
   margin: 0 auto;
   padding: 0 16px;
 }
+
+.dashboard-sidebar-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.dashboard-sidebar-scroll::-webkit-scrollbar {
+  display: none;
+}

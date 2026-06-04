@@ -218,7 +218,7 @@ export default function PublicPlaygroundPage() {
         console.error('Error sincronizando celda pública:', saveError);
         setMessage('No se pudo sincronizar el cambio. Intenta guardar manualmente.');
       }
-    }, 650);
+    }, 250);
   }, [token]);
 
   useEffect(() => {
@@ -268,6 +268,11 @@ export default function PublicPlaygroundPage() {
           await reloadWorkbook();
         } catch (err) {
           console.warn('No se pudo refrescar playground público:', err);
+        }
+      },
+      onRealtimeStatus: (status) => {
+        if (status === 'CHANNEL_ERROR') {
+          setMessage('Realtime no conectó. Revisa REALTIME_SETUP.sql en Supabase.');
         }
       },
     });

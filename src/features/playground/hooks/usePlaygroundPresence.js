@@ -17,6 +17,22 @@ function getOrCreateGuestName() {
   return value;
 }
 
+function getOrCreateTabId() {
+  if (typeof window === 'undefined') return `tab-${Date.now()}`;
+
+  const key = 'waldo_playground_tab_id';
+  const existing = window.sessionStorage.getItem(key);
+  if (existing) return existing;
+
+  const value =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? `tab-${crypto.randomUUID()}`
+      : `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  window.sessionStorage.setItem(key, value);
+  return value;
+}
+
 function getUserName(user) {
   const metadataName =
     user?.user_metadata?.full_name ||
@@ -33,6 +49,7 @@ export function usePlaygroundPresence(workbookId, activeSheetName, pageMode = 'e
   const [currentUser, setCurrentUser] = useState(null);
   const channelRef = useRef(null);
   const trackTimerRef = useRef(null);
+  const identityRef = useRef({ tabId: getOrCreateTabId(), presenceKey: '' });
 
   useEffect(() => {
     let mounted = true;
@@ -47,12 +64,15 @@ export function usePlaygroundPresence(workbookId, activeSheetName, pageMode = 'e
       setCurrentUser(user);
 
       const name = getUserName(user);
-      const userId = user?.id || `guest-${getOrCreateGuestName().replace(/\s+/g, '-').toLowerCase()}`;
+      const baseUserId = user?.id || `guest-${getOrCreateGuestName().replace(/\s+/g, '-').toLowerCase()}`;
+      const tabId = identityRef.current.tabId;
+      const presenceKey = `${baseUserId}:${tabId}`;
+      identityRef.current.presenceKey = presenceKey;
 
       channel = supabase.channel(`playground-presence-${workbookId}`, {
         config: {
           presence: {
-            key: userId,
+            key: presenceKey,
           },
         },
       });
@@ -65,7 +85,7 @@ export function usePlaygroundPresence(workbookId, activeSheetName, pageMode = 'e
           const nextMembers = Object.entries(state).flatMap(([key, presences]) =>
             presences.map((presence) => ({
               key,
-              isSelf: key === userId,
+              isSelf: key === identityRef.current.presenceKey || presence.tabId === identityRef.current.tabId,
               name: presence.name || 'Usuario',
               email: presence.email || '',
               isGuest: Boolean(presence.isGuest),
@@ -85,6 +105,7 @@ export function usePlaygroundPresence(workbookId, activeSheetName, pageMode = 'e
             name,
             email: user?.email || '',
             isGuest: !user,
+            tabId: identityRef.current.tabId,
             sheet: activeSheetName || 'Hoja',
             pageMode,
             activeCell: activeCellLabel || '',
@@ -122,6 +143,7 @@ export function usePlaygroundPresence(workbookId, activeSheetName, pageMode = 'e
         name,
         email: currentUser?.email || '',
         isGuest: !currentUser,
+        tabId: identityRef.current.tabId,
         sheet: activeSheetName || 'Hoja',
         pageMode,
         activeCell: activeCellLabel || '',

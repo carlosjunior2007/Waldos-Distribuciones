@@ -95,6 +95,10 @@ export function useQuotations() {
       setRows(listRes.rows);
       setTotalPages(listRes.totalPages);
       setSummary(summaryRes);
+
+      if (listRes.page && listRes.page !== page) {
+        setPage(listRes.page);
+      }
     } catch (error) {
       console.error(error);
       showMessage(

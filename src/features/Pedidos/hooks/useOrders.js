@@ -500,13 +500,15 @@ export function useOrders() {
   function requestDeleteCancelledOrder(order) {
     if (!order?.id) return;
 
-    if (order.cotizacion_id) {
+    const quotationExists = Boolean(order.quotation?.id);
+
+    if (order.cotizacion_id && quotationExists) {
       setDeleteOrderDialog({
         open: true,
         order,
         blocked: true,
         message:
-          "No se puede eliminar este pedido porque está enlazado a una cotización. Conserva el registro para no romper el historial.",
+          "No se puede eliminar este pedido porque todavía está enlazado a una cotización existente. Conserva el registro para no romper el historial.",
       });
       return;
     }

@@ -99,7 +99,7 @@ export function useProveedores() {
     setSelectedProvider(null);
     setForm({
       ...INITIAL_PROVIDER_FORM,
-      codigo: buildNextProviderCode(providers.length),
+      codigo: buildNextProviderCode(providers),
     });
     setModalMode("create");
   }
@@ -193,7 +193,7 @@ export function useProveedores() {
         type === "checkbox"
           ? checked
           : CAPITALIZED_TEXT_FIELDS.includes(name)
-            ? normalizeProviderTextField(value)
+            ? normalizeProviderTextField(value, { trim: false })
             : value,
     }));
   }

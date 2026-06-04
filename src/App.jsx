@@ -48,7 +48,6 @@ export default function App() {
         <Route path="productos" element={<ProductsAdminPage />} />
         <Route path="gastos" element={<ExpensesPage />} />
         <Route path="clientes" element={<ClientsPage />} />
-        <Route path="contrarecibo" element={<ReceiptsPage />} />
         <Route path="pedidos" element={<Pedidos />} />
         <Route path="playground" element={<PlaygroundListPage  />} />
         <Route path="provedores" element={<ProvedoresPage />} />

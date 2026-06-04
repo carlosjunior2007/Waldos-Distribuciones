@@ -52,6 +52,29 @@ function toIntegerValue(value, fallback = 0) {
   return String(Math.max(Number(digits), fallback));
 }
 
+function toDecimalValue(value, fallback = 0) {
+  const text = String(value ?? "").replace(",", ".");
+  const cleaned = text.replace(/[^0-9.]/g, "");
+  const [integerPart, ...decimalParts] = cleaned.split(".");
+  const hasDecimalPoint = cleaned.includes(".");
+  const decimals = decimalParts.join("").slice(0, 2);
+  const integer = integerPart || (hasDecimalPoint ? "0" : "");
+
+  if (!integer && !hasDecimalPoint) return "";
+
+  const result = hasDecimalPoint ? `${integer}.${decimals}` : integer;
+  const number = Number(result);
+
+  if (!Number.isFinite(number)) return String(fallback);
+  return result;
+}
+
+function normalizeDecimalOnBlur(value, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return Number(fallback).toFixed(2);
+  return Math.max(number, fallback).toFixed(2);
+}
+
 export default function OrderFormModal({
   open,
   order,
@@ -185,8 +208,23 @@ export default function OrderFormModal({
     setDetails((current) => {
       const copy = [...current];
       const currentItem = copy[index];
-      const nextValue = value === "" ? "" : Number(toIntegerValue(value));
+      const decimalFields = new Set(["precio_unitario", "costo_unitario"]);
+      const nextValue = decimalFields.has(field)
+        ? toDecimalValue(value)
+        : value === ""
+          ? ""
+          : Number(toIntegerValue(value));
+
       copy[index] = { ...currentItem, [field]: nextValue };
+      return copy;
+    });
+  }
+
+  function normalizeDetailDecimal(index, field) {
+    setDetails((current) => {
+      const copy = [...current];
+      const currentItem = copy[index];
+      copy[index] = { ...currentItem, [field]: normalizeDecimalOnBlur(currentItem?.[field] || 0) };
       return copy;
     });
   }
@@ -371,10 +409,10 @@ export default function OrderFormModal({
                           <input type="number" min={item.cantidad_entregada || 0} step="1" inputMode="numeric" pattern="[0-9]*" className={`${inputClass} ml-auto w-28 text-right`} value={item.cantidad_pedida} onChange={(event) => updateDetail(index, "cantidad_pedida", toIntegerValue(event.target.value))} />
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <input type="number" min="0" step="0.01" className={`${inputClass} ml-auto w-32 text-right`} value={item.precio_unitario} onChange={(event) => updateDetail(index, "precio_unitario", event.target.value)} />
+                          <input type="text" inputMode="decimal" className={`${inputClass} ml-auto w-32 text-right`} value={item.precio_unitario} onChange={(event) => updateDetail(index, "precio_unitario", event.target.value)} onBlur={() => normalizeDetailDecimal(index, "precio_unitario")} />
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <input type="number" min="0" step="0.01" className={`${inputClass} ml-auto w-32 text-right`} value={item.costo_unitario} onChange={(event) => updateDetail(index, "costo_unitario", event.target.value)} />
+                          <input type="text" inputMode="decimal" className={`${inputClass} ml-auto w-32 text-right`} value={item.costo_unitario} onChange={(event) => updateDetail(index, "costo_unitario", event.target.value)} onBlur={() => normalizeDetailDecimal(index, "costo_unitario")} />
                         </td>
                         <td className={`px-4 py-3 text-right font-bold ${lineProfit.profit >= 0 ? "text-success-700" : "text-error-700"}`}>
                           {formatMoney(lineProfit.profit)}

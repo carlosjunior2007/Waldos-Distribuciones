@@ -94,7 +94,12 @@ export function getStatusStyles(status) {
 }
 
 export function buildLastMonthsOptions(total = 12) {
-  const result = [];
+  const result = [
+    {
+      value: "todas",
+      label: "Todos los meses",
+    },
+  ];
   const today = new Date();
 
   for (let i = 0; i < total; i++) {
@@ -110,6 +115,13 @@ export function buildLastMonthsOptions(total = 12) {
   }
 
   return result;
+}
+
+export function getPreviousMonthValue() {
+  const today = new Date();
+  const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function calculateSalePriceFromUtility(cost, utilityPercent) {

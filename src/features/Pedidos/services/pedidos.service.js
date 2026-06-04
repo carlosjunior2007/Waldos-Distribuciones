@@ -410,7 +410,7 @@ export async function deleteCancelledOrder(orderId) {
 
   const { data: order, error: orderError } = await supabase
     .from("pedidos")
-    .select("id, folio, estado, cotizacion_id")
+    .select("id, folio, estado, cotizacion_id, cotizaciones:cotizacion_id ( id )")
     .eq("id", orderId)
     .single();
 
@@ -421,8 +421,12 @@ export async function deleteCancelledOrder(orderId) {
     throw new Error("Solo puedes eliminar pedidos cancelados.");
   }
 
-  if (order.cotizacion_id) {
-    throw new Error("No se puede eliminar este pedido porque está enlazado a una cotización. Conserva el registro para no romper el historial.");
+  const quote = Array.isArray(order.cotizaciones)
+    ? order.cotizaciones[0] || null
+    : order.cotizaciones || null;
+
+  if (order.cotizacion_id && quote?.id) {
+    throw new Error("No se puede eliminar este pedido porque todavía está enlazado a una cotización existente. Conserva el registro para no romper el historial.");
   }
 
   const { data: deliveries, error: deliveriesError } = await supabase

@@ -1,5 +1,5 @@
 import { DEFAULT_COLUMNS, DEFAULT_ROWS } from '../excelModule/excel.constants';
-import { createEmptyGrid, displayCell } from '../excelModule/excel.helpers';
+import { columnIndexToLetter, createEmptyGrid, displayCell } from '../excelModule/excel.helpers';
 import { PRODUCT_CHANGE_COLUMNS } from '../playground.constants';
 
 export function makeProductChangesGrid(products = []) {
@@ -15,9 +15,9 @@ export function makeProductChangesGrid(products = []) {
       product.id || '',
       product.codigo || '',
       product.nombre || '',
-      product.precio ?? '',
-      product.precio_compra ?? '',
       '',
+      product.precio_compra ?? '',
+      calculateUtilityPercent(product.precio, product.precio_compra),
       product.descripcion || '',
       product.categoria || '',
       product.unidad || '',
@@ -30,10 +30,12 @@ export function makeProductChangesGrid(products = []) {
       grid[row][colIndex] = { value: String(value), formula: '', style: {} };
     });
 
-    const price = Number(product.precio || 0);
-    const cost = Number(product.precio_compra || 0);
-    const utilidad = price > 0 ? (((price - cost) / price) * 100).toFixed(2) : '';
-    grid[row][5] = { value: utilidad, formula: '', style: { bgColor: '#f8fafc' } };
+    grid[row][3] = { value: '', formula: makePriceFormula(row + 1), style: { bgColor: '#ecfeff' } };
+    grid[row][5] = {
+      value: calculateUtilityPercent(product.precio, product.precio_compra),
+      formula: '',
+      style: { bgColor: '#f8fafc' },
+    };
   });
 
   return grid;
@@ -70,6 +72,25 @@ export function toNullableBoolean(value) {
   if (['si', 'sí', 'yes', 'true', '1', 'activo', 'habilitado'].includes(clean)) return true;
   if (['no', 'false', '0', 'inactivo', 'deshabilitado'].includes(clean)) return false;
   return null;
+}
+
+
+function makePriceFormula(rowNumber, costColIndex = 4, utilityColIndex = 5) {
+  if (!hasIndex(costColIndex) || !hasIndex(utilityColIndex)) return '';
+
+  const costColumn = columnIndexToLetter(costColIndex);
+  const utilityColumn = columnIndexToLetter(utilityColIndex);
+  return `=IF(${utilityColumn}${rowNumber}>=100,0,ROUND(${costColumn}${rowNumber}/(1-${utilityColumn}${rowNumber}/100),2))`;
+}
+
+function calculateUtilityPercent(price, cost) {
+  const salePrice = Number(price || 0);
+  const purchaseCost = Number(cost || 0);
+
+  if (salePrice <= 0) return '';
+
+  const utilityPercent = ((salePrice - purchaseCost) / salePrice) * 100;
+  return String(Math.round(utilityPercent));
 }
 
 export function getProductIdsFromGrid(grid = []) {
@@ -143,11 +164,7 @@ function productFieldValue(product = {}, key) {
   if (key === 'unidad') return product.unidad || '';
   if (key === 'caja') return product.cantidad_caja ?? '';
   if (key === 'habilitado') return product.habilitado === false ? 'No' : 'Sí';
-  if (key === 'utilidad') {
-    const price = Number(product.precio || 0);
-    const cost = Number(product.precio_compra || 0);
-    return price > 0 ? (((price - cost) / price) * 100).toFixed(2) : '';
-  }
+  if (key === 'utilidad') return calculateUtilityPercent(product.precio, product.precio_compra);
   return '';
 }
 
@@ -234,10 +251,13 @@ export function reconcileProductSheetGrid(grid = [], products = []) {
     Object.entries(sourceMap).forEach(([key, colIndex]) => {
       if (!hasIndex(colIndex)) return;
       const value = productFieldValue(product, key);
+      const isPrice = key === 'precio';
+      const priceFormula = isPrice ? makePriceFormula(targetRow + 1, idx.costo, idx.utilidad) : '';
+
       nextGrid[targetRow][colIndex] = {
-        value: value === null || value === undefined ? '' : String(value),
-        formula: '',
-        style: key === 'utilidad' ? { bgColor: '#f8fafc' } : {},
+        value: isPrice && priceFormula ? '' : (value === null || value === undefined ? '' : String(value)),
+        formula: priceFormula,
+        style: isPrice && priceFormula ? { bgColor: '#ecfeff' } : (key === 'utilidad' ? { bgColor: '#f8fafc' } : {}),
       };
     });
   });

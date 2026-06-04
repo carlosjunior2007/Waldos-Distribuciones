@@ -13,9 +13,9 @@ export default function QuotationsStats({ summary }) {
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
       <SummaryCard
         icon={FileText}
-        title="Cotizaciones del mes"
+        title="Cotizaciones mostradas"
         value={summary.total || 0}
-        note={`Total cotizado: ${formatMoney(summary.totalCotizado || 0)}`}
+        note={`Total visible: ${formatMoney(summary.totalCotizado || 0)}`}
         tone="primary"
       />
 
@@ -23,7 +23,7 @@ export default function QuotationsStats({ summary }) {
         icon={Send}
         title="Enviadas"
         value={summary.enviadas || 0}
-        note="Cotizaciones esperando respuesta."
+        note="Esperando respuesta del cliente."
         tone="info"
       />
 
@@ -39,7 +39,7 @@ export default function QuotationsStats({ summary }) {
         icon={FileCheck2}
         title="Convertidas"
         value={summary.convertidas || 0}
-        note="Cotizaciones que ya pasaron a pedido."
+        note="Ya pasaron a pedido."
         tone="success"
       />
     </div>

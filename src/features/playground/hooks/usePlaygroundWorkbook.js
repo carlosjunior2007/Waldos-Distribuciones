@@ -57,6 +57,7 @@ export function usePlaygroundWorkbook(workbookId) {
   const pendingCellSavesRef = useRef({});
   const pendingSaveTimerRef = useRef(null);
   const realtimeChannelRef = useRef(null);
+  const lastRealtimeStatusRef = useRef('');
 
   const cloneGrids = useCallback((source = {}) => {
     return Object.fromEntries(
@@ -155,7 +156,7 @@ export function usePlaygroundWorkbook(workbookId) {
         console.error('Error guardando cambios realtime:', persistError);
         setMessage('No se pudieron sincronizar algunos cambios. Presiona Guardar.');
       }
-    }, 650);
+    }, 250);
   }, []);
 
 
@@ -331,6 +332,12 @@ export function usePlaygroundWorkbook(workbookId) {
       onCellChange: applyRealtimeCellChange,
       onSheetChange: () => load({ showFullPageLoading: false }),
       onWorkbookChange: () => load({ showFullPageLoading: false }),
+      onRealtimeStatus: (status) => {
+        lastRealtimeStatusRef.current = status;
+        if (status === 'CHANNEL_ERROR') {
+          setMessage('Realtime no conectó. Revisa REALTIME_SETUP.sql en Supabase.');
+        }
+      },
     });
 
     realtimeChannelRef.current = channel;
@@ -642,7 +649,7 @@ export function usePlaygroundWorkbook(workbookId) {
 
       const savedCells = await saveSheetCells(sheet.id, grid);
       realtimeChannelRef.current?.send?.({ type: 'broadcast', event: 'workbook-reload', payload: {} });
-      setMessage(`Hoja de cambios de productos creada. Se guardaron ${savedCells.length} celdas con datos. Edita directamente precio, costo, descripción, categoría u otros campos. Al aplicar, se comparará contra la DB actual.`);
+      setMessage(`Hoja de cambios de productos creada. Se guardaron ${savedCells.length} celdas con datos. El precio se calcula con fórmula desde costo y utilidad %, así puedes modificar utilidad y aplicar precios sin hacerlo a mano.`);
     } finally {
       setSaving(false);
     }

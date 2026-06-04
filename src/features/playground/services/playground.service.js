@@ -20,6 +20,25 @@ function isMissingColumnError(error, columnName) {
   return message.includes(String(columnName).toLowerCase()) && (message.includes('does not exist') || message.includes('schema cache'));
 }
 
+function isMissingCellUniqueConstraintError(error) {
+  const message = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+  return message.includes('42p10') || message.includes('no unique or exclusion constraint');
+}
+
+function dedupeCellPayloads(cells = []) {
+  const map = new Map();
+  cells.forEach((cell) => {
+    const key = `${cell.sheet_id}:${Number(cell.row_index)}:${Number(cell.col_index)}`;
+    map.set(key, {
+      ...cell,
+      row_index: Number(cell.row_index),
+      col_index: Number(cell.col_index),
+      updated_at: cell.updated_at || new Date().toISOString(),
+    });
+  });
+  return [...map.values()];
+}
+
 function cellsWithoutStyle(cells = []) {
   return cells.map(({ style, ...cell }) => cell);
 }
@@ -415,9 +434,76 @@ async function insertCellsInChunks(cells = []) {
   return inserted;
 }
 
+async function updateExistingCellByPosition(cell = {}, includeStyle = true) {
+  const updatePayload = {
+    value: cell.value ?? '',
+    formula: cell.formula ?? '',
+    updated_at: cell.updated_at || new Date().toISOString(),
+  };
+
+  if (includeStyle) updatePayload.style = cell.style || {};
+
+  return supabase
+    .from('playground_cells')
+    .update(updatePayload)
+    .eq('sheet_id', cell.sheet_id)
+    .eq('row_index', Number(cell.row_index))
+    .eq('col_index', Number(cell.col_index))
+    .select('*')
+    .maybeSingle();
+}
+
+async function manualUpsertCellsWithoutUniqueConstraint(cells = []) {
+  const saved = [];
+
+  for (const cell of dedupeCellPayloads(cells)) {
+    let updateResponse = await updateExistingCellByPosition(cell, true);
+
+    if (updateResponse.error && isMissingStyleColumnError(updateResponse.error)) {
+      updateResponse = await updateExistingCellByPosition(cell, false);
+    }
+
+    if (updateResponse.error) throw updateResponse.error;
+
+    if (updateResponse.data) {
+      saved.push(updateResponse.data);
+      continue;
+    }
+
+    let insertResponse = await supabase
+      .from('playground_cells')
+      .insert(cell)
+      .select('*')
+      .single();
+
+    if (insertResponse.error && isMissingStyleColumnError(insertResponse.error)) {
+      insertResponse = await supabase
+        .from('playground_cells')
+        .insert(cellsWithoutStyle([cell])[0])
+        .select('*')
+        .single();
+    }
+
+    // Si otra pestaña creó la celda entre el UPDATE y el INSERT, intentamos actualizar otra vez.
+    if (insertResponse.error && String(insertResponse.error?.code || '').toLowerCase() === '23505') {
+      const retryResponse = await updateExistingCellByPosition(cell, true);
+      if (retryResponse.error) throw retryResponse.error;
+      if (retryResponse.data) saved.push(retryResponse.data);
+      continue;
+    }
+
+    if (insertResponse.error) throw insertResponse.error;
+    saved.push(insertResponse.data);
+  }
+
+  return saved;
+}
+
 async function upsertCellsInChunks(cells = []) {
   const upserted = [];
-  for (const chunk of chunkArray(cells)) {
+  const cleanCells = dedupeCellPayloads(cells);
+
+  for (const chunk of chunkArray(cleanCells)) {
     let response = await supabase
       .from('playground_cells')
       .upsert(chunk, { onConflict: 'sheet_id,row_index,col_index' })
@@ -428,6 +514,12 @@ async function upsertCellsInChunks(cells = []) {
         .from('playground_cells')
         .upsert(cellsWithoutStyle(chunk), { onConflict: 'sheet_id,row_index,col_index' })
         .select('*');
+    }
+
+    if (response.error && isMissingCellUniqueConstraintError(response.error)) {
+      const fallbackRows = await manualUpsertCellsWithoutUniqueConstraint(chunk);
+      upserted.push(...fallbackRows);
+      continue;
     }
 
     if (response.error) throw response.error;
@@ -528,7 +620,14 @@ export async function upsertSheetCells(sheetId, cells = []) {
   return upsertCellsInChunks(normalized);
 }
 
-export function subscribeToPlaygroundChanges({ workbookId, sheets = [], onCellChange, onSheetChange, onWorkbookChange }) {
+export function subscribeToPlaygroundChanges({
+  workbookId,
+  sheets = [],
+  onCellChange,
+  onSheetChange,
+  onWorkbookChange,
+  onRealtimeStatus,
+}) {
   if (!workbookId) return null;
 
   const channel = supabase.channel(`playground-db-${workbookId}`, {
@@ -543,6 +642,7 @@ export function subscribeToPlaygroundChanges({ workbookId, sheets = [], onCellCh
     (payload) => onWorkbookChange?.(payload),
   );
 
+  // Broadcast se queda como respaldo rápido. Postgres Changes es la fuente real.
   channel.on(
     'broadcast',
     { event: 'cell-change' },
@@ -560,6 +660,7 @@ export function subscribeToPlaygroundChanges({ workbookId, sheets = [], onCellCh
             value: item.cell?.value ?? '',
             formula: item.cell?.formula ?? '',
             style: item.cell?.style || {},
+            updated_at: new Date().toISOString(),
           },
         });
       });
@@ -603,9 +704,10 @@ export function subscribeToPlaygroundChanges({ workbookId, sheets = [], onCellCh
     );
   });
 
-  channel.subscribe((status) => {
+  channel.subscribe((status, err) => {
+    onRealtimeStatus?.(status, err);
     if (status === 'CHANNEL_ERROR') {
-      console.warn('No se pudo conectar realtime del playground. Revisa Realtime en Supabase.');
+      console.warn('No se pudo conectar realtime del playground. Revisa supabase_realtime y las políticas RLS.', err);
     }
   });
 

@@ -42,12 +42,6 @@ const NAV_GROUPS = [
         icon: FileText,
         end: true,
       },
-      {
-        label: "Contra Recibo",
-        to: "/dashboard/contrarecibo",
-        icon: CheckCheck,
-        end: true,
-      },
     ],
   },
   {

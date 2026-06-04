@@ -47,6 +47,10 @@ export function getMonthRange(monthValue) {
   };
 }
 
+function isAllMonths(monthValue) {
+  return monthValue === "todas" || monthValue === "all";
+}
+
 export function addDaysISO(days = 14) {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -210,24 +214,26 @@ async function attachQuotationProfit(rows = []) {
   }));
 }
 
-export async function fetchQuotations({
-  page = 1,
+async function fetchQuotationRowsForFilters({
   month = getCurrentMonthValue(),
   search = "",
   status = "todas",
-}) {
+} = {}) {
   await expireQuotations();
 
-  const { start, end } = getMonthRange(month);
   const cleanSearch = escapeLike(search.trim());
+  const allMonths = isAllMonths(month);
 
   let monthQuery = supabase
     .from("cotizaciones")
     .select(QUOTATION_SELECT)
-    .gte("created_at", start)
-    .lt("created_at", end)
     .order("created_at", { ascending: false })
     .range(0, MAX_ROWS);
+
+  if (!allMonths) {
+    const { start, end } = getMonthRange(month);
+    monthQuery = monthQuery.gte("created_at", start).lt("created_at", end);
+  }
 
   monthQuery = applyQuotationSearch(monthQuery, cleanSearch);
   monthQuery = applyQuotationStatus(monthQuery, status);
@@ -236,37 +242,43 @@ export async function fetchQuotations({
 
   if (monthError) throw monthError;
 
-  const carryoverStatuses = [];
-
-  if (status === "todas") {
-    carryoverStatuses.push("borrador", "enviada", "aceptada");
-  }
-
-  if (["borrador", "enviada", "aceptada"].includes(status)) {
-    carryoverStatuses.push(status);
-  }
-
   let carryoverRows = [];
 
-  if (carryoverStatuses.length > 0) {
-    let carryoverQuery = supabase
-      .from("cotizaciones")
-      .select(QUOTATION_SELECT)
-      .in("estado", carryoverStatuses)
-      .lt("created_at", start)
-      .order("created_at", { ascending: false })
-      .range(0, MAX_ROWS);
+  // Cuando se filtra por un mes específico, también mostramos las cotizaciones
+  // abiertas de meses anteriores para que no se pierdan trabajos pendientes.
+  // En "Todos los meses" no hace falta traer carryover porque ya vienen todas.
+  if (!allMonths) {
+    const { start } = getMonthRange(month);
+    const carryoverStatuses = [];
 
-    carryoverQuery = applyQuotationSearch(carryoverQuery, cleanSearch);
+    if (status === "todas") {
+      carryoverStatuses.push("borrador", "enviada", "aceptada");
+    }
 
-    const { data, error } = await carryoverQuery;
+    if (["borrador", "enviada", "aceptada"].includes(status)) {
+      carryoverStatuses.push(status);
+    }
 
-    if (error) throw error;
+    if (carryoverStatuses.length > 0) {
+      let carryoverQuery = supabase
+        .from("cotizaciones")
+        .select(QUOTATION_SELECT)
+        .in("estado", [...new Set(carryoverStatuses)])
+        .lt("created_at", start)
+        .order("created_at", { ascending: false })
+        .range(0, MAX_ROWS);
 
-    carryoverRows = (data || []).map((row) => ({
-      ...row,
-      isCarryover: true,
-    }));
+      carryoverQuery = applyQuotationSearch(carryoverQuery, cleanSearch);
+
+      const { data, error } = await carryoverQuery;
+
+      if (error) throw error;
+
+      carryoverRows = (data || []).map((row) => ({
+        ...row,
+        isCarryover: true,
+      }));
+    }
   }
 
   const monthRows = (monthRowsData || []).map((row) => ({
@@ -280,9 +292,16 @@ export async function fetchQuotations({
     map.set(row.id, row);
   }
 
-  const mergedRows = await attachQuotationProfit(
-    Array.from(map.values()).sort(sortQuotations),
-  );
+  return attachQuotationProfit(Array.from(map.values()).sort(sortQuotations));
+}
+
+export async function fetchQuotations({
+  page = 1,
+  month = getCurrentMonthValue(),
+  search = "",
+  status = "todas",
+}) {
+  const mergedRows = await fetchQuotationRowsForFilters({ month, search, status });
 
   const total = mergedRows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -294,6 +313,7 @@ export async function fetchQuotations({
     rows: mergedRows.slice(from, to),
     total,
     totalPages,
+    page: safePage,
   };
 }
 
@@ -302,26 +322,7 @@ export async function fetchQuotationSummary({
   search = "",
   status = "todas",
 } = {}) {
-  await expireQuotations();
-
-  const { start, end } = getMonthRange(month);
-  const cleanSearch = escapeLike(search.trim());
-
-  let query = supabase
-    .from("cotizaciones")
-    .select("id, estado, total, created_at")
-    .gte("created_at", start)
-    .lt("created_at", end)
-    .range(0, MAX_ROWS);
-
-  query = applyQuotationSearch(query, cleanSearch);
-  query = applyQuotationStatus(query, status);
-
-  const { data, error } = await query;
-
-  if (error) throw error;
-
-  const rows = data || [];
+  const rows = await fetchQuotationRowsForFilters({ month, search, status });
 
   return {
     total: rows.length,
@@ -332,6 +333,10 @@ export async function fetchQuotationSummary({
     vencidas: rows.filter((x) => x.estado === "vencida").length,
     convertidas: rows.filter((x) => x.estado === "convertida").length,
     totalCotizado: rows.reduce((acc, x) => acc + Number(x.total || 0), 0),
+    gananciaEstimada: rows.reduce(
+      (acc, x) => acc + Number(x.ganancia_estimada || 0),
+      0,
+    ),
   };
 }
 

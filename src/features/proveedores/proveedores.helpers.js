@@ -13,8 +13,11 @@ export function capitalizeFirstLetter(value) {
   );
 }
 
-export function normalizeProviderTextField(value) {
-  return capitalizeFirstLetter(String(value ?? "").trim());
+export function normalizeProviderTextField(value, options = {}) {
+  const { trim = true } = options;
+  const text = String(value ?? "");
+
+  return capitalizeFirstLetter(trim ? text.trim() : text);
 }
 
 export function buildProviderForm(provider) {
@@ -94,8 +97,20 @@ export function normalizeProviderCode(value) {
     .replace(/\s+/g, "-");
 }
 
-export function buildNextProviderCode(totalProviders = 0) {
-  const next = Number(totalProviders || 0) + 1;
+export function buildNextProviderCode(providers = []) {
+  const providerList = Array.isArray(providers) ? providers : [];
+
+  const maxNumber = providerList.reduce((max, provider) => {
+    const code = String(provider?.codigo || "");
+    const match = code.match(/(\d+)$/);
+
+    if (!match) return max;
+
+    const number = Number.parseInt(match[1], 10);
+    return Number.isNaN(number) ? max : Math.max(max, number);
+  }, 0);
+
+  const next = maxNumber + 1;
   return `PRV-${String(next).padStart(4, "0")}`;
 }
 

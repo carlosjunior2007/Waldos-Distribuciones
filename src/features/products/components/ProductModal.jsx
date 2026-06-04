@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2,
   CheckCircle2,
@@ -1055,23 +1055,52 @@ function SatCatalogSearch({
   emptyText,
 }) {
   const [query, setQuery] = useState("");
+  const [selectedItem, setSelectedItem] = useState(null);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [hasManualSearch, setHasManualSearch] = useState(false);
+  const [hasUserTyped, setHasUserTyped] = useState(false);
 
-  const effectiveQuery = hasManualSearch ? query.trim() : String(defaultQuery || "").trim();
+  const selectedLabel = selectedItem
+    ? `${selectedItem.clave} - ${selectedItem.descripcion}`
+    : "";
 
-  const selectedItem = useMemo(() => {
-    return results.find((item) => item.clave === value) || null;
-  }, [results, value]);
+  const inputValue = selectedItem ? selectedLabel : query;
+  const cleanQuery = query.trim();
+  const hasStoredValue = Boolean(value) && !selectedItem && !hasUserTyped;
+  const canSearch = !selectedItem && !hasStoredValue && cleanQuery.length >= 2;
+  const shouldShowDefaultHint =
+    !selectedItem &&
+    !hasStoredValue &&
+    !hasUserTyped &&
+    !value &&
+    String(defaultQuery || "").trim().length >= 2;
+
+  useEffect(() => {
+    if (!value) {
+      setSelectedItem(null);
+
+      if (!hasUserTyped) {
+        setQuery("");
+      }
+
+      return;
+    }
+
+    if (selectedItem?.clave === value) return;
+
+    if (!hasUserTyped && !selectedItem) {
+      setQuery(String(value || ""));
+    }
+  }, [value, selectedItem, hasUserTyped]);
 
   useEffect(() => {
     if (disabled) return undefined;
 
-    if (effectiveQuery.length < 2) {
+    if (!canSearch) {
       setResults([]);
       setErrorMessage("");
+      setLoading(false);
       return undefined;
     }
 
@@ -1082,7 +1111,7 @@ function SatCatalogSearch({
         setLoading(true);
         setErrorMessage("");
 
-        const rows = await searchFn(effectiveQuery);
+        const rows = await searchFn(cleanQuery);
 
         if (!cancelled) {
           setResults(rows || []);
@@ -1108,7 +1137,57 @@ function SatCatalogSearch({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [effectiveQuery, disabled, searchFn]);
+  }, [canSearch, cleanQuery, disabled, searchFn]);
+
+  useEffect(() => {
+    if (disabled || selectedItem || hasStoredValue || hasUserTyped || value) return undefined;
+
+    const cleanDefaultQuery = String(defaultQuery || "").trim();
+
+    if (cleanDefaultQuery.length < 2) return undefined;
+
+    let cancelled = false;
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+
+        const rows = await searchFn(cleanDefaultQuery);
+
+        if (!cancelled) {
+          setResults(rows || []);
+        }
+      } catch (error) {
+        console.error("Error consultando sugerencias SAT:", error);
+
+        if (!cancelled) {
+          setResults([]);
+          setErrorMessage(
+            error.message ||
+              "No se pudo consultar el catálogo fiscal en este momento.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    defaultQuery,
+    disabled,
+    hasStoredValue,
+    hasUserTyped,
+    searchFn,
+    selectedItem,
+    value,
+  ]);
 
   function emitValue(nextValue) {
     onChange({
@@ -1120,21 +1199,30 @@ function SatCatalogSearch({
     });
   }
 
-  function handleManualSearch(nextValue) {
+  function handleInputChange(nextValue) {
+    setHasUserTyped(true);
+    setSelectedItem(null);
     setQuery(nextValue);
-    setHasManualSearch(true);
-  }
-
-  function useAutomaticSuggestions() {
-    setQuery("");
-    setHasManualSearch(false);
+    setResults([]);
+    emitValue(nextValue.trim());
   }
 
   function selectItem(item) {
-    emitValue(item.clave);
-    setQuery(`${item.clave} - ${item.descripcion}`);
-    setHasManualSearch(true);
+    setSelectedItem(item);
+    setQuery("");
     setResults([]);
+    setErrorMessage("");
+    setLoading(false);
+    emitValue(item.clave);
+  }
+
+  function clearSelection() {
+    setSelectedItem(null);
+    setQuery("");
+    setResults([]);
+    setErrorMessage("");
+    setHasUserTyped(false);
+    emitValue("");
   }
 
   return (
@@ -1145,36 +1233,27 @@ function SatCatalogSearch({
 
           <input
             type="text"
-            value={hasManualSearch ? query : ""}
-            onChange={(event) => handleManualSearch(event.target.value)}
+            name={name}
+            value={inputValue}
+            onChange={(event) => handleInputChange(event.target.value)}
             disabled={disabled}
             placeholder={placeholder}
             className="h-10 min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none disabled:opacity-70"
           />
 
-          {hasManualSearch && defaultQuery ? (
+          {selectedItem && !disabled ? (
             <button
               type="button"
-              onClick={useAutomaticSuggestions}
-              disabled={disabled}
+              onClick={clearSelection}
               className="shrink-0 rounded-xl bg-surface-soft px-2.5 py-1.5 text-xs font-bold text-text-secondary transition hover:bg-surface"
             >
-              Usar sugerencias
+              Cambiar
             </button>
           ) : null}
         </div>
-
-        <input
-          name={name}
-          value={value || ""}
-          onChange={(event) => emitValue(event.target.value)}
-          disabled={disabled}
-          placeholder="Clave seleccionada"
-          className="mt-2 h-10 w-full rounded-xl border border-border bg-surface-soft px-3 text-sm font-semibold text-text-primary outline-none disabled:opacity-70"
-        />
       </div>
 
-      {!hasManualSearch && defaultQuery && !value ? (
+      {shouldShowDefaultHint ? (
         <p className="rounded-xl border border-primary-100 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700">
           {recommendationLabel}: “{defaultQuery}”
         </p>
@@ -1193,16 +1272,26 @@ function SatCatalogSearch({
       ) : null}
 
       {!loading && !errorMessage && selectedItem ? (
-        <p className="text-xs font-semibold text-success-700">
-          {selectedItem.descripcion}
+        <p className="rounded-xl border border-success-100 bg-success-50 px-3 py-2 text-xs font-semibold text-success-700">
+          Clave seleccionada: {selectedItem.clave}
         </p>
       ) : null}
 
-      {!loading && !errorMessage && effectiveQuery.length < 2 ? (
+      {!loading && !errorMessage && !selectedItem && hasStoredValue ? (
+        <p className="rounded-xl border border-success-100 bg-success-50 px-3 py-2 text-xs font-semibold text-success-700">
+          Clave guardada. Presiona el campo para buscar otra.
+        </p>
+      ) : null}
+
+      {!loading &&
+      !errorMessage &&
+      !selectedItem &&
+      !hasStoredValue &&
+      cleanQuery.length < 2 ? (
         <p className="text-xs text-text-muted">{emptyText}</p>
       ) : null}
 
-      {!loading && !errorMessage && results.length ? (
+      {!loading && !errorMessage && !selectedItem && results.length ? (
         <div className="max-h-56 overflow-y-auto rounded-2xl border border-border bg-surface p-1">
           {results.map((item) => (
             <button
@@ -1224,7 +1313,8 @@ function SatCatalogSearch({
 
       {!loading &&
       !errorMessage &&
-      effectiveQuery.length >= 2 &&
+      !selectedItem &&
+      canSearch &&
       !results.length ? (
         <p className="text-xs text-text-muted">
           Sin resultados. Puedes ajustar la búsqueda o pegar la clave manualmente.

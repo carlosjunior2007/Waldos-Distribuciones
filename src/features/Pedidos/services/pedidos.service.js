@@ -525,6 +525,47 @@ export async function updateOrderInvoiceDraft({ orderId, clientId, values }) {
 }
 
 export async function cancelOrder(orderId) {
+  if (!orderId) throw new Error("Pedido inválido.");
+
+  const { data: order, error: orderError } = await supabase
+    .from("pedidos")
+    .select("id, estado")
+    .eq("id", orderId)
+    .single();
+
+  if (orderError) throw buildAppError(orderError);
+  if (!order) throw new Error("No se encontró el pedido.");
+
+  if (String(order.estado || "").toLowerCase() === "cancelado") {
+    return fetchOrderById(orderId);
+  }
+
+  const { data: deliveries, error: deliveriesError } = await supabase
+    .from("entregas")
+    .select("id, estado")
+    .eq("pedido_id", orderId)
+    .neq("estado", "cancelada");
+
+  if (deliveriesError) throw buildAppError(deliveriesError);
+
+  const activeDeliveries = deliveries || [];
+
+  for (const delivery of activeDeliveries) {
+    const currentRows = await fetchDeliveryDetailRows(delivery.id);
+
+    if (deliveryCountsAsDelivered(delivery.estado)) {
+      await revertDeliveryFromOrderDetails(currentRows);
+      await revertInventoryForDelivery(delivery.id);
+    }
+
+    const { error: deliveryUpdateError } = await supabase
+      .from("entregas")
+      .update({ estado: "cancelada", updated_at: new Date().toISOString() })
+      .eq("id", delivery.id);
+
+    if (deliveryUpdateError) throw buildAppError(deliveryUpdateError);
+  }
+
   const { error } = await supabase
     .from("pedidos")
     .update({ estado: "cancelado", updated_at: new Date().toISOString() })

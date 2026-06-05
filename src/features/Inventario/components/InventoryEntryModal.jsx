@@ -147,26 +147,31 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
       if (existingIndex >= 0) {
         const products = [...prev.products];
         const current = products[existingIndex];
-        products[existingIndex] = {
+        const updatedProduct = {
           ...current,
           cantidad: String(toNumber(current.cantidad) + 1),
         };
-        return { ...prev, products };
+
+        products.splice(existingIndex, 1);
+
+        return {
+          ...prev,
+          products: [updatedProduct, ...products],
+        };
       }
+
+      const newProduct = {
+        ...emptyLine,
+        producto_id: product.id,
+        producto_nombre: product.nombre,
+        producto_codigo: product.codigo || "",
+        cantidad: "1",
+        costo_unitario: product.precio_compra || "",
+      };
 
       return {
         ...prev,
-        products: [
-          ...prev.products,
-          {
-            ...emptyLine,
-            producto_id: product.id,
-            producto_nombre: product.nombre,
-            producto_codigo: product.codigo || "",
-            cantidad: "1",
-            costo_unitario: product.precio_compra || "",
-          },
-        ],
+        products: [newProduct, ...prev.products],
       };
     });
   }
@@ -386,49 +391,59 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
                           const lineTotal = toNumber(item.cantidad) * toNumber(item.costo_unitario);
 
                           return (
-                            <article key={`${item.producto_id}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <article
+                              key={`${item.producto_id}-${index}`}
+                              className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
+                            >
+                              <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate font-black text-slate-950">{item.producto_nombre}</p>
-                                  <p className="mt-1 text-xs font-semibold text-slate-500">{item.producto_codigo || "Sin código"}</p>
+                                  <p className="line-clamp-2 font-black leading-snug text-slate-950">
+                                    {item.producto_nombre}
+                                  </p>
+                                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                                    {item.producto_codigo || "Sin código"}
+                                  </p>
                                 </div>
 
                                 <button
                                   type="button"
                                   onClick={() => removeLine(index)}
-                                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                                  aria-label="Eliminar producto"
                                 >
                                   <Trash2 size={16} />
                                 </button>
                               </div>
 
-                              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1fr]">
-                                <Field label="Cantidad">
-                                  <div className="flex h-12 overflow-hidden rounded-2xl border border-slate-200 bg-white focus-within:border-red-300 focus-within:ring-4 focus-within:ring-red-50">
-                                    <button
-                                      type="button"
-                                      onClick={() => decreaseQuantity(index)}
-                                      className="w-11 border-r border-slate-200 text-lg font-black text-slate-500 hover:bg-slate-50"
-                                    >
-                                      -
-                                    </button>
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      pattern="[0-9]*"
-                                      value={item.cantidad}
-                                      onChange={(event) => updateIntegerQuantity(index, event.target.value)}
-                                      className="min-w-0 flex-1 border-0 bg-white px-3 text-center text-sm font-black outline-none"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => increaseQuantity(index)}
-                                      className="w-11 border-l border-slate-200 text-lg font-black text-slate-500 hover:bg-slate-50"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                </Field>
+                              <div className="mt-4 grid grid-cols-2 gap-3">
+                                <div className="col-span-2">
+                                  <Field label="Cantidad">
+                                    <div className="flex h-12 overflow-hidden rounded-2xl border border-slate-200 bg-white focus-within:border-red-300 focus-within:ring-4 focus-within:ring-red-50">
+                                      <button
+                                        type="button"
+                                        onClick={() => decreaseQuantity(index)}
+                                        className="w-12 shrink-0 border-r border-slate-200 text-lg font-black text-slate-500 transition hover:bg-slate-50"
+                                      >
+                                        -
+                                      </button>
+                                      <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        value={item.cantidad}
+                                        onChange={(event) => updateIntegerQuantity(index, event.target.value)}
+                                        className="min-w-0 flex-1 border-0 bg-white px-3 text-center text-sm font-black outline-none"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => increaseQuantity(index)}
+                                        className="w-12 shrink-0 border-l border-slate-200 text-lg font-black text-slate-500 transition hover:bg-slate-50"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  </Field>
+                                </div>
 
                                 <Field label="Costo unitario">
                                   <input
@@ -437,12 +452,12 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
                                     step="0.01"
                                     value={item.costo_unitario}
                                     onChange={(event) => updateLine(index, "costo_unitario", event.target.value)}
-                                    className={`${inputClass} text-right font-black`}
+                                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-right text-sm font-black outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
                                   />
                                 </Field>
 
                                 <Field label="Importe">
-                                  <div className="flex h-12 items-center justify-end rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-950">
+                                  <div className="flex h-12 w-full items-center justify-end rounded-2xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950">
                                     {money.format(lineTotal)}
                                   </div>
                                 </Field>
@@ -540,8 +555,8 @@ function Panel({ icon: Icon, title, description, children }) {
 
 function Field({ label, children }) {
   return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-black text-slate-800">{label}</span>
+    <label className="block min-w-0">
+      <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-700">{label}</span>
       {children}
     </label>
   );

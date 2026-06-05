@@ -2,8 +2,7 @@ import { Download, FileText, Package, Truck, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import {
   calculateDerivedOrderStatus,
-  calculateLineProfit,
-  calculateOrderProfit,
+  calculateOrderRealProfit,
   formatDate,
   formatMoney,
   getAddressLabel,
@@ -27,7 +26,7 @@ export default function OrderDetailsModal({
 
   const status = getOrderStatusMeta(calculateDerivedOrderStatus(order));
   const payment = getPaymentStatusMeta(order.estado_pago);
-  const profit = calculateOrderProfit(order.details || []);
+  const realProfit = calculateOrderRealProfit(order);
   const showProfit = isOrderProfitRealized(order);
 
   return createPortal(
@@ -110,24 +109,43 @@ export default function OrderDetailsModal({
 
               <div className="rounded-[28px] border border-border bg-surface p-5 shadow-[var(--shadow-soft)]">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
-                  Totales
+                  Ganancia real
                 </p>
 
                 <div className="mt-4 space-y-3 text-sm">
-                  <SummaryLine label="Subtotal" value={formatMoney(order.subtotal)} />
-                  <SummaryLine label="Costo" value={formatMoney(profit.cost)} />
-                  <SummaryLine label="Ganancia" value={formatMoney(profit.profit)} highlight={profit.profit >= 0 ? "success" : "error"} note={showProfit ? "Realizada" : "Estimada, no realizada"} />
-                  <SummaryLine label="Margen" value={`${profit.margin.toFixed(1)}%`} />
-                  <SummaryLine label={`IVA ${order.iva_porcentaje}%`} value={formatMoney(order.total - order.subtotal + Number(order.descuento || 0))} />
-                  <SummaryLine label="Total" value={formatMoney(order.total)} bold />
+                  <SummaryLine label="Venta del pedido" value={formatMoney(order.subtotal)} />
+                  <SummaryLine label="Venta entregada" value={formatMoney(realProfit.deliveredSale)} />
+                  <SummaryLine label="Costo real FIFO" value={formatMoney(realProfit.realCost)} />
+                  <SummaryLine label="Ganancia real" value={formatMoney(realProfit.realProfit)} highlight={realProfit.realProfit >= 0 ? "success" : "error"} note={showProfit ? "Pedido entregado y pagado" : "Se vuelve final cuando esté entregado y pagado"} />
+                  <SummaryLine label="Margen real" value={`${realProfit.realMargin.toFixed(1)}%`} />
+                  <SummaryLine label="Total con impuestos" value={formatMoney(order.total)} bold />
                 </div>
               </div>
             </section>
 
-            <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
               <InfoCard label="Fecha inicio" value={formatDate(order.entrega_inicio)} />
               <InfoCard label="Fecha fin" value={formatDate(order.entrega_fin)} />
               <InfoCard label="Estado factura" value={getInvoiceLabel(order)} />
+              <InfoCard label="Referencia de pago" value={order.pago_referencia || "Sin referencia"} />
+            </section>
+
+            <section className="rounded-[28px] border border-border bg-surface p-5 shadow-[var(--shadow-soft)]">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">Pago</p>
+                  <h4 className="mt-1 text-lg font-black text-text-primary">Gestión del cobro</h4>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <InfoCard label="Estado" value={payment.label} />
+                <InfoCard label="Método" value={order.metodo_pago || "Sin definir"} />
+                <InfoCard label="Monto pagado" value={formatMoney(realProfit.paidAmount)} />
+                <InfoCard label="Fecha de pago" value={order.pago_fecha ? formatDate(order.pago_fecha) : "Sin fecha"} />
+              </div>
+              <p className="mt-3 rounded-2xl border border-border bg-background p-4 text-sm font-semibold text-text-secondary">
+                {order.pago_notas || "Sin notas de pago."}
+              </p>
             </section>
 
             <section className="rounded-[28px] border border-border bg-surface p-5 shadow-[var(--shadow-soft)]">
@@ -160,8 +178,6 @@ export default function OrderDetailsModal({
 
               <div className="grid gap-3">
                 {(order.details || []).map((item) => {
-                  const lineProfit = calculateLineProfit(item);
-
                   return (
                     <article key={item.id} className="rounded-2xl border border-border bg-background p-4">
                       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_repeat(4,minmax(110px,auto))] xl:items-center">
@@ -176,10 +192,11 @@ export default function OrderDetailsModal({
                         <Metric label="Importe" value={formatMoney(item.importe)} strong />
                       </div>
 
-                      <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm md:grid-cols-3">
-                        <SummaryLine label="Precio" value={formatMoney(item.precio_unitario)} />
-                        <SummaryLine label="Costo" value={formatMoney(item.costo_unitario)} />
-                        <SummaryLine label="Ganancia" value={`${formatMoney(lineProfit.profit)} · ${lineProfit.margin.toFixed(1)}%`} highlight={lineProfit.profit >= 0 ? "success" : "error"} />
+                      <div className="mt-3 grid gap-3 border-t border-border pt-3 text-sm md:grid-cols-4">
+                        <SummaryLine label="Precio venta" value={formatMoney(item.precio_unitario)} />
+                        <SummaryLine label="Costo estimado" value={formatMoney(item.costo_unitario)} />
+                        <SummaryLine label="Costo real FIFO" value={formatMoney(item.costo_real_fifo || 0)} />
+                        <SummaryLine label="Ganancia real" value={`${formatMoney(item.ganancia_real || 0)} · ${Number(item.venta_entregada || 0) > 0 ? ((Number(item.ganancia_real || 0) / Number(item.venta_entregada || 0)) * 100).toFixed(1) : "0.0"}%`} highlight={Number(item.ganancia_real || 0) >= 0 ? "success" : "error"} />
                       </div>
                     </article>
                   );

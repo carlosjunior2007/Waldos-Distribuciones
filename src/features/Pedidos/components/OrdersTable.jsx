@@ -16,7 +16,7 @@ import {
 
 import {
   calculateDerivedOrderStatus,
-  calculateOrderProfit,
+  calculateOrderRealProfit,
   isOrderProfitRealized,
   formatDate,
   formatMoney,
@@ -116,7 +116,7 @@ function OrderRow({
 }) {
   const status = getOrderStatusMeta(calculateDerivedOrderStatus(order));
   const payment = getPaymentStatusMeta(order.estado_pago);
-  const profit = calculateOrderProfit(order.details);
+  const realProfit = calculateOrderRealProfit(order);
   const showProfit = isOrderProfitRealized(order);
   const invoiceReadiness = getOrderInvoiceReadiness(order);
   const hasInvoice = Boolean(order.factura_uuid || order.facturama_id || order.factura_status === "timbrada" || order.factura_status === "cancelada");
@@ -204,6 +204,10 @@ function OrderRow({
           {order.tracking_token || "Sin tracking"}
         </p>
 
+        <p className="mt-1 max-w-[170px] truncate text-xs font-semibold text-text-muted">
+          Pago: {order.pago_referencia || "Sin referencia"}
+        </p>
+
         {order.is_recurrent ? (
           <span className="mt-2 inline-flex rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-[11px] font-bold text-primary-700">
             Recurrente
@@ -267,14 +271,17 @@ function OrderRow({
       </td>
 
       <td className="px-4 py-4 align-top">
-        <p className={`text-sm font-black ${profit.profit >= 0 ? "text-success-700" : "text-error-700"}`}>
-          {formatMoney(profit.profit)}
+        <p className={`text-sm font-black ${realProfit.realProfit >= 0 ? "text-success-700" : "text-error-700"}`}>
+          {formatMoney(realProfit.realProfit)}
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          {profit.margin.toFixed(1)}% utilidad
+          {realProfit.realMargin.toFixed(1)}% margen real
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          Costo: {formatMoney(profit.cost)}
+          Costo real: {formatMoney(realProfit.realCost)}
+        </p>
+        <p className="mt-1 text-xs text-text-muted">
+          Pagado: {formatMoney(realProfit.paidAmount)}
         </p>
         {!showProfit ? (
           <p className="mt-1 text-[11px] font-semibold text-warning-700">

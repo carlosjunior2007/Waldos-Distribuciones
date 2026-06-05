@@ -21,8 +21,14 @@ import {
   deleteLocalInvoiceRecord,
   sendInvoiceEmailSandbox,
 } from "../services/pedidos.service";
-import { calculateDerivedOrderStatus, calculateOrderProfit, isOrderProfitRealized } from "../order.helpers";
+import { calculateDerivedOrderStatus, calculateOrderRealProfit, isOrderProfitRealized } from "../order.helpers";
 import { generateDeliveryReceiptPDF, generateOrderPDF, generateOrderSuppliersPDF } from "../services/orderDocuments.service";
+
+function getReadableError(error) {
+  if (!error) return "Error desconocido.";
+  if (typeof error === "string") return error;
+  return error.message || error.details || error.hint || "Intenta de nuevo.";
+}
 
 function getOrderMonthValue(order) {
   const sourceDate =
@@ -112,7 +118,7 @@ export function useOrders() {
       });
     } catch (error) {
       console.error(error);
-      showMessageDialog("No se pudieron cargar los pedidos", error.message || "Intenta de nuevo.");
+      showMessageDialog("No se pudieron cargar los pedidos", getReadableError(error));
     } finally {
       setLoading(false);
     }
@@ -242,7 +248,7 @@ export function useOrders() {
       );
     } catch (error) {
       console.error(error);
-      showMessageDialog("No se pudo guardar el pedido", error.message || "Intenta de nuevo.");
+      showMessageDialog("No se pudo guardar el pedido", getReadableError(error));
     }
   }
 
@@ -265,7 +271,7 @@ export function useOrders() {
       );
     } catch (error) {
       console.error(error);
-      showMessageDialog("No se pudo guardar la entrega", error.message || "Intenta de nuevo.");
+      showMessageDialog("No se pudo guardar la entrega", getReadableError(error));
     }
   }
 
@@ -340,7 +346,7 @@ export function useOrders() {
       return updated;
     } catch (error) {
       console.error(error);
-      showMessageDialog("No se pudieron guardar los datos fiscales", error.message || "Intenta de nuevo.");
+      showMessageDialog("No se pudieron guardar los datos fiscales", getReadableError(error));
       throw error;
     }
   }
@@ -685,11 +691,11 @@ export function useOrders() {
       (acc, order) => {
         acc.total += 1;
         acc.monto += Number(order.total || 0);
-        const profit = calculateOrderProfit(order.details);
+        const realProfit = calculateOrderRealProfit(order);
         const status = calculateDerivedOrderStatus(order);
         if (isOrderProfitRealized(order)) {
-          acc.costo += profit.cost;
-          acc.ganancia += profit.profit;
+          acc.costo += realProfit.realCost;
+          acc.ganancia += realProfit.collectedProfit;
         }
         if (status === "creado" || status === "borrador") acc.creados += 1;
         if (status === "parcial") acc.parciales += 1;

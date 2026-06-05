@@ -22,6 +22,7 @@ export function useInventory() {
   const [providers, setProviders] = useState([]);
 
   const [stockSearch, setStockSearch] = useState("");
+  const [stockFilters, setStockFilters] = useState({ dateFrom: "", dateTo: "" });
   const [stockPage, setStockPage] = useState(0);
   const [stockCount, setStockCount] = useState(0);
   const [stockHasMore, setStockHasMore] = useState(false);
@@ -35,10 +36,18 @@ export function useInventory() {
     return (summary || []).reduce(
       (acc, item) => {
         const quantity = toNumber(item.cantidad_disponible);
-        const value = toNumber(item.valor_estimado);
+
+        // costo_stock = lo que realmente costó el inventario disponible.
+        // valor_venta_potencial = lo que entraría si se vende todo al precio actual.
+        // ganancia_potencial = valor de venta - costo del stock.
+        const stockCost = toNumber(item.costo_stock ?? item.valor_estimado);
+        const saleValue = toNumber(item.valor_venta_potencial);
+        const potentialProfit = toNumber(item.ganancia_potencial);
 
         acc.totalUnits += quantity;
-        acc.totalValue += value;
+        acc.stockCost += stockCost;
+        acc.saleValue += saleValue;
+        acc.potentialProfit += potentialProfit;
         acc.activeLots += toNumber(item.lotes_activos);
 
         return acc;
@@ -47,13 +56,15 @@ export function useInventory() {
         productsWithStock: stockCount || 0,
         activeLots: 0,
         totalUnits: 0,
-        totalValue: 0,
+        stockCost: 0,
+        saleValue: 0,
+        potentialProfit: 0,
       },
     );
   }, [summary, stockCount]);
 
   const loadStock = useCallback(
-    async ({ search = stockSearch, reset = true } = {}) => {
+    async ({ search = stockSearch, filters = stockFilters, reset = true } = {}) => {
       const nextPage = reset ? 0 : stockPage + 1;
 
       if (!reset) setStockLoadingMore(true);
@@ -62,10 +73,13 @@ export function useInventory() {
         search,
         page: nextPage,
         pageSize: STOCK_PAGE_SIZE,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
       });
 
       setSummary((prev) => (reset ? result.data : [...prev, ...result.data]));
       setStockSearch(search);
+      setStockFilters(filters);
       setStockPage(nextPage);
       setStockCount(result.count || 0);
       setStockHasMore((nextPage + 1) * STOCK_PAGE_SIZE < (result.count || 0));
@@ -73,18 +87,18 @@ export function useInventory() {
 
       return result;
     },
-    [stockPage, stockSearch],
+    [stockFilters, stockPage, stockSearch],
   );
 
   const loadInventory = useCallback(
-    async ({ search = stockSearch } = {}) => {
+    async ({ search = stockSearch, filters = stockFilters } = {}) => {
       setLoading(true);
       setError("");
 
       try {
         const [entriesData, movementsData, catalogs] = await Promise.all([
-          fetchInventoryEntries(),
-          fetchInventoryMovements(),
+          fetchInventoryEntries(filters),
+          fetchInventoryMovements({ dateFrom: filters.dateFrom, dateTo: filters.dateTo }),
           fetchInventoryFormCatalogs(),
         ]);
 
@@ -92,7 +106,7 @@ export function useInventory() {
         setMovements(movementsData);
         setProviders(catalogs.providers || []);
 
-        await loadStock({ search, reset: true });
+        await loadStock({ search, filters, reset: true });
       } catch (err) {
         console.error(err);
         setError(err.message || "No se pudo cargar el inventario.");
@@ -100,20 +114,20 @@ export function useInventory() {
         setLoading(false);
       }
     },
-    [loadStock, stockSearch],
+    [loadStock, stockFilters, stockSearch],
   );
 
   const searchStock = useCallback(
-    async (search) => {
+    async (search, filters = stockFilters) => {
       setError("");
       try {
-        await loadStock({ search, reset: true });
+        await loadStock({ search, filters, reset: true });
       } catch (err) {
         console.error(err);
         setError(err.message || "No se pudo buscar inventario.");
       }
     },
-    [loadStock],
+    [loadStock, stockFilters],
   );
 
   const loadMoreStock = useCallback(async () => {
@@ -121,13 +135,13 @@ export function useInventory() {
 
     setError("");
     try {
-      await loadStock({ search: stockSearch, reset: false });
+      await loadStock({ search: stockSearch, filters: stockFilters, reset: false });
     } catch (err) {
       console.error(err);
       setError(err.message || "No se pudo cargar más inventario.");
       setStockLoadingMore(false);
     }
-  }, [loadStock, stockHasMore, stockLoadingMore, stockSearch]);
+  }, [loadStock, stockFilters, stockHasMore, stockLoadingMore, stockSearch]);
 
   const saveEntry = useCallback(
     async (payload) => {
@@ -136,7 +150,7 @@ export function useInventory() {
 
       try {
         const result = await createInventoryEntry(payload);
-        await loadInventory({ search: stockSearch });
+        await loadInventory({ search: stockSearch, filters: stockFilters });
         return result;
       } catch (err) {
         console.error(err);
@@ -146,7 +160,7 @@ export function useInventory() {
         setSaving(false);
       }
     },
-    [loadInventory, stockSearch],
+    [loadInventory, stockFilters, stockSearch],
   );
 
   const cancelEntry = useCallback(
@@ -156,7 +170,7 @@ export function useInventory() {
 
       try {
         await cancelInventoryEntry(entryId);
-        await loadInventory({ search: stockSearch });
+        await loadInventory({ search: stockSearch, filters: stockFilters });
       } catch (err) {
         console.error(err);
         setError(err.message || "No se pudo cancelar la entrada.");
@@ -165,7 +179,7 @@ export function useInventory() {
         setSaving(false);
       }
     },
-    [loadInventory, stockSearch],
+    [loadInventory, stockFilters, stockSearch],
   );
 
   useEffect(() => {
@@ -184,6 +198,7 @@ export function useInventory() {
     saving,
     error,
     stockSearch,
+    stockFilters,
     stockCount,
     stockHasMore,
     stockLoadingMore,

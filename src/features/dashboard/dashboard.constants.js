@@ -25,10 +25,15 @@ export const DASHBOARD_QUERIES = {
     subtotal,
     descuento,
     iva_porcentaje,
+    iva_monto,
     total,
     estado,
     estado_pago,
     metodo_pago,
+    referencia_pago,
+    monto_pagado,
+    fecha_pago,
+    notas_pago,
     entrega_inicio,
     entrega_fin,
     fecha_inicio,
@@ -97,11 +102,63 @@ export const DASHBOARD_QUERIES = {
     created_at,
     updated_at
   `,
+
+  inventario_entradas: `
+    id,
+    proveedor_id,
+    folio,
+    numero_factura,
+    fecha_compra,
+    subtotal,
+    iva,
+    total,
+    estado,
+    notas,
+    archivo_url,
+    archivo_nombre,
+    created_at,
+    updated_at,
+    proveedores(nombre, codigo)
+  `,
+
+  inventario_lotes: `
+    id,
+    entrada_id,
+    producto_id,
+    cantidad_inicial,
+    cantidad_disponible,
+    costo_unitario,
+    costo_total,
+    fecha_compra,
+    created_at,
+    updated_at,
+    productos(nombre, codigo),
+    inventario_entradas(folio, numero_factura, fecha_compra, archivo_url, archivo_nombre, proveedores(nombre))
+  `,
+
+  inventario_movimientos: `
+    id,
+    producto_id,
+    lote_id,
+    entrada_id,
+    tipo,
+    cantidad,
+    pedido_id,
+    pedido_detalle_id,
+    entrega_id,
+    entrega_detalle_id,
+    referencia,
+    notas,
+    created_at,
+    productos(nombre, codigo)
+  `,
 };
 
 export const RANGE_OPTIONS = [
   { value: "month", label: "Mes actual" },
-  { value: "week", label: "Semana actual" },
-  { value: "year", label: "Año actual" },
+  { value: "lastMonth", label: "Mes pasado" },
+  { value: "week", label: "Semana" },
+  { value: "year", label: "Año" },
+  { value: "custom", label: "Rango" },
   { value: "all", label: "Todo" },
 ];

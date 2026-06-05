@@ -1,7 +1,13 @@
 import { Download, Eye, Package, Pencil, Trash2 } from "lucide-react";
 
 import { formatMoney } from "../../../utils/formatters";
-import { formatUtilityPercent, getCategoryLabel, getInventoryStatus } from "../product.helpers";
+import {
+  formatSalePriceWithIva,
+  formatUtilityPercent,
+  getCategoryLabel,
+  getInventoryStatus,
+  getProductIvaPercent,
+} from "../product.helpers";
 
 export default function ProductsMobileList({
   products,
@@ -54,8 +60,13 @@ function ProductMobileCard({ item, onView, onEdit, onDelete, onDownloadLabel }) 
         <MiniInfo label="Categoría" value={getCategoryLabel(item.categoria)} />
         <MiniInfo label="Proveedores" value={getSuppliersLabel(item)} />
         <MiniInfo label="Compra" value={formatMoney(item.precio_compra)} />
+        <MiniInfo label="Venta s/IVA" value={formatMoney(item.precio)} />
+        <MiniInfo
+          label={`Venta c/IVA ${getProductIvaPercent(item)}%`}
+          value={formatSalePriceWithIva(item)}
+          strong
+        />
         <MiniInfo label="Utilidad" value={formatUtilityPercent(item)} />
-        <MiniInfo label="Precio" value={formatMoney(item.precio)} strong />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">

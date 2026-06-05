@@ -13,6 +13,10 @@ const ORDER_SELECT = `
   estado,
   estado_pago,
   metodo_pago,
+  pago_referencia,
+  pago_monto,
+  pago_fecha,
+  pago_notas,
   fecha_emision,
   fecha_inicio,
   fecha_fin,
@@ -47,8 +51,32 @@ const ORDER_SELECT = `
   )
 `;
 
+const INVENTORY_CONSUMPTION_SELECT = `
+  id,
+  entrega_id,
+  entrega_detalle_id,
+  pedido_id,
+  pedido_detalle_id,
+  producto_id,
+  lote_id,
+  entrada_id,
+  cantidad,
+  created_at,
+  inventario_lotes (
+    id,
+    costo_unitario,
+    fecha_compra
+  ),
+  inventario_entradas (
+    id,
+    folio,
+    numero_factura,
+    fecha_compra
+  )
+`;
+
 export async function fetchExpensesData() {
-  const [orderResult, expenseResult] = await Promise.all([
+  const [orderResult, expenseResult, consumptionResult] = await Promise.all([
     supabase
       .from("pedidos")
       .select(ORDER_SELECT)
@@ -70,14 +98,23 @@ export async function fetchExpensesData() {
       `,
       )
       .order("fecha", { ascending: false }),
+
+    supabase
+      .from("inventario_consumos_entrega")
+      .select(INVENTORY_CONSUMPTION_SELECT)
+      .order("created_at", { ascending: false }),
   ]);
 
   if (orderResult.error) throw orderResult.error;
   if (expenseResult.error) throw expenseResult.error;
+  if (consumptionResult.error) throw consumptionResult.error;
 
   return {
     orderRows: Array.isArray(orderResult.data) ? orderResult.data : [],
     expenseRows: Array.isArray(expenseResult.data) ? expenseResult.data : [],
+    inventoryConsumptionRows: Array.isArray(consumptionResult.data)
+      ? consumptionResult.data
+      : [],
   };
 }
 

@@ -2,18 +2,17 @@ import {
   Building2,
   CalendarDays,
   CircleDollarSign,
-  Eye,
   FileText,
+  PackageCheck,
   Plus,
   Receipt,
   Trash2,
-  TrendingDown,
 } from "lucide-react";
 
 import EmptyState from "../../../components/ui/EmptyState";
 import ActionIconButton from "../../../components/ui/ActionIconButton";
 import { formatMoney } from "../../../utils/formatters";
-import { getMovementType, getNatureStyles } from "../expense.helpers";
+import { getNatureStyles } from "../expense.helpers";
 
 export default function ExpensesTable({
   rows,
@@ -24,28 +23,38 @@ export default function ExpensesTable({
   onDeleteExpense,
 }) {
   return (
-    <div className="hidden xl:block">
-      <div className="overflow-x-auto">
-        <table className="min-w-full table-fixed">
+    <div className="hidden w-full xl:block">
+      <div className="w-full overflow-hidden rounded-b-2xl">
+        <table className="w-full table-fixed">
+          <colgroup>
+            <col className="w-[18%]" />
+            <col className="w-[18%]" />
+            <col className="w-[12%]" />
+            <col className="w-[14%]" />
+            <col className="w-[12%]" />
+            <col className="w-[13%]" />
+            <col className="w-[9%]" />
+            <col className="w-[4%]" />
+          </colgroup>
           <thead className="bg-surface-soft">
             <tr>
               {[
-                "Concepto",
-                "Referencia",
-                "Tipo",
-                "Naturaleza",
-                "Cliente",
-                "Fecha",
-                "Gastos",
-                "Neto",
-                "Acciones",
+                "Pedido / cliente",
+                "Pago",
+                "Venta real",
+                "Costo mercancía",
+                "Gastos extra",
+                "Ganancia neta",
+                "Estado",
+                "Gasto",
               ].map((header, index) => (
                 <th
                   key={header}
                   className={[
                     "px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted",
-                    index === 0 ? "w-[20%] px-6" : "",
-                    index === 8 ? "text-right" : "",
+                    index === 0 ? "px-5" : "",
+                    index >= 2 && index <= 5 ? "text-right" : "",
+                    index === 7 ? "text-right" : "",
                   ].join(" ")}
                 >
                   {header}
@@ -68,7 +77,7 @@ export default function ExpensesTable({
               ))
             ) : (
               <tr>
-                <td colSpan={9}>
+                <td colSpan={8}>
                   <EmptyState loading={loading} />
                 </td>
               </tr>
@@ -87,107 +96,79 @@ function ExpenseTableRow({
   onNewExpense,
   onDeleteExpense,
 }) {
-  const movementType = getMovementType(item.tipo);
-  const TypeIcon = movementType.icon;
-
   const nature = getNatureStyles(item.naturaleza);
   const NatureIcon = nature.icon;
 
   return (
-    <tr className="border-t border-border align-top transition hover:bg-surface-soft/70">
-      <td className="px-6 py-5">
-        <p className="line-clamp-2 text-sm font-semibold leading-6 text-text-primary">
-          {item.concepto}
-        </p>
+    <tr onClick={() => onDetail(item)} className="cursor-pointer border-t border-border align-middle transition hover:bg-surface-soft/70">
+      <td className="px-5 py-4">
+        <div className="block w-full rounded-xl text-left transition hover:text-primary-700">
+          <p className="line-clamp-1 text-sm font-semibold leading-5 text-text-primary">
+            {item.folio || item.concepto}
+          </p>
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-text-secondary">
+            <Building2 className="h-3.5 w-3.5 text-accent-500" />
+            <span className="line-clamp-1">{item.cliente}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
+            <CalendarDays className="h-3.5 w-3.5 text-primary-500" />
+            <span>{item.fecha}</span>
+          </div>
+        </div>
+      </td>
 
+      <td className="px-4 py-4">
+        <Badge icon={FileText}>{item.pagoReferencia || item.referencia}</Badge>
         <p className="mt-1 text-xs text-text-muted">
-          {item.rowType === "ganancia"
-            ? `${item.expenseCount} gasto(s) asociado(s)`
-            : "Gasto independiente"}
+          Pagado: {formatMoney(item.montoPagado || 0)}
         </p>
       </td>
 
-      <td className="px-4 py-5">
-        <Badge icon={FileText}>{item.referencia}</Badge>
-      </td>
+      <MoneyCell value={item.ventaRealSinIva} note="s/IVA" />
+      <MoneyCell value={item.costoMercanciaReal} note={item.hasRealConsumption ? "FIFO" : "estimado"} icon={PackageCheck} />
+      <MoneyCell value={item.gastos} note={`${item.expenseCount || 0} gasto(s)`} negative />
+      <MoneyCell value={item.ganancia} note="después de gastos" success={item.ganancia >= 0} />
 
-      <td className="px-4 py-5">
-        <StatusBadge icon={TypeIcon} className={movementType.className}>
-          {movementType.label}
-        </StatusBadge>
-      </td>
-
-      <td className="px-4 py-5">
+      <td className="px-3 py-4">
         <StatusBadge icon={NatureIcon} className={nature.className}>
           {nature.label}
         </StatusBadge>
       </td>
 
-      <td className="px-4 py-5">
-        <div className="flex items-start gap-2 pr-2">
-          <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-accent-500" />
-
-          <span className="line-clamp-2 text-sm leading-5 text-text-primary">
-            {item.cliente}
-          </span>
-        </div>
-      </td>
-
-      <td className="px-4 py-5">
-        <div className="inline-flex items-center gap-2 text-sm text-text-secondary">
-          <CalendarDays className="h-4 w-4 shrink-0 text-primary-500" />
-          <span className="whitespace-nowrap">{item.fecha}</span>
-        </div>
-      </td>
-
-      <td className="px-4 py-5">
-        <AmountBadge
-          icon={TrendingDown}
-          className="border-error-100 bg-error-50 text-error-700"
-        >
-          {formatMoney(item.gastos)}
-        </AmountBadge>
-      </td>
-
-      <td className="px-4 py-5">
-        <AmountBadge icon={CircleDollarSign} className={nature.amountClass}>
-          {formatMoney(item.ganancia)}
-        </AmountBadge>
-      </td>
-
-      <td className="px-4 py-5">
+      <td className="px-5 py-4">
         <div className="flex items-center justify-end gap-2">
-          <ActionIconButton
-            icon={Eye}
-            label="Ver detalle"
-            tone="default"
-            onClick={() => onDetail(item)}
-          />
-
-          <ActionIconButton
-            icon={Receipt}
-            label="Editar gasto"
-            tone="default"
-            disabled={!item.expenses.length}
-            onClick={() => onEditExpense(item.expenses[0])}
-          />
-
-          <ActionIconButton
-            icon={Plus}
-            label="Agregar gasto"
-            tone="default"
-            onClick={() =>
-              onNewExpense(item.rowType === "ganancia" ? item.rawId : "")
-            }
-          />
-
-          <ActionIconButton
-            icon={Trash2}
-            label="Eliminar"
-            tone="default"
-            disabled={!item.expenses.length}
-            onClick={() => onDeleteExpense(item.expenses[0])}
-          />
+          {item.expenses.length ? (
+            <>
+              <ActionIconButton
+                icon={Receipt}
+                label="Editar gasto"
+                tone="default"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEditExpense(item.expenses[0]);
+                }}
+              />
+              <ActionIconButton
+                icon={Trash2}
+                label="Eliminar gasto"
+                tone="default"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDeleteExpense(item.expenses[0]);
+                }}
+              />
+            </>
+          ) : (
+            <ActionIconButton
+              icon={Plus}
+              label="Agregar gasto"
+              tone="default"
+              onClick={(event) => {
+                event.stopPropagation();
+                onNewExpense(item.rowType === "ganancia" ? item.rawId : "");
+              }}
+            />
+          )}
         </div>
       </td>
     </tr>
@@ -196,7 +177,7 @@ function ExpenseTableRow({
 
 function Badge({ icon: Icon, children }) {
   return (
-    <div className="inline-flex max-w-full items-center gap-2 rounded-xl border border-border bg-surface-soft px-3 py-2 text-sm font-medium text-text-primary">
+    <div className="inline-flex w-full max-w-[230px] items-center gap-2 rounded-xl border border-border bg-surface-soft px-3 py-2 text-sm font-medium text-text-primary">
       <Icon className="h-4 w-4 shrink-0 text-primary-500" />
       <span className="truncate">{children}</span>
     </div>
@@ -205,22 +186,27 @@ function Badge({ icon: Icon, children }) {
 
 function StatusBadge({ icon: Icon, className, children }) {
   return (
-    <span
-      className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${className}`}
-    >
+    <span className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${className}`}>
       <Icon className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{children}</span>
     </span>
   );
 }
 
-function AmountBadge({ icon: Icon, className, children }) {
+function MoneyCell({ value, note, negative = false, success = false, icon: Icon = CircleDollarSign }) {
+  const tone = negative
+    ? "text-error-700"
+    : success
+      ? "text-success-700"
+      : "text-text-primary";
+
   return (
-    <div
-      className={`inline-flex whitespace-nowrap items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold ${className}`}
-    >
-      <Icon className="h-4 w-4 shrink-0" />
-      {children}
-    </div>
+    <td className="px-4 py-4 text-right">
+      <div className="inline-flex items-center justify-end gap-2">
+        <Icon className="h-4 w-4 text-text-muted" />
+        <span className={`whitespace-nowrap text-sm font-bold ${tone}`}>{formatMoney(value || 0)}</span>
+      </div>
+      <p className="mt-1 text-xs text-text-muted">{note}</p>
+    </td>
   );
 }

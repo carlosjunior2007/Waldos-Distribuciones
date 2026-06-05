@@ -13,13 +13,13 @@ import {
   calculateDerivedOrderStatus,
   calculateLineProfit,
   calculateOrderProfit,
+  calculateOrderRealProfit,
   calculateOrderProgress,
   formatDate,
   formatMoney,
   getAddressLabel,
   getOrderStatusMeta,
   getPaymentStatusMeta,
-  isOrderProfitRealized,
 } from "../order.helpers";
 
 import OrderProgressBar from "../components/OrderProgressBar";
@@ -41,7 +41,10 @@ export default function PedidoDetallePage({
   const payment = getPaymentStatusMeta(order.estado_pago);
   const progress = calculateOrderProgress(order.details || []);
   const profit = calculateOrderProfit(order.details || []);
-  const showProfit = isOrderProfitRealized(order);
+  const realProfit = calculateOrderRealProfit(order);
+  const hasRealCost = realProfit.realCost > 0 || realProfit.deliveredSale > 0;
+  const mainProfit = hasRealCost ? realProfit.realProfit : profit.profit;
+  const mainMargin = hasRealCost ? realProfit.realMargin : profit.margin;
 
   return (
     <section className="min-h-screen bg-background">
@@ -86,7 +89,7 @@ export default function PedidoDetallePage({
 
           <div className="grid gap-0 divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
             <HeroMetric label="Total" value={formatMoney(order.total)} helper={`IVA ${Number(order.iva_porcentaje || 0)}%`} />
-            <HeroMetric label="Ganancia" value={formatMoney(profit.profit)} helper={`${profit.margin.toFixed(1)}% · ${showProfit ? "realizada" : "estimada"}`} tone={profit.profit >= 0 ? "success" : "error"} />
+            <HeroMetric label={hasRealCost ? "Ganancia real" : "Ganancia estimada"} value={formatMoney(mainProfit)} helper={`${mainMargin.toFixed(1)}% · ${hasRealCost ? "según FIFO" : "según costo estimado"}`} tone={mainProfit >= 0 ? "success" : "error"} />
             <HeroMetric label="Entregado" value={`${progress.delivered}/${progress.total}`} helper={`${progress.pending} unidades pendientes`} />
             <HeroMetric label="Entregas" value={order.deliveries?.length || 0} helper="Registros de entrega" />
           </div>
@@ -98,12 +101,14 @@ export default function PedidoDetallePage({
               <SectionTitle eyebrow="Productos" title="Productos del pedido" icon={Package} />
 
               <div className="mt-5 overflow-hidden rounded-2xl border border-border">
-                <div className="hidden grid-cols-[minmax(0,1.3fr)_repeat(5,minmax(90px,0.5fr))] gap-4 border-b border-border bg-surface-soft px-4 py-3 text-[10px] font-black uppercase tracking-[0.16em] text-text-muted lg:grid">
+                <div className="hidden grid-cols-[minmax(0,1.25fr)_repeat(7,minmax(88px,0.5fr))] gap-4 border-b border-border bg-surface-soft px-4 py-3 text-[10px] font-black uppercase tracking-[0.16em] text-text-muted lg:grid">
                   <span>Producto</span>
                   <span>Pedida</span>
                   <span>Entregada</span>
                   <span>Pendiente</span>
-                  <span>Importe</span>
+                  <span>Venta est.</span>
+                  <span>Venta real</span>
+                  <span>Costo real</span>
                   <span>Ganancia</span>
                 </div>
 
@@ -116,6 +121,24 @@ export default function PedidoDetallePage({
                     <EmptyBox>Este pedido no tiene productos registrados.</EmptyBox>
                   ) : null}
                 </div>
+              </div>
+            </Panel>
+
+            <Panel>
+              <SectionTitle eyebrow="Rentabilidad" title="Valores reales y estimados" icon={ReceiptText} />
+              <p className="mt-2 text-sm font-semibold text-text-secondary">
+                Lo estimado sale del pedido completo. Lo real sale de lo entregado y del costo FIFO consumido en inventario. Porque mezclar ambos sería contabilidad con los ojos vendados.
+              </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <ValueCard label="Venta estimada" value={formatMoney(realProfit.estimatedSale)} helper="Pedido completo sin IVA" />
+                <ValueCard label="Costo estimado" value={formatMoney(realProfit.estimatedCost)} helper="Costo guardado al crear pedido" />
+                <ValueCard label="Ganancia estimada" value={formatMoney(realProfit.estimatedProfit)} helper={`${profit.margin.toFixed(1)}% de margen`} tone={realProfit.estimatedProfit >= 0 ? "success" : "error"} />
+                <ValueCard label="Venta entregada" value={formatMoney(realProfit.deliveredSale)} helper="Solo unidades entregadas" />
+                <ValueCard label="Costo real FIFO" value={formatMoney(realProfit.realCost)} helper="Según lotes consumidos" />
+                <ValueCard label="Ganancia real" value={formatMoney(realProfit.realProfit)} helper={`${realProfit.realMargin.toFixed(1)}% de margen real`} tone={realProfit.realProfit >= 0 ? "success" : "error"} featured />
+                <ValueCard label="Monto pagado" value={formatMoney(realProfit.paidAmount)} helper={order.pago_referencia ? `Ref. ${order.pago_referencia}` : "Sin referencia"} />
+                <ValueCard label="Ganancia cobrada" value={formatMoney(realProfit.collectedProfit)} helper={`${realProfit.collectedMargin.toFixed(1)}% sobre cobrado`} tone={realProfit.collectedProfit >= 0 ? "success" : "error"} />
               </div>
             </Panel>
 
@@ -157,13 +180,32 @@ export default function PedidoDetallePage({
               </div>
             </Panel>
 
+
+            <Panel compact>
+              <SectionTitle eyebrow="Pago" title="Cobro" />
+              <div className="mt-4 grid gap-3 text-sm">
+                <InfoLine label="Estado" value={payment.label} />
+                <InfoLine label="Método" value={order.metodo_pago || "Sin método"} />
+                <InfoLine label="Pagado" value={formatMoney(realProfit.paidAmount)} />
+                <InfoLine label="Referencia" value={order.pago_referencia || "Sin referencia"} />
+                <InfoLine label="Fecha" value={order.pago_fecha ? formatDate(order.pago_fecha) : "Sin fecha"} />
+              </div>
+            </Panel>
+
             <Panel compact>
               <SectionTitle eyebrow="Totales" title="Resumen" />
               <div className="mt-5 grid gap-3">
-                <MoneyRow label="Subtotal" value={formatMoney(profit.subtotal)} />
-                <MoneyRow label="Costo" value={formatMoney(profit.cost)} />
-                <MoneyRow label="Ganancia" value={formatMoney(profit.profit)} tone={profit.profit >= 0 ? "success" : "error"} strong />
-                <MoneyRow label="Margen" value={`${profit.margin.toFixed(1)}%`} />
+                <MoneyRow label="Venta estimada" value={formatMoney(realProfit.estimatedSale)} />
+                <MoneyRow label="Costo estimado" value={formatMoney(realProfit.estimatedCost)} />
+                <MoneyRow label="Ganancia estimada" value={formatMoney(realProfit.estimatedProfit)} tone={realProfit.estimatedProfit >= 0 ? "success" : "error"} />
+                <div className="my-1 border-t border-border" />
+                <MoneyRow label="Venta entregada" value={formatMoney(realProfit.deliveredSale)} />
+                <MoneyRow label="Costo real FIFO" value={formatMoney(realProfit.realCost)} />
+                <MoneyRow label="Ganancia real" value={formatMoney(realProfit.realProfit)} tone={realProfit.realProfit >= 0 ? "success" : "error"} strong />
+                <MoneyRow label="Margen real" value={`${realProfit.realMargin.toFixed(1)}%`} />
+                <div className="my-1 border-t border-border" />
+                <MoneyRow label="Monto pagado" value={formatMoney(realProfit.paidAmount)} />
+                <MoneyRow label="Ganancia cobrada" value={formatMoney(realProfit.collectedProfit)} tone={realProfit.collectedProfit >= 0 ? "success" : "error"} />
                 <MoneyRow label={`IVA ${Number(order.iva_porcentaje || 0)}%`} value={formatMoney(order.iva_monto)} />
                 <div className="mt-2 border-t border-border pt-4">
                   <MoneyRow label="Total" value={formatMoney(order.total)} strong big />
@@ -231,6 +273,18 @@ function HeroMetric({ label, value, helper, tone }) {
   );
 }
 
+function ValueCard({ label, value, helper, tone, featured = false }) {
+  const toneClass = tone === "success" ? "text-success-700" : tone === "error" ? "text-error-700" : "text-text-primary";
+
+  return (
+    <article className={`rounded-2xl border ${featured ? "border-success-100 bg-success-50/40" : "border-border bg-surface-soft"} p-4`}>
+      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-text-muted">{label}</p>
+      <p className={`mt-2 text-xl font-black tracking-tight ${toneClass}`}>{value}</p>
+      {helper ? <p className="mt-1 text-xs font-semibold text-text-secondary">{helper}</p> : null}
+    </article>
+  );
+}
+
 function Panel({ children, compact = false }) {
   return (
     <article className={`rounded-[24px] border border-border bg-surface shadow-sm ${compact ? "p-5" : "p-5 md:p-6"}`}>
@@ -255,7 +309,7 @@ function ProductRow({ item }) {
   const profit = calculateLineProfit(item);
 
   return (
-    <div className="grid gap-3 bg-surface px-4 py-4 transition hover:bg-surface-soft/60 lg:grid-cols-[minmax(0,1.3fr)_repeat(5,minmax(90px,0.5fr))] lg:items-center">
+    <div className="grid gap-3 bg-surface px-4 py-4 transition hover:bg-surface-soft/60 lg:grid-cols-[minmax(0,1.25fr)_repeat(7,minmax(88px,0.5fr))] lg:items-center">
       <div className="min-w-0">
         <p className="truncate font-black text-text-primary">{item.nombre_producto}</p>
         <p className="mt-1 text-xs font-semibold text-text-muted">{item.codigo || "Sin código"}</p>
@@ -264,8 +318,10 @@ function ProductRow({ item }) {
       <MiniMetric label="Pedida" value={Number(item.cantidad_pedida || 0)} />
       <MiniMetric label="Entregada" value={Number(item.cantidad_entregada || 0)} />
       <MiniMetric label="Pendiente" value={Number(item.cantidad_pendiente || 0)} />
-      <MiniMetric label="Importe" value={formatMoney(item.importe)} strong />
-      <MiniMetric label="Ganancia" value={formatMoney(profit.profit)} strong tone={profit.profit >= 0 ? "success" : "error"} />
+      <MiniMetric label="Venta est." value={formatMoney(profit.sale)} strong />
+      <MiniMetric label="Venta real" value={formatMoney(item.venta_entregada || 0)} strong />
+      <MiniMetric label="Costo real" value={formatMoney(item.costo_real_fifo || 0)} strong />
+      <MiniMetric label="Ganancia" value={formatMoney(item.ganancia_real ?? profit.profit)} strong tone={Number(item.ganancia_real ?? profit.profit) >= 0 ? "success" : "error"} />
     </div>
   );
 }

@@ -294,6 +294,50 @@ export function calculateLineProfit(item = {}) {
 }
 
 
+export function calculateOrderRealProfit(order = {}) {
+  const details = order.details || [];
+  const subtotal = Number(order.subtotal || 0);
+  const total = Number(order.total || 0);
+  const paidAmount = Number(order.pago_monto || (String(order.estado_pago || '').toLowerCase() === 'pagado' ? total : 0));
+  const paidWithoutTax = total > 0 && subtotal > 0 ? paidAmount * (subtotal / total) : paidAmount;
+
+  const deliveredSale = details.reduce((sum, item) => {
+    return sum + Number(item.cantidad_entregada || 0) * Number(item.precio_unitario || 0);
+  }, 0);
+
+  const realCost = details.reduce((sum, item) => {
+    const fallbackCost = Number(item.cantidad_entregada || 0) * Number(item.costo_unitario || 0);
+    return sum + Number(item.costo_real_fifo ?? fallbackCost);
+  }, 0);
+
+  const estimatedSale = details.reduce((sum, item) => {
+    return sum + Number(item.cantidad_pedida || 0) * Number(item.precio_unitario || 0);
+  }, 0);
+
+  const estimatedCost = details.reduce((sum, item) => {
+    return sum + Number(item.cantidad_pedida || 0) * Number(item.costo_unitario || 0);
+  }, 0);
+
+  const realProfit = deliveredSale - realCost;
+  const collectedProfit = paidWithoutTax - realCost;
+  const estimatedProfit = estimatedSale - estimatedCost;
+
+  return {
+    estimatedSale,
+    estimatedCost,
+    estimatedProfit,
+    deliveredSale,
+    realCost,
+    realProfit,
+    paidAmount,
+    paidWithoutTax,
+    collectedProfit,
+    realMargin: deliveredSale > 0 ? (realProfit / deliveredSale) * 100 : 0,
+    collectedMargin: paidWithoutTax > 0 ? (collectedProfit / paidWithoutTax) * 100 : 0,
+  };
+}
+
+
 export function capitalizeFirstLetter(value) {
   const text = String(value ?? "");
   const firstLetterIndex = text.search(/[A-Za-zÀ-ÖØ-öø-ÿ]/);

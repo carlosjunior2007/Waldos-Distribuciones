@@ -10,7 +10,7 @@ export default function ExpensesToolbar({ expenses }) {
         <SearchInput
           value={expenses.search}
           onChange={expenses.setSearch}
-          placeholder="Buscar pedido, cliente, correo, teléfono..."
+          placeholder="Buscar pedido, cliente, referencia de pago, correo..."
           className="w-full xl:max-w-md"
         />
 
@@ -37,13 +37,13 @@ export default function ExpensesToolbar({ expenses }) {
         />
 
         <FilterPill
-          label="Realizadas"
+          label="Pedidos cobrados"
           active={expenses.quickFilter === "ganancias"}
           onClick={() => expenses.setQuickFilter("ganancias")}
         />
 
         <FilterPill
-          label="Con gastos"
+          label="Con gastos extra"
           active={expenses.quickFilter === "gastos"}
           onClick={() => expenses.setQuickFilter("gastos")}
         />

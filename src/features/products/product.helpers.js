@@ -84,6 +84,30 @@ export function formatUtilityPercent(productOrForm) {
   return `${utility.toFixed(2)}%`;
 }
 
+export function getProductIvaPercent(productOrForm) {
+  const iva = Number(productOrForm?.iva_porcentaje ?? 0);
+
+  if (!Number.isFinite(iva) || iva < 0) return 0;
+
+  return iva;
+}
+
+export function calculateSalePriceWithIva(productOrForm) {
+  const salePrice = Number(productOrForm?.precio || 0);
+  const iva = getProductIvaPercent(productOrForm);
+
+  if (!Number.isFinite(salePrice) || salePrice <= 0) return 0;
+
+  return salePrice * (1 + iva / 100);
+}
+
+export function formatSalePriceWithIva(productOrForm) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  }).format(calculateSalePriceWithIva(productOrForm));
+}
+
 export function looksLikeUUID(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     String(value || ""),

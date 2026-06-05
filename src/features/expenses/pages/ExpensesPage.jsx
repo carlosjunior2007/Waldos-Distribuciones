@@ -61,8 +61,8 @@ export default function ExpensesPage() {
       <section className="rounded-[28px] border border-border bg-surface shadow-[var(--shadow-soft)]">
         <PageHeader
           eyebrow="Gestión financiera"
-          title="Ganancias por pedido"
-          description="Aquí ves ganancias realizadas por pedidos entregados y pagados, menos gastos asociados."
+          title="Ganancia real por pedido"
+          description="Consulta venta real, costo FIFO de mercancía, gastos asociados, pagos y ganancia neta por pedido."
           actions={
             <div className="flex flex-col gap-3 sm:flex-row">
               <button

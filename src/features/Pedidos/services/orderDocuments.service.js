@@ -298,7 +298,7 @@ export function generateOrderPDF(order) {
   const topY = 55;
   const cardGap = 8;
   const cardW = (contentWidth - cardGap) / 2;
-  const cardH = 48;
+  const cardH = 58;
 
   drawInfoCard("Cliente", marginX, topY, cardW, cardH);
   let y = topY + 17;
@@ -315,6 +315,8 @@ export function generateOrderPDF(order) {
   rightY += 17;
   drawLabelValue(doc, "Pago", statusText(order?.estado_pago), orderX + 5, rightY, colW, colors);
   drawLabelValue(doc, "Método", text(order?.metodo_pago, "Sin definir"), orderX + 5 + colW + 6, rightY, colW, colors);
+  rightY += 17;
+  drawLabelValue(doc, "Referencia", text(order?.pago_referencia, "Sin referencia"), orderX + 5, rightY, cardW - 10, colors);
 
   const productsStartY = topY + cardH + 12;
 

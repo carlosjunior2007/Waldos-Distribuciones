@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Minus, PackageCheck, Plus } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileText, Minus, PackageCheck, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 function getDeliveryQuantity(delivery, detailId) {
@@ -30,6 +30,8 @@ function getInitialRows(details = [], delivery = null) {
         cantidad_pendiente: available,
         pendiente: available,
         cantidad_entregada: currentDeliveryQuantity,
+        lotes_disponibles: product.lotes_disponibles || [],
+        stock_disponible: (product.lotes_disponibles || []).reduce((acc, lot) => acc + Number(lot.cantidad_disponible || 0), 0),
       };
     })
     .filter((product) => product.pendiente > 0 || Number(product.cantidad_entregada || 0) > 0);
@@ -156,11 +158,34 @@ export default function DeliveryProductPicker({ order, delivery = null, value, o
                     </div>
                     <p className="mt-1 text-xs font-semibold text-slate-500">{row.codigo || "Sin código"}</p>
 
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-sm sm:max-w-lg">
+                    <div className="mt-3 grid grid-cols-4 gap-2 text-sm sm:max-w-2xl">
                       <MiniStat label="Pedido" value={row.cantidad_pedida} />
                       <MiniStat label="Antes" value={row.cantidad_entregada_previa} />
                       <MiniStat label="Disponible" value={pending} strong />
+                      <MiniStat label="Stock" value={row.stock_disponible} strong={quantity > 0} />
                     </div>
+
+                    {row.lotes_disponibles?.length ? (
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        <div className="mb-1 flex items-center gap-1.5 font-black uppercase tracking-[0.12em] text-slate-500">
+                          <FileText className="h-3.5 w-3.5" /> Stock disponible por factura / entrada
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {row.lotes_disponibles.slice(0, 3).map((lot) => (
+                            <span key={lot.id} className="rounded-full bg-white px-2 py-1 font-bold text-slate-700 ring-1 ring-slate-200">
+                              {lot.entrada?.numero_factura || lot.entrada?.folio || "Entrada"}: {Number(lot.cantidad_disponible || 0)} pzas
+                            </span>
+                          ))}
+                          {row.lotes_disponibles.length > 3 ? (
+                            <span className="rounded-full bg-white px-2 py-1 font-bold text-slate-500 ring-1 ring-slate-200">+{row.lotes_disponibles.length - 3} más</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                        No hay stock cargado para este producto. Si marcas la entrega como entregada, el sistema la bloqueará.
+                      </div>
+                    )}
 
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                       <div className="h-full rounded-full bg-primary-600" style={{ width: `${percent}%` }} />

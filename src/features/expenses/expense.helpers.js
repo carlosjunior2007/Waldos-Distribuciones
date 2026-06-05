@@ -183,23 +183,112 @@ export function isOrderRealized(order = {}) {
   return getRealOrderProgress(order).complete && isOrderPaid(order);
 }
 
-export function calculateOrderGrossProfit(order = {}) {
-  return (order.pedido_detalles || []).reduce((sum, item) => {
-    const quantity = parseNumberish(item.cantidad_pedida);
-    const price = parseNumberish(item.precio_unitario);
-    const cost = parseNumberish(item.costo_unitario);
-    return sum + quantity * (price - cost);
-  }, 0);
+export function buildConsumptionMap(inventoryConsumptionRows = []) {
+  const map = new Map();
+
+  for (const row of inventoryConsumptionRows || []) {
+    if (!row?.pedido_id) continue;
+    if (!map.has(row.pedido_id)) map.set(row.pedido_id, []);
+    map.get(row.pedido_id).push(row);
+  }
+
+  return map;
 }
 
-export function calculateOrderCost(order = {}) {
+export function getDetailMap(order = {}) {
+  const map = new Map();
+
+  for (const detail of order.pedido_detalles || []) {
+    map.set(detail.id, detail);
+  }
+
+  return map;
+}
+
+export function calculateEstimatedOrderCost(order = {}) {
   return (order.pedido_detalles || []).reduce((sum, item) => {
     return sum + parseNumberish(item.cantidad_pedida) * parseNumberish(item.costo_unitario);
   }, 0);
 }
 
-export function buildPreparedRows({ orderRows, expenseRows }) {
+export function calculateEstimatedOrderSaleWithoutTax(order = {}) {
+  return (order.pedido_detalles || []).reduce((sum, item) => {
+    return sum + parseNumberish(item.cantidad_pedida) * parseNumberish(item.precio_unitario);
+  }, 0);
+}
+
+export function calculateRealOrderNumbers(order = {}, consumptionRows = []) {
+  const detailMap = getDetailMap(order);
+
+  let ventaRealSinIva = 0;
+  let costoMercanciaReal = 0;
+  const productLines = new Map();
+
+  for (const consumption of consumptionRows || []) {
+    const detail = detailMap.get(consumption.pedido_detalle_id);
+    if (!detail) continue;
+
+    const quantity = parseNumberish(consumption.cantidad);
+    const saleUnit = parseNumberish(detail.precio_unitario);
+    const fallbackCostUnit = parseNumberish(detail.costo_unitario);
+    const realCostUnit = parseNumberish(
+      consumption.inventario_lotes?.costo_unitario ?? fallbackCostUnit,
+    );
+
+    const sale = quantity * saleUnit;
+    const cost = quantity * realCostUnit;
+
+    ventaRealSinIva += sale;
+    costoMercanciaReal += cost;
+
+    const key = detail.id;
+    const current = productLines.get(key) || {
+      pedido_detalle_id: detail.id,
+      producto_id: detail.producto_id,
+      codigo: detail.codigo,
+      nombre_producto: detail.nombre_producto,
+      cantidad_pedida: parseNumberish(detail.cantidad_pedida),
+      cantidad_entregada_real: 0,
+      precio_unitario: saleUnit,
+      costo_estimado_unitario: fallbackCostUnit,
+      costo_real_total: 0,
+      venta_real_sin_iva: 0,
+      ganancia_real: 0,
+      facturas: [],
+    };
+
+    current.cantidad_entregada_real += quantity;
+    current.costo_real_total += cost;
+    current.venta_real_sin_iva += sale;
+    current.ganancia_real = current.venta_real_sin_iva - current.costo_real_total;
+
+    const entrada = consumption.inventario_entradas;
+    const referencia = entrada?.numero_factura || entrada?.folio || "Sin referencia";
+    if (!current.facturas.includes(referencia)) current.facturas.push(referencia);
+
+    productLines.set(key, current);
+  }
+
+  const hasRealConsumption = consumptionRows?.length > 0 && costoMercanciaReal > 0;
+
+  const estimatedSaleWithoutTax = calculateEstimatedOrderSaleWithoutTax(order);
+  const estimatedCost = calculateEstimatedOrderCost(order);
+
+  return {
+    ventaEstimadaSinIva: estimatedSaleWithoutTax,
+    costoEstimadoMercancia: estimatedCost,
+    gananciaEstimada: estimatedSaleWithoutTax - estimatedCost,
+    ventaRealSinIva: hasRealConsumption ? ventaRealSinIva : 0,
+    costoMercanciaReal: hasRealConsumption ? costoMercanciaReal : 0,
+    utilidadBrutaReal: hasRealConsumption ? ventaRealSinIva - costoMercanciaReal : 0,
+    productLines: Array.from(productLines.values()),
+    hasRealConsumption,
+  };
+}
+
+export function buildPreparedRows({ orderRows, expenseRows, inventoryConsumptionRows = [] }) {
   const expenseMap = new Map();
+  const consumptionMap = buildConsumptionMap(inventoryConsumptionRows);
 
   for (const expense of expenseRows) {
     const key = expense.pedido_id;
@@ -210,29 +299,58 @@ export function buildPreparedRows({ orderRows, expenseRows }) {
 
   return orderRows.map((order) => {
     const relatedExpenses = expenseMap.get(order.id) || [];
+    const relatedConsumptions = consumptionMap.get(order.id) || [];
     const totalExpenses = relatedExpenses.reduce(
       (acc, item) => acc + parseNumberish(item.monto),
       0,
     );
 
     const realized = isOrderRealized(order);
-    const grossProfit = realized ? calculateOrderGrossProfit(order) : 0;
-    const cost = calculateOrderCost(order);
+    const realNumbers = calculateRealOrderNumbers(order, relatedConsumptions);
+    const fallbackEstimatedProfit = realNumbers.gananciaEstimada;
+    const grossProfit = realized
+      ? realNumbers.hasRealConsumption
+        ? realNumbers.utilidadBrutaReal
+        : fallbackEstimatedProfit
+      : 0;
+
+    const costoMercanciaReal = realNumbers.hasRealConsumption
+      ? realNumbers.costoMercanciaReal
+      : realized
+        ? realNumbers.costoEstimadoMercancia
+        : 0;
+
+    const ventaRealSinIva = realNumbers.hasRealConsumption
+      ? realNumbers.ventaRealSinIva
+      : realized
+        ? realNumbers.ventaEstimadaSinIva
+        : 0;
+
+    const montoPagado = parseNumberish(order.pago_monto) || (isOrderPaid(order) ? parseNumberish(order.total) : 0);
     const netProfit = realized ? grossProfit - totalExpenses : -totalExpenses;
-    const dateValue = order.fecha_fin || order.fecha_inicio || order.fecha_emision || order.created_at;
+    const dateValue = order.pago_fecha || order.fecha_fin || order.fecha_inicio || order.fecha_emision || order.created_at;
     const progress = getRealOrderProgress(order);
 
     return {
       id: order.id,
       folio: order.folio || "Sin folio",
-      referencia: order.folio || "Sin folio",
+      referencia: order.pago_referencia || order.folio || "Sin folio",
       cliente: order.cliente_nombre || "Cliente sin nombre",
       cliente_email: order.cliente_email || "",
       cliente_telefono: order.cliente_telefono || "",
       fechaISO: dateValue,
       fecha: formatExpenseDate(dateValue, { isTimestamp: !/^\d{4}-\d{2}-\d{2}$/.test(String(dateValue || "")) }),
       totalPedido: parseNumberish(order.total),
-      costoPedido: cost,
+      ventaEstimadaSinIva: realNumbers.ventaEstimadaSinIva,
+      costoEstimadoMercancia: realNumbers.costoEstimadoMercancia,
+      gananciaEstimada: realNumbers.gananciaEstimada,
+      ventaRealSinIva,
+      montoPagado,
+      pagoReferencia: order.pago_referencia || "Sin referencia de pago",
+      pagoFecha: order.pago_fecha || "",
+      pagoNotas: order.pago_notas || "",
+      costoPedido: costoMercanciaReal,
+      costoMercanciaReal,
       utilidadBruta: grossProfit,
       gastos: totalExpenses,
       ganancia: netProfit,
@@ -243,11 +361,14 @@ export function buildPreparedRows({ orderRows, expenseRows }) {
       naturaleza: realized ? "ganancia" : totalExpenses > 0 ? "gasto" : "pendiente",
       tipo: "ganancia_pedido",
       concepto: realized
-        ? `Ganancia realizada por pedido ${order.folio || ""}`.trim()
+        ? `Ganancia real por pedido ${order.folio || ""}`.trim()
         : `Pedido pendiente ${order.folio || ""}`.trim(),
       notas: order.notas || "",
       expenseCount: relatedExpenses.length,
       expenses: relatedExpenses,
+      consumptions: relatedConsumptions,
+      productLines: realNumbers.productLines,
+      hasRealConsumption: realNumbers.hasRealConsumption,
       order,
     };
   });

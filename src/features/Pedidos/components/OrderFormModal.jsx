@@ -9,6 +9,10 @@ const emptyForm = {
   cliente_id: "",
   metodo_pago: "",
   estado_pago: "pendiente",
+  pago_referencia: "",
+  pago_monto: "",
+  pago_fecha: "",
+  pago_notas: "",
   iva_porcentaje: 8,
   isr_porcentaje: 0,
   fecha_inicio: "",
@@ -98,6 +102,10 @@ export default function OrderFormModal({
         cliente_id: order.cliente_id || "",
         metodo_pago: order.metodo_pago || "",
         estado_pago: order.estado_pago || "pendiente",
+        pago_referencia: order.pago_referencia || "",
+        pago_monto: order.pago_monto !== null && order.pago_monto !== undefined ? String(order.pago_monto) : "",
+        pago_fecha: toDateInput(order.pago_fecha),
+        pago_notas: order.pago_notas || "",
         iva_porcentaje: toIntegerValue(order.iva_porcentaje ?? 8),
         isr_porcentaje:
           order.isr_porcentaje !== null && order.isr_porcentaje !== undefined
@@ -154,9 +162,23 @@ export default function OrderFormModal({
   }
 
   function updateForm(field, value) {
-    const textFields = new Set(["notas"]);
+    const textFields = new Set(["notas", "pago_referencia", "pago_notas"]);
     const nextValue = textFields.has(field) ? capitalizeFirstLetter(value) : value;
-    setForm((current) => ({ ...current, [field]: nextValue }));
+
+    setForm((current) => {
+      const next = { ...current, [field]: nextValue };
+
+      if (field === "estado_pago" && value === "pagado") {
+        if (!next.pago_monto) next.pago_monto = normalizeDecimalOnBlur(totals.total, 0);
+        if (!next.pago_fecha) next.pago_fecha = getDateInputDaysFromToday(0);
+      }
+
+      if (field === "metodo_pago" && value !== "transferencia" && !next.pago_referencia) {
+        next.pago_referencia = "";
+      }
+
+      return next;
+    });
   }
 
   function addProduct(productId) {
@@ -248,6 +270,10 @@ export default function OrderFormModal({
         cliente_email: selectedClient?.correo || selectedClient?.email || order?.cliente_email || null,
         metodo_pago: form.metodo_pago || null,
         estado_pago: form.estado_pago,
+        pago_referencia: normalizeCapitalizedText(form.pago_referencia),
+        pago_monto: Number(form.pago_monto || 0),
+        pago_fecha: form.pago_fecha || null,
+        pago_notas: normalizeCapitalizedText(form.pago_notas),
         iva_porcentaje: Number(toIntegerValue(form.iva_porcentaje || 0)),
         isr_porcentaje: Number(form.isr_porcentaje || 0),
         fecha_inicio: form.fecha_inicio || null,
@@ -317,6 +343,38 @@ export default function OrderFormModal({
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
+                </Field>
+
+                <Field label="Referencia de pago" className="md:col-span-2">
+                  <input
+                    className={inputClass}
+                    value={form.pago_referencia}
+                    onChange={(event) => updateForm("pago_referencia", event.target.value)}
+                    placeholder="Ej. transferencia, SPEI, autorización, cheque..."
+                  />
+                </Field>
+
+                <Field label="Monto pagado">
+                  <input
+                    className={inputClass}
+                    value={form.pago_monto}
+                    onChange={(event) => updateForm("pago_monto", toDecimalValue(event.target.value))}
+                    onBlur={(event) => updateForm("pago_monto", normalizeDecimalOnBlur(event.target.value, 0))}
+                    placeholder="0.00"
+                  />
+                </Field>
+
+                <Field label="Fecha de pago">
+                  <input type="date" className={inputClass} value={form.pago_fecha} onChange={(event) => updateForm("pago_fecha", event.target.value)} />
+                </Field>
+
+                <Field label="Nota de pago" className="md:col-span-2">
+                  <input
+                    className={inputClass}
+                    value={form.pago_notas}
+                    onChange={(event) => updateForm("pago_notas", event.target.value)}
+                    placeholder="Banco, últimos dígitos, aclaraciones internas..."
+                  />
                 </Field>
 
                 <Field label="IVA %">
@@ -393,6 +451,8 @@ export default function OrderFormModal({
                 <SummaryRow label="ISR" value={`${Number(totals.isr || 0)}% · -${formatMoney(totals.isrMonto)}`} muted />
                 <div className="border-t border-slate-200 pt-3">
                   <SummaryRow label="Total" value={formatMoney(totals.total)} strong />
+                  <SummaryRow label="Pagado" value={formatMoney(form.pago_monto || 0)} />
+                  <SummaryRow label="Referencia" value={form.pago_referencia || "Sin referencia"} muted />
                 </div>
               </div>
             </section>

@@ -82,6 +82,7 @@ export default function DeliveriesModal({
                           <thead className="bg-white text-left text-[0.68rem] uppercase tracking-[0.16em] text-slate-500">
                             <tr>
                               <th className="px-4 py-3">Producto</th>
+                              <th className="px-4 py-3">Factura / entrada usada</th>
                               <th className="px-4 py-3 text-right">Cantidad entregada</th>
                             </tr>
                           </thead>
@@ -89,6 +90,19 @@ export default function DeliveriesModal({
                             {delivery.details.map((item) => (
                               <tr key={`${delivery.id}-${item.pedido_detalle_id}`}>
                                 <td className="px-4 py-3 font-semibold text-slate-800">{item.nombre_producto}</td>
+                                <td className="px-4 py-3 text-xs text-slate-600">
+                                  {item.consumos_inventario?.length ? (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {item.consumos_inventario.map((consumo) => (
+                                        <span key={consumo.id} className="rounded-full bg-slate-50 px-2 py-1 font-bold text-slate-700 ring-1 ring-slate-200">
+                                          {consumo.entrada?.numero_factura || consumo.entrada?.folio || "Entrada"} · {Number(consumo.cantidad || 0)} pzas
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="font-semibold text-slate-400">Sin consumo de stock todavía</span>
+                                  )}
+                                </td>
                                 <td className="px-4 py-3 text-right font-black text-slate-950">{item.cantidad_entregada}</td>
                               </tr>
                             ))}

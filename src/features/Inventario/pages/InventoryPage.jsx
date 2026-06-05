@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
   Boxes,
+  CalendarDays,
   ClipboardList,
-  FileText,
+  Coins,
   Layers,
   PackagePlus,
   RefreshCcw,
   Search,
+  X,
   TrendingUp,
+  WalletCards,
 } from "lucide-react";
 import { InventoryEntryModal } from "../components/InventoryEntryModal";
 import { useInventory } from "../hooks/useInventory";
@@ -25,6 +28,44 @@ const number = new Intl.NumberFormat("es-MX", {
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDateInput(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getMonthRange(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
+  return {
+    dateFrom: formatDateInput(start),
+    dateTo: formatDateInput(end),
+  };
+}
+
+function getLastMonthRange() {
+  const date = new Date();
+  return getMonthRange(new Date(date.getFullYear(), date.getMonth() - 1, 1));
+}
+
+function buildDateFilters(preset) {
+  const now = new Date();
+
+  if (preset === "today") {
+    const today = formatDateInput(now);
+    return { dateFrom: today, dateTo: today };
+  }
+
+  if (preset === "current_month") {
+    return getMonthRange(now);
+  }
+
+  if (preset === "last_month") {
+    return getLastMonthRange();
+  }
+
+  return { dateFrom: "", dateTo: "" };
 }
 
 export default function InventoryPage() {
@@ -49,17 +90,43 @@ export default function InventoryPage() {
 
   const [tab, setTab] = useState("stock");
   const [search, setSearch] = useState("");
+  const [datePreset, setDatePreset] = useState("all");
+  const [dateFilters, setDateFilters] = useState({ dateFrom: "", dateTo: "" });
   const [entryModalOpen, setEntryModalOpen] = useState(false);
 
   useEffect(() => {
-    if (tab !== "stock") return;
-
     const timeout = window.setTimeout(() => {
-      searchStock(search);
+      if (tab === "stock") {
+        searchStock(search, dateFilters);
+      }
     }, 320);
 
     return () => window.clearTimeout(timeout);
-  }, [search, searchStock, tab]);
+  }, [dateFilters, search, searchStock, tab]);
+
+  useEffect(() => {
+    loadInventory({ search, filters: dateFilters });
+  }, [dateFilters.dateFrom, dateFilters.dateTo]);
+
+  function handleDatePresetChange(value) {
+    setDatePreset(value);
+    if (value !== "custom") {
+      setDateFilters(buildDateFilters(value));
+    }
+  }
+
+  function handleCustomDateChange(field, value) {
+    setDatePreset("custom");
+    setDateFilters((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
+
+  function clearDateFilters() {
+    setDatePreset("all");
+    setDateFilters({ dateFrom: "", dateTo: "" });
+  }
 
   const filteredMovements = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -120,7 +187,7 @@ export default function InventoryPage() {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={loadInventory}
+              onClick={() => loadInventory({ search, filters: dateFilters })}
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-800 transition hover:bg-slate-50"
             >
               <RefreshCcw size={17} />
@@ -138,11 +205,27 @@ export default function InventoryPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard icon={Boxes} title="Productos con stock" value={number.format(totals.productsWithStock)} description="Con existencia disponible" />
         <StatCard icon={Archive} title="Unidades disponibles" value={number.format(totals.totalUnits)} description="Suma de lotes activos" />
         <StatCard icon={Layers} title="Lotes activos" value={number.format(totals.activeLots)} description="Entradas con disponibilidad" />
-        <StatCard icon={TrendingUp} title="Valor estimado" value={money.format(totals.totalValue)} description="Costo del stock disponible" />
+        <StatCard icon={WalletCards} title="Costo stock s/IVA" value={money.format(totals.stockCost)} description="Costo de compra sin IVA" />
+        <StatCard icon={TrendingUp} title="Valor de venta" value={money.format(totals.saleValue)} description="Si vendes todo el stock" />
+      </div>
+
+      <div className="rounded-[26px] border border-emerald-100 bg-emerald-50 p-5 shadow-sm">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Ganancia potencial</p>
+            <p className="mt-1 text-sm font-semibold text-emerald-800">Valor de venta menos costo del stock disponible sin IVA.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-white/70 p-3 text-emerald-700">
+              <Coins size={21} />
+            </div>
+            <p className="text-3xl font-black text-emerald-800">{money.format(totals.potentialProfit)}</p>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-[30px] border border-slate-200 bg-white shadow-sm">
@@ -154,14 +237,59 @@ export default function InventoryPage() {
               <TabButton active={tab === "movements"} onClick={() => setTab("movements")}>Movimientos</TabButton>
             </div>
 
-            <div className="relative w-full xl:max-w-md">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar producto, folio, factura o movimiento..."
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
-              />
+            <div className="grid w-full gap-3 xl:max-w-5xl xl:grid-cols-[1.2fr_auto] xl:items-center">
+              <div className="relative w-full">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar producto, folio, factura o movimiento..."
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={datePreset}
+                    onChange={(event) => handleDatePresetChange(event.target.value)}
+                    className="h-12 rounded-2xl border border-slate-200 bg-white pl-10 pr-9 text-sm font-bold text-slate-700 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
+                  >
+                    <option value="all">Todas las fechas</option>
+                    <option value="today">Hoy</option>
+                    <option value="current_month">Este mes</option>
+                    <option value="last_month">Mes pasado</option>
+                    <option value="custom">Rango personalizado</option>
+                  </select>
+                </div>
+
+                <input
+                  type="date"
+                  value={dateFilters.dateFrom}
+                  onChange={(event) => handleCustomDateChange("dateFrom", event.target.value)}
+                  className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
+                  title="Fecha inicial"
+                />
+                <input
+                  type="date"
+                  value={dateFilters.dateTo}
+                  onChange={(event) => handleCustomDateChange("dateTo", event.target.value)}
+                  className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
+                  title="Fecha final"
+                />
+
+                {dateFilters.dateFrom || dateFilters.dateTo ? (
+                  <button
+                    type="button"
+                    onClick={clearDateFilters}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                  >
+                    <X size={16} />
+                    Limpiar
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -182,6 +310,7 @@ export default function InventoryPage() {
               hasMore={stockHasMore}
               loadingMore={stockLoadingMore}
               onLoadMore={loadMoreStock}
+              dateFilters={dateFilters}
             />
           ) : tab === "entries" ? (
             <EntriesView entries={filteredEntries} onCancelEntry={cancelEntry} saving={saving} />
@@ -234,7 +363,7 @@ function TabButton({ active, children, onClick }) {
   );
 }
 
-function StockView({ items, totalCount, hasMore, loadingMore, onLoadMore }) {
+function StockView({ items, totalCount, hasMore, loadingMore, onLoadMore, dateFilters }) {
   if (!items.length) {
     return <EmptyState title="No hay existencias" description="Solo se muestran productos con stock disponible. Registra una entrada para empezar a ver lotes." />;
   }
@@ -246,26 +375,35 @@ function StockView({ items, totalCount, hasMore, loadingMore, onLoadMore }) {
           Mostrando <strong className="text-slate-950">{items.length}</strong> de <strong className="text-slate-950">{totalCount}</strong> productos con stock.
         </span>
         <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-          No se cargan productos sin existencia
+          {dateFilters?.dateFrom || dateFilters?.dateTo
+            ? `Filtrado: ${dateFilters.dateFrom || "inicio"} a ${dateFilters.dateTo || "hoy"}`
+            : "No se cargan productos sin existencia"}
         </span>
       </div>
 
       <div className="grid gap-3">
         {items.map((item) => {
           const available = toNumber(item.cantidad_disponible);
+          const stockCost = toNumber(item.costo_stock ?? item.valor_estimado);
+          const saleValue = toNumber(item.valor_venta_potencial);
+          const potentialProfit = toNumber(item.ganancia_potencial);
 
           return (
             <article key={item.producto_id} className="rounded-[24px] border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-sm">
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_140px_110px_150px_160px] xl:items-center">
-                <div>
-                  <p className="text-lg font-black text-slate-950">{item.nombre}</p>
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0 xl:max-w-[34%]">
+                  <p className="truncate text-lg font-black text-slate-950" title={item.nombre}>{item.nombre}</p>
                   <p className="mt-1 text-xs font-semibold text-slate-500">{item.codigo || "Sin código"}</p>
                 </div>
 
-                <Metric label="Disponible" value={number.format(available)} highlight />
-                <Metric label="Lotes" value={number.format(toNumber(item.lotes_activos))} />
-                <Metric label="Última compra" value={item.ultima_compra || "Sin compras"} />
-                <Metric label="Valor" value={money.format(toNumber(item.valor_estimado))} highlight />
+                <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 xl:max-w-[66%]">
+                  <Metric label="Disponible" value={number.format(available)} tone="success" />
+                  <Metric label="Lotes" value={number.format(toNumber(item.lotes_activos))} />
+                  <Metric label="Última compra" value={item.ultima_compra || "Sin compras"} />
+                  <Metric label="Costo s/IVA" value={money.format(stockCost)} />
+                  <Metric label="Valor venta" value={money.format(saleValue)} />
+                  <Metric label="Ganancia" value={money.format(potentialProfit)} tone={potentialProfit > 0 ? "success" : "default"} />
+                </div>
               </div>
             </article>
           );
@@ -309,8 +447,14 @@ function EntriesView({ entries, onCancelEntry, saving }) {
                   <span className={["rounded-full px-3 py-1 text-xs font-black", active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"].join(" ")}>{active ? "Activa" : "Cancelada"}</span>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{entry.fecha_compra}</span>
                 </div>
-                <h3 className="mt-3 text-lg font-black text-slate-950">{entry.folio || entry.numero_factura || "Entrada sin folio"}</h3>
-                <p className="mt-1 text-sm text-slate-500">{entry.proveedor?.nombre || "Sin proveedor"} · {lots.length} productos</p>
+                <div className="mt-3 space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Referencia</p>
+                  <h3 className="text-lg font-black text-slate-950">{entry.numero_factura || entry.folio || "Sin referencia"}</h3>
+                  {entry.numero_factura && entry.folio ? (
+                    <p className="text-xs font-bold text-slate-500">Folio interno: {entry.folio}</p>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-sm text-slate-500">{entry.proveedor?.nombre || "Sin proveedor"} · {lots.length} productos</p>
                 {entry.archivo_url ? (
                   <a
                     href={entry.archivo_url}
@@ -384,11 +528,21 @@ function MovementsView({ movements }) {
   );
 }
 
-function Metric({ label, value, highlight = false }) {
+function Metric({ label, value, highlight = false, tone = "default" }) {
+  const isSuccess = highlight || tone === "success";
+
   return (
-    <div className="min-w-[120px] rounded-2xl bg-slate-50 px-4 py-3">
-      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className={highlight ? "mt-1 font-black text-emerald-700" : "mt-1 font-black text-slate-950"}>{value}</p>
+    <div className="min-w-0 rounded-2xl bg-slate-50 px-4 py-3">
+      <p className="truncate text-[10px] font-black uppercase tracking-[0.14em] text-slate-500" title={label}>{label}</p>
+      <p
+        className={[
+          "mt-1 truncate text-sm font-black sm:text-base",
+          isSuccess ? "text-emerald-700" : "text-slate-950",
+        ].join(" ")}
+        title={String(value)}
+      >
+        {value}
+      </p>
     </div>
   );
 }

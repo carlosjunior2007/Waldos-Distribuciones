@@ -149,22 +149,68 @@ export function sanitizeClientAddresses(addresses = []) {
 export function calculateOrderProfit(order = {}) {
   const details = order.details || order.pedido_detalles || [];
 
-  const subtotal = details.reduce((sum, item) => {
+  const estimatedSubtotal = details.reduce((sum, item) => {
     return sum + Number(item.cantidad_pedida || 0) * Number(item.precio_unitario || 0);
   }, 0);
 
-  const cost = details.reduce((sum, item) => {
+  const estimatedCost = details.reduce((sum, item) => {
     return sum + Number(item.cantidad_pedida || 0) * Number(item.costo_unitario || 0);
   }, 0);
 
-  const profit = subtotal - cost;
-  const margin = subtotal > 0 ? (profit / subtotal) * 100 : 0;
+  const estimatedProfit = estimatedSubtotal - estimatedCost;
+  const real = order.realProfit || {};
+
+  const realSale = Number(
+    real.venta_real_sin_iva
+      ?? real.venta_entregada_sin_iva
+      ?? order.venta_real_sin_iva
+      ?? order.venta_entregada_sin_iva
+      ?? 0,
+  );
+
+  const realCost = Number(
+    real.costo_real_fifo
+      ?? order.costo_real_fifo
+      ?? 0,
+  );
+
+  const realProfit = Number(
+    real.ganancia_neta
+      ?? real.ganancia_real
+      ?? real.ganancia_real_fifo
+      ?? order.ganancia_neta
+      ?? order.ganancia_real
+      ?? order.ganancia_real_fifo
+      ?? (realSale - realCost),
+  );
+
+  const realMargin = Number(
+    real.margen_real
+      ?? real.margen_real_porcentaje
+      ?? order.margen_real
+      ?? order.margen_real_porcentaje
+      ?? (realSale > 0 ? (realProfit / realSale) * 100 : 0),
+  );
+
+  const paidAmount = Number(
+    real.monto_pagado
+      ?? real.pago_monto
+      ?? order.monto_pagado
+      ?? order.pago_monto
+      ?? 0,
+  );
 
   return {
-    subtotal,
-    cost,
-    profit,
-    margin,
+    subtotal: realSale,
+    cost: realCost,
+    profit: realProfit,
+    margin: realMargin,
+    paidAmount,
+    paymentReference: real.referencia_pago ?? real.pago_referencia ?? order.referencia_pago ?? order.pago_referencia ?? null,
+    paymentDate: real.fecha_pago ?? real.pago_fecha ?? order.fecha_pago ?? order.pago_fecha ?? null,
+    estimatedSubtotal,
+    estimatedCost,
+    estimatedProfit,
   };
 }
 
@@ -212,29 +258,29 @@ export function getClientOrderTotals(orders = []) {
       const profit = calculateOrderProfit(order);
 
       acc.count += 1;
-      acc.total += Number(order.total || 0);
-      acc.estimatedProfit += profit.profit;
-      acc.estimatedCost += profit.cost;
-
-      if (isOrderProfitRealized(order)) {
-        acc.realizedTotal += Number(order.total || 0);
-        acc.realizedProfit += profit.profit;
-        acc.realizedCost += profit.cost;
-      }
+      acc.total += profit.subtotal;
+      acc.realizedProfit += profit.profit;
+      acc.realizedCost += profit.cost;
+      acc.paidAmount += profit.paidAmount;
+      acc.estimatedTotal += profit.estimatedSubtotal;
+      acc.estimatedProfit += profit.estimatedProfit;
+      acc.estimatedCost += profit.estimatedCost;
 
       return acc;
     },
     {
       count: 0,
       total: 0,
-      estimatedProfit: 0,
-      estimatedCost: 0,
-      realizedTotal: 0,
       realizedProfit: 0,
       realizedCost: 0,
+      paidAmount: 0,
+      estimatedTotal: 0,
+      estimatedProfit: 0,
+      estimatedCost: 0,
     },
   );
 }
+
 
 
 export function validateClientData(form = {}, addresses = []) {

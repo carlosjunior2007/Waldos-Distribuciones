@@ -112,6 +112,8 @@ export default function DeliveryFormModal({ open, order, delivery = null, saving
     });
   }
 
+  const willConsumeStock = String(form.estado || "").toLowerCase() === "entregada";
+
   return (
     <Modal
       open={open}
@@ -152,7 +154,10 @@ export default function DeliveryFormModal({ open, order, delivery = null, saving
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <ReadOnlyCard label="Folio" value={isEditing ? delivery.folio : "Se crea al guardar"} />
 
-                <Field label="Estado">
+                <Field
+                  label="Estado"
+                  helper={willConsumeStock ? "Al guardar como entregada se descuenta stock FIFO." : "Mientras no esté entregada, no se descuenta stock."}
+                >
                   <select className={inputClass} value={form.estado} onChange={(event) => updateForm("estado", event.target.value)}>
                     {DELIVERY_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
@@ -208,6 +213,15 @@ export default function DeliveryFormModal({ open, order, delivery = null, saving
             </ModalSection>
 
             <DeliveryProductPicker order={order} delivery={delivery} value={rows} onChange={setRows} />
+
+            <div className={`rounded-2xl border px-4 py-3 text-sm ${willConsumeStock ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+              <strong>{willConsumeStock ? "Esta entrega sí descontará stock." : "Esta entrega no descontará stock todavía."}</strong>
+              <span className="ml-1">
+                {willConsumeStock
+                  ? "El sistema usará FIFO y guardará qué factura/entrada alimentó cada producto."
+                  : "Puedes dejarla pendiente, en ruta o parcial sin tocar inventario. El stock se mueve hasta marcarla como entregada."}
+              </span>
+            </div>
           </div>
 
           <aside className="space-y-4">
@@ -218,6 +232,7 @@ export default function DeliveryFormModal({ open, order, delivery = null, saving
                 <SummaryRow label="Tipo" value={isPickup ? "Recogido por el cliente" : "Entrega a domicilio"} />
                 <SummaryRow label="Dirección" value={isPickup ? "No aplica" : selectedAddress ? getAddressLabel(selectedAddress) : "Sin seleccionar"} />
                 <SummaryRow label="Recibe" value={form.recibido_por || "Pendiente"} />
+                <SummaryRow label="Stock" value={willConsumeStock ? "Se descuenta al guardar" : "No se descuenta"} />
               </div>
             </ModalSection>
           </aside>

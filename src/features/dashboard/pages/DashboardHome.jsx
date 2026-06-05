@@ -3,13 +3,14 @@ import EmptyState from "../../../components/ui/EmptyState";
 import { useDashboard } from "../hooks/useDashboard";
 
 import DashboardHeader from "../components/DashboardHeader";
-import DashboardStats from "../components/DashboardStats";
-import DashboardSummaryPanel from "../components/DashboardSummaryPanel";
+import FinancialOverview from "../components/FinancialOverview";
+import OperationsOverview from "../components/OperationsOverview";
 import RecentActivity from "../components/RecentActivity";
 import SimpleBarChart from "../components/SimpleBarChart";
 import ComparisonChart from "../components/ComparisonChart";
 import MovementDetailModal from "../components/MovementDetailModal";
 import DashboardMessageModal from "../components/DashboardMessageModal";
+import { PurchasesTable, RealOrdersTable, TopProductsTable } from "../components/DashboardTables";
 
 export default function DashboardHome() {
   const dashboard = useDashboard();
@@ -17,7 +18,7 @@ export default function DashboardHome() {
   if (dashboard.loading) {
     return (
       <section className="rounded-[28px] border border-border bg-surface shadow-[var(--shadow-soft)]">
-        <EmptyState loading title="Cargando resumen real..." />
+        <EmptyState loading title="Cargando dashboard real..." />
       </section>
     );
   }
@@ -39,35 +40,44 @@ export default function DashboardHome() {
         <DashboardHeader
           range={dashboard.range}
           setRange={dashboard.setRange}
+          filters={dashboard.filters}
+          setFilters={dashboard.setFilters}
+          periodLabel={dashboard.periodLabel}
+          onExportExcel={dashboard.handleExportExcel}
+          onRefresh={dashboard.retryLoad}
         />
 
-        <DashboardStats stats={dashboard.stats} />
+        <FinancialOverview resumen={dashboard.resumen} />
+
+        <OperationsOverview resumen={dashboard.resumen} />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <DashboardSummaryPanel
-            resumen={dashboard.resumen}
-            range={dashboard.range}
+          <ComparisonChart
+            title="Venta, FIFO, gastos y ganancia"
+            subtitle="Tendencia real por periodo"
+            data={dashboard.periodData}
           />
 
-          <RecentActivity
-            items={dashboard.recentActivity}
-            onSelect={dashboard.setSelectedMovement}
+          <SimpleBarChart
+            title="Compras de mercancía"
+            subtitle="Facturas y entradas"
+            data={dashboard.periodData}
           />
         </div>
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <ComparisonChart
-            title="Ganancias vs gastos"
-            subtitle="Comparación financiera"
-            data={dashboard.financeChartData}
-          />
+          <div className="space-y-6 xl:col-span-2">
+            <RealOrdersTable rows={dashboard.filteredData.pedidoGanancias} />
+            <PurchasesTable rows={dashboard.filteredData.inventarioEntradas} />
+          </div>
 
-          <SimpleBarChart
-            title="Cotizaciones"
-            subtitle="Cantidad por periodo"
-            data={dashboard.quotationChartData}
-            valueFormatter={(value) => `${value} cotizaciones`}
-          />
+          <div className="space-y-6">
+            <TopProductsTable rows={dashboard.topProducts} />
+            <RecentActivity
+              items={dashboard.recentActivity}
+              onSelect={dashboard.setSelectedMovement}
+            />
+          </div>
         </div>
       </section>
 

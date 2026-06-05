@@ -15,7 +15,7 @@ import {
 
 import {
   calculateDerivedOrderStatus,
-  calculateOrderProfit,
+  calculateOrderRealProfit,
   calculateOrderProgress,
   formatDate,
   formatMoney,
@@ -88,7 +88,7 @@ function OrderCard({
 }) {
   const status = getOrderStatusMeta(calculateDerivedOrderStatus(order));
   const payment = getPaymentStatusMeta(order.estado_pago);
-  const profit = calculateOrderProfit(order.details || []);
+  const realProfit = calculateOrderRealProfit(order);
   const progress = calculateOrderProgress(order.details || []);
   const showProfit = isOrderProfitRealized(order);
   const invoiceReadiness = getOrderInvoiceReadiness(order);
@@ -202,6 +202,7 @@ function OrderCard({
           <div className="mt-3 flex flex-wrap gap-2">
             <SoftTag>{order.quotation ? `Cotización ${order.quotation.folio}` : "Sin cotización"}</SoftTag>
             <SoftTag>{order.tracking_token || "Sin tracking"}</SoftTag>
+            <SoftTag>{order.pago_referencia ? `Pago ${order.pago_referencia}` : "Sin ref. pago"}</SoftTag>
             {order.is_recurrent ? <SoftTag tone="primary">Recurrente</SoftTag> : null}
           </div>
         </section>
@@ -215,10 +216,10 @@ function OrderCard({
         <section className="grid grid-cols-2 gap-4 sm:max-w-md">
           <CleanMetric label="Total" value={formatMoney(order.total)} helper={`IVA ${Number(order.iva_porcentaje || 0)}%`} />
           <CleanMetric
-            label="Ganancia"
-            value={formatMoney(profit.profit)}
-            helper={`${profit.margin.toFixed(1)}% · ${showProfit ? "realizada" : "estimada"}`}
-            tone={profit.profit >= 0 ? "success" : "error"}
+            label="Ganancia real"
+            value={formatMoney(realProfit.realProfit)}
+            helper={`${realProfit.realMargin.toFixed(1)}% · ${showProfit ? "final" : "en proceso"}`}
+            tone={realProfit.realProfit >= 0 ? "success" : "error"}
           />
         </section>
 

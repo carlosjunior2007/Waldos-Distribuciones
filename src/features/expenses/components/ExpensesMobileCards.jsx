@@ -53,10 +53,10 @@ function ExpenseMobileCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-text-primary">
-            {item.concepto}
+            {item.folio || item.concepto}
           </p>
 
-          <p className="mt-1 text-sm text-text-secondary">{item.referencia}</p>
+          <p className="mt-1 text-sm text-text-secondary">{item.pagoReferencia || item.referencia}</p>
         </div>
 
         <StatusBadge icon={NatureIcon} className={nature.className}>
@@ -66,14 +66,16 @@ function ExpenseMobileCard({
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <MiniInfo label="Cliente" value={item.cliente} />
-        <MiniInfo label="Fecha" value={item.fecha} />
+        <MiniInfo label="Pago" value={formatMoney(item.montoPagado || 0)} />
+        <MiniInfo label="Venta real s/IVA" value={formatMoney(item.ventaRealSinIva || 0)} />
+        <MiniInfo label="Costo mercancía" value={formatMoney(item.costoMercanciaReal || 0)} />
         <MiniInfo
-          label="Gastos"
+          label="Gastos extra"
           value={formatMoney(item.gastos)}
           valueClass="text-error-700"
         />
         <MiniInfo
-          label="Neto"
+          label="Ganancia neta"
           value={formatMoney(item.ganancia)}
           valueClass={item.ganancia >= 0 ? "text-success-700" : "text-error-700"}
         />

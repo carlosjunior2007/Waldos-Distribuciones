@@ -147,6 +147,10 @@ export async function fetchClientOrders(clientId) {
       estado,
       estado_pago,
       metodo_pago,
+      pago_referencia,
+      pago_monto,
+      pago_fecha,
+      pago_notas,
       fecha_emision,
       fecha_inicio,
       fecha_fin,
@@ -185,10 +189,35 @@ export async function fetchClientOrders(clientId) {
 
   if (error) throw error;
 
-  return (data || []).map((order) => ({
+  const orders = (data || []).map((order) => ({
     ...order,
     details: order.pedido_detalles || [],
     deliveries: order.entregas || [],
+  }));
+
+  if (!orders.length) return orders;
+
+  const orderIds = orders.map((order) => order.id).filter(Boolean);
+
+  // Vista creada por SQL_GANANCIA_REAL_Y_REFERENCIA_PAGO.sql.
+  // Si todavía no existe, no rompemos clientes: usamos fallback estimado en helpers.
+  const { data: profitRows, error: profitError } = await supabase
+    .from("pedido_ganancia_real")
+    .select("*")
+    .in("pedido_id", orderIds);
+
+  if (profitError) {
+    console.warn("No se pudo cargar pedido_ganancia_real para clientes:", profitError);
+    return orders;
+  }
+
+  const profitByOrderId = new Map(
+    (profitRows || []).map((row) => [row.pedido_id, row]),
+  );
+
+  return orders.map((order) => ({
+    ...order,
+    realProfit: profitByOrderId.get(order.id) || null,
   }));
 }
 

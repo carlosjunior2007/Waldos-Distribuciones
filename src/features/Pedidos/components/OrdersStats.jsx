@@ -10,7 +10,7 @@ export default function OrdersStats({ stats }) {
       <SummaryCard icon={Truck} title="Parciales" value={stats.parciales} note="Tienen entrega parcial." tone="warning" />
       <SummaryCard icon={PackageCheck} title="Entregados" value={stats.entregados} note="Sin pendientes por entregar." tone="success" />
       <SummaryCard icon={WalletCards} title="Pago pendiente" value={stats.pendientesPago} note="Falta registrar pago." tone="slate" />
-      <SummaryCard icon={TrendingUp} title="Ganancia realizada" value={formatMoney(stats.ganancia)} note="Solo pedidos entregados y pagados." tone="success" />
+      <SummaryCard icon={TrendingUp} title="Ganancia real cobrada" value={formatMoney(stats.ganancia)} note="Pagado s/IVA - costo FIFO." tone="success" />
     </div>
   );
 }

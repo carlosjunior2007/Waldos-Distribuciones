@@ -24,7 +24,6 @@ import {
   calculateOrderProgress,
   getOrderDisplayStatus,
   getClientOrderTotals,
-  isOrderProfitRealized,
 } from "../client.helpers";
 
 export default function ClientDetail({
@@ -181,11 +180,15 @@ export default function ClientDetail({
 
       <div className="grid gap-4 md:grid-cols-3">
         <MiniStat label="Pedidos" value={filteredTotals.count} />
-        <MiniStat label="Total en pedidos" value={formatMoney(filteredTotals.total)} />
         <MiniStat
-          label="Ganancia estimada"
-          value={formatMoney(filteredTotals.estimatedProfit)}
-          hint={`Realizada: ${formatMoney(filteredTotals.realizedProfit)}`}
+          label="Venta real entregada"
+          value={formatMoney(filteredTotals.total)}
+          hint={`Pagado: ${formatMoney(filteredTotals.paidAmount)}`}
+        />
+        <MiniStat
+          label="Ganancia real"
+          value={formatMoney(filteredTotals.realizedProfit)}
+          hint={`Costo FIFO: ${formatMoney(filteredTotals.realizedCost)}`}
         />
       </div>
 
@@ -221,7 +224,7 @@ export default function ClientDetail({
             <table className="min-w-full">
               <thead className="bg-surface-soft">
                 <tr>
-                  {["Pedido", "Estado", "Pago", "Total", "Ganancia", "Progreso", "Fecha"].map(
+                  {["Pedido", "Estado", "Pago", "Venta real", "Costo real", "Ganancia real", "Progreso", "Fecha"].map(
                     (header) => (
                       <th
                         key={header}
@@ -429,14 +432,13 @@ function OrderRow({ order }) {
   const profit = calculateOrderProfit(order);
   const progress = calculateOrderProgress(order);
   const status = getOrderDisplayStatus(order);
-  const realized = isOrderProfitRealized(order);
 
   return (
     <tr className="border-t border-border">
       <td className="px-5 py-4 text-sm font-semibold text-text-primary">
         <div>{order.folio}</div>
-        <div className="mt-1 text-xs font-medium text-text-muted">
-          {order.metodo_pago || "Sin método"}
+        <div className="mt-1 max-w-[180px] truncate text-xs font-medium text-text-muted">
+          {profit.paymentReference || order.metodo_pago || "Sin referencia"}
         </div>
       </td>
 
@@ -446,10 +448,19 @@ function OrderRow({ order }) {
 
       <td className="px-5 py-4 text-sm text-text-secondary">
         <StatusPill value={order.estado_pago || "pendiente"} />
+        <div className="mt-1 text-xs text-text-muted">
+          Pagado: {formatMoney(profit.paidAmount)}
+        </div>
       </td>
 
       <td className="px-5 py-4 text-sm font-semibold text-text-primary">
-        {formatMoney(order.total)}
+        {formatMoney(profit.subtotal)}
+        <div className="mt-1 text-xs font-medium text-text-muted">s/IVA entregado</div>
+      </td>
+
+      <td className="px-5 py-4 text-sm font-semibold text-text-primary">
+        {formatMoney(profit.cost)}
+        <div className="mt-1 text-xs font-medium text-text-muted">FIFO</div>
       </td>
 
       <td className="px-5 py-4 text-sm">
@@ -457,10 +468,7 @@ function OrderRow({ order }) {
           {formatMoney(profit.profit)}
         </div>
         <div className="mt-1 text-xs text-text-muted">
-          {profit.margin.toFixed(1)}% utilidad
-        </div>
-        <div className="mt-1 text-xs text-text-muted">
-          {realized ? "Realizada" : "Estimada"}
+          {profit.margin.toFixed(1)}% margen real
         </div>
       </td>
 

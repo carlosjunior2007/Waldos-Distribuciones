@@ -148,14 +148,170 @@ const ORDER_SELECT = `
   )
 `;
 
+function getErrorText(error) {
+  if (!error) return "Error desconocido.";
+  if (typeof error === "string") return error;
+  return error.message || error.details || error.hint || JSON.stringify(error);
+}
+
+function buildAppError(error, fallback = "Ocurrió un error.") {
+  const raw = getErrorText(error);
+  const message = makeFriendlyErrorMessage(raw, fallback);
+  const nextError = new Error(message);
+  nextError.originalError = error;
+  return nextError;
+}
+
+function makeFriendlyErrorMessage(rawMessage = "", fallback = "Ocurrió un error.") {
+  const message = String(rawMessage || "").trim();
+  const lower = message.toLowerCase();
+
+  if (!message) return fallback;
+  if (lower.includes("inventario insuficiente")) return message;
+  if (lower.includes("violates row-level security") || lower.includes("permission denied")) {
+    return "No tienes permisos para hacer esta operación. Revisa las políticas RLS o inicia sesión de nuevo.";
+  }
+  if (lower.includes("duplicate key")) {
+    return "Ya existe un registro con esos datos. Revisa folio, factura o clave duplicada.";
+  }
+  if (lower.includes("foreign key")) {
+    return "Hay un dato relacionado que no existe o fue eliminado. Actualiza la página y vuelve a intentar.";
+  }
+  if (lower.includes("not-null") || lower.includes("null value")) {
+    return "Falta llenar un dato obligatorio. Revisa los campos marcados antes de guardar.";
+  }
+  if (lower.includes("check constraint")) {
+    return "Un dato no cumple las reglas del sistema. Revisa cantidades, estados y valores negativos.";
+  }
+
+  return message || fallback;
+}
+
+
+
+function collectOrderProductIds(orders = []) {
+  return Array.from(new Set((orders || [])
+    .flatMap((order) => order.pedido_detalles || [])
+    .map((detail) => detail.producto_id)
+    .filter(Boolean)));
+}
+
+function collectOrderDeliveryIds(orders = []) {
+  return Array.from(new Set((orders || [])
+    .flatMap((order) => order.entregas || [])
+    .map((delivery) => delivery.id)
+    .filter(Boolean)));
+}
+
+async function hydrateInventoryContext(orders = []) {
+  if (!orders.length) return orders;
+
+  const productIds = collectOrderProductIds(orders);
+  const deliveryIds = collectOrderDeliveryIds(orders);
+
+  let lots = [];
+  let consumptions = [];
+
+  if (productIds.length) {
+    const { data, error } = await supabase
+      .from("inventario_lotes")
+      .select(`
+        id,
+        producto_id,
+        entrada_id,
+        cantidad_inicial,
+        cantidad_disponible,
+        costo_unitario,
+        fecha_compra,
+        entrada:entrada_id (
+          id,
+          folio,
+          numero_factura,
+          fecha_compra,
+          archivo_url,
+          proveedor:proveedor_id (
+            id,
+            nombre,
+            codigo
+          )
+        )
+      `)
+      .in("producto_id", productIds)
+      .gt("cantidad_disponible", 0)
+      .order("fecha_compra", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) throw buildAppError(error, "No se pudieron cargar los lotes de inventario.");
+    lots = data || [];
+  }
+
+  if (deliveryIds.length) {
+    const { data, error } = await supabase
+      .from("inventario_consumos_entrega")
+      .select(`
+        id,
+        entrega_id,
+        entrega_detalle_id,
+        pedido_id,
+        pedido_detalle_id,
+        producto_id,
+        lote_id,
+        entrada_id,
+        cantidad,
+        created_at,
+        lote:lote_id (
+          id,
+          costo_unitario,
+          fecha_compra
+        ),
+        entrada:entrada_id (
+          id,
+          folio,
+          numero_factura,
+          fecha_compra,
+          archivo_url,
+          proveedor:proveedor_id (
+            id,
+            nombre,
+            codigo
+          )
+        )
+      `)
+      .in("entrega_id", deliveryIds);
+
+    if (error) throw buildAppError(error, "No se pudo cargar la relación entre entregas e inventario.");
+    consumptions = data || [];
+  }
+
+  const lotsByProductId = lots.reduce((acc, lot) => {
+    if (!lot.producto_id) return acc;
+    acc[lot.producto_id] = [...(acc[lot.producto_id] || []), lot];
+    return acc;
+  }, {});
+
+  const consumptionsByDeliveryDetailId = consumptions.reduce((acc, item) => {
+    if (!item.entrega_detalle_id) return acc;
+    acc[item.entrega_detalle_id] = [...(acc[item.entrega_detalle_id] || []), item];
+    return acc;
+  }, {});
+
+  return orders.map((order) => ({
+    ...order,
+    _inventoryLotsByProductId: lotsByProductId,
+    _inventoryConsumptionsByDeliveryDetailId: consumptionsByDeliveryDetailId,
+  }));
+}
+
 export async function fetchOrders() {
   const { data, error } = await supabase
     .from("pedidos")
     .select(ORDER_SELECT)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
-  return normalizeOrders(data || []);
+  if (error) throw buildAppError(error, "No se pudieron cargar los pedidos.");
+
+  const hydrated = await hydrateInventoryContext(data || []);
+  return normalizeOrders(hydrated);
 }
 
 export async function fetchOrderById(orderId) {
@@ -165,8 +321,10 @@ export async function fetchOrderById(orderId) {
     .eq("id", orderId)
     .single();
 
-  if (error) throw error;
-  return normalizeOrder(data);
+  if (error) throw buildAppError(error, "No se pudo cargar el pedido.");
+
+  const [hydrated] = await hydrateInventoryContext(data ? [data] : []);
+  return normalizeOrder(hydrated);
 }
 
 export async function fetchOrderClients() {
@@ -206,7 +364,7 @@ export async function fetchOrderClients() {
     `)
     .order("nombre", { ascending: true });
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
 
   return (data || []).map((client) => ({
     ...client,
@@ -224,7 +382,7 @@ export async function fetchOrderProducts() {
     .select("id,nombre,descripcion,precio,precio_compra,cantidad_caja,codigo,iva_porcentaje,habilitado,clave_sat,clave_unidad_sat,unidad,tax_object")
     .order("nombre", { ascending: true });
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
 
   return (data || []).filter((product) => product.habilitado !== false);
 }
@@ -255,6 +413,10 @@ export async function createOrder({ order, details }) {
       estado: order.fecha_inicio || order.fecha_fin ? "creado" : "borrador",
       estado_pago: order.estado_pago || "pendiente",
       metodo_pago: order.metodo_pago || null,
+      pago_referencia: order.pago_referencia || null,
+      pago_monto: Number(order.pago_monto || 0),
+      pago_fecha: order.pago_fecha || null,
+      pago_notas: order.pago_notas || null,
       fecha_emision: order.fecha_emision || new Date().toISOString(),
       fecha_inicio: order.fecha_inicio || null,
       fecha_fin: order.fecha_fin || null,
@@ -265,7 +427,7 @@ export async function createOrder({ order, details }) {
     .select()
     .single();
 
-  if (orderError) throw orderError;
+  if (orderError) throw buildAppError(orderError);
 
   await insertOrderDetails(createdOrder.id, cleanDetails);
   await createTrackingIfPossible(createdOrder.id);
@@ -297,6 +459,10 @@ export async function updateOrder(orderId, { order, details }) {
       estado: derivedStatus,
       estado_pago: order.estado_pago || "pendiente",
       metodo_pago: order.metodo_pago || null,
+      pago_referencia: order.pago_referencia || null,
+      pago_monto: Number(order.pago_monto || 0),
+      pago_fecha: order.pago_fecha || null,
+      pago_notas: order.pago_notas || null,
       fecha_inicio: order.fecha_inicio || null,
       fecha_fin: order.fecha_fin || null,
       entrega_inicio: order.fecha_inicio || null,
@@ -306,7 +472,7 @@ export async function updateOrder(orderId, { order, details }) {
     })
     .eq("id", orderId);
 
-  if (orderError) throw orderError;
+  if (orderError) throw buildAppError(orderError);
 
   await syncOrderDetails(orderId, cleanDetails);
   await updateOrderStatus(orderId);
@@ -353,7 +519,7 @@ export async function updateOrderInvoiceDraft({ orderId, clientId, values }) {
     .update(orderPayload)
     .eq("id", orderId);
 
-  if (orderError) throw orderError;
+  if (orderError) throw buildAppError(orderError);
 
   return fetchOrderById(orderId);
 }
@@ -364,7 +530,7 @@ export async function cancelOrder(orderId) {
     .update({ estado: "cancelado", updated_at: new Date().toISOString() })
     .eq("id", orderId);
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
   return fetchOrderById(orderId);
 }
 
@@ -375,14 +541,14 @@ export async function restoreOrder(orderId) {
     .eq("id", orderId)
     .single();
 
-  if (orderError) throw orderError;
+  if (orderError) throw buildAppError(orderError);
 
   const { data: details, error: detailsError } = await supabase
     .from("pedido_detalles")
     .select("cantidad_pedida,cantidad_entregada")
     .eq("pedido_id", orderId);
 
-  if (detailsError) throw detailsError;
+  if (detailsError) throw buildAppError(detailsError);
 
   const hasPeriod = Boolean(
     order?.fecha_inicio ||
@@ -400,7 +566,7 @@ export async function restoreOrder(orderId) {
     .update({ estado: nextStatus, updated_at: new Date().toISOString() })
     .eq("id", orderId);
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
 
   return fetchOrderById(orderId);
 }
@@ -415,7 +581,7 @@ export async function deleteCancelledOrder(orderId) {
     .eq("id", orderId)
     .single();
 
-  if (orderError) throw orderError;
+  if (orderError) throw buildAppError(orderError);
   if (!order) throw new Error("No se encontró el pedido.");
 
   if (String(order.estado || "").toLowerCase() !== "cancelado") {
@@ -496,7 +662,7 @@ export async function deleteCancelledOrder(orderId) {
 
   for (const request of relatedDeletes) {
     const { error } = await request;
-    if (error) throw error;
+    if (error) throw buildAppError(error);
   }
 
   const { error: deleteOrderError } = await supabase
@@ -518,6 +684,54 @@ function getDeliveryNotes(delivery = {}) {
   return isPickupDelivery(delivery) ? "Recogido por el cliente" : null;
 }
 
+async function validateStockBeforeDeliveryConsumption(rows = [], stockAlreadyConsumedRows = []) {
+  const requiredByProductId = rows.reduce((acc, row) => {
+    if (!row.producto_id) return acc;
+    acc[row.producto_id] = Number(acc[row.producto_id] || 0) + Number(row.cantidad_entregada || 0);
+    return acc;
+  }, {});
+
+  const productIds = Object.keys(requiredByProductId);
+  if (!productIds.length) return true;
+
+  const { data: lots, error } = await supabase
+    .from("inventario_lotes")
+    .select("producto_id,cantidad_disponible,productos:producto_id(nombre,codigo)")
+    .in("producto_id", productIds)
+    .gt("cantidad_disponible", 0);
+
+  if (error) throw buildAppError(error, "No se pudo revisar el stock disponible.");
+
+  const availableByProductId = (lots || []).reduce((acc, lot) => {
+    acc[lot.producto_id] = Number(acc[lot.producto_id] || 0) + Number(lot.cantidad_disponible || 0);
+    return acc;
+  }, {});
+
+  // Cuando se edita una entrega que ya estaba entregada, ese stock ya fue descontado.
+  // Para validar sin romper el proceso, lo sumamos temporalmente como disponible lógico.
+  for (const row of stockAlreadyConsumedRows || []) {
+    if (!row.producto_id) continue;
+    availableByProductId[row.producto_id] = Number(availableByProductId[row.producto_id] || 0) + Number(row.cantidad_entregada || 0);
+  }
+
+  const checkedProductIds = new Set();
+  for (const row of rows) {
+    if (!row.producto_id || checkedProductIds.has(row.producto_id)) continue;
+    checkedProductIds.add(row.producto_id);
+
+    const needed = Number(requiredByProductId[row.producto_id] || 0);
+    const available = Number(availableByProductId[row.producto_id] || 0);
+    if (needed > available) {
+      const lot = (lots || []).find((item) => item.producto_id === row.producto_id);
+      const name = row.nombre_producto || lot?.productos?.nombre || row.producto_id;
+      const code = row.codigo || lot?.productos?.codigo || "sin código";
+      throw new Error(`No se puede marcar como entregado porque falta inventario para ${name} (${code}). Necesitas ${needed}, pero solo hay ${available}. Primero agrega una entrada de inventario o reduce la cantidad entregada.`);
+    }
+  }
+
+  return true;
+}
+
 export async function createDelivery({ order, delivery, products }) {
   if (!order?.id) throw new Error("Pedido inválido.");
   if (!isPickupDelivery(delivery) && !delivery.cliente_direccion_id) throw new Error("Selecciona una dirección del cliente o la opción de recogido.");
@@ -530,6 +744,12 @@ export async function createDelivery({ order, delivery, products }) {
   if (overLimit) throw new Error("Hay cantidades mayores a lo pendiente.");
 
   await validateDeliveryRowsAvailability({ orderId: order.id, rows });
+
+  const willBeCounted = deliveryCountsAsDelivered(delivery.estado || "pendiente");
+  if (willBeCounted) {
+    // Validamos ANTES de crear la entrega. Si no hay stock, no queda una entrega fantasma como "entregada".
+    await validateStockBeforeDeliveryConsumption(rows);
+  }
 
   const { data: createdDelivery, error: deliveryError } = await supabase
     .from("entregas")
@@ -545,7 +765,7 @@ export async function createDelivery({ order, delivery, products }) {
     .select()
     .single();
 
-  if (deliveryError) throw deliveryError;
+  if (deliveryError) throw buildAppError(deliveryError);
 
   try {
     await insertDeliveryDetails(createdDelivery.id, rows);
@@ -583,6 +803,12 @@ export async function updateDelivery({ order, delivery, products }) {
   const wasCounted = deliveryCountsAsDelivered(currentDelivery?.estado);
   const willBeCounted = deliveryCountsAsDelivered(delivery.estado);
 
+  if (willBeCounted) {
+    // Validamos ANTES de cambiar el estado de la entrega.
+    // Si no hay stock, la entrega se queda como estaba y el usuario ve un error claro.
+    await validateStockBeforeDeliveryConsumption(rows, wasCounted ? currentRows : []);
+  }
+
   if (wasCounted) {
     await revertDeliveryFromOrderDetails(currentRows);
     await revertInventoryForDelivery(delivery.id);
@@ -600,14 +826,14 @@ export async function updateDelivery({ order, delivery, products }) {
     })
     .eq("id", delivery.id);
 
-  if (deliveryError) throw deliveryError;
+  if (deliveryError) throw buildAppError(deliveryError);
 
   const { error: deleteDetailsError } = await supabase
     .from("entrega_detalles")
     .delete()
     .eq("entrega_id", delivery.id);
 
-  if (deleteDetailsError) throw deleteDetailsError;
+  if (deleteDetailsError) throw buildAppError(deleteDetailsError);
 
   await insertDeliveryDetails(delivery.id, rows);
 
@@ -638,14 +864,14 @@ export async function deleteDelivery({ orderId, delivery }) {
     .delete()
     .eq("entrega_id", delivery.id);
 
-  if (detailError) throw detailError;
+  if (detailError) throw buildAppError(detailError);
 
   const { error: deliveryError } = await supabase
     .from("entregas")
     .delete()
     .eq("id", delivery.id);
 
-  if (deliveryError) throw deliveryError;
+  if (deliveryError) throw buildAppError(deliveryError);
 
   await updateOrderStatus(orderId);
   return fetchOrderById(orderId);
@@ -694,7 +920,7 @@ export async function saveRecurringOrderRule({ order, rule, products }) {
 
   if (rows.length) {
     const { error } = await supabase.from("pedido_recurrencia_productos").insert(rows);
-    if (error) throw error;
+    if (error) throw buildAppError(error);
   }
 
   if (rule.systemAction === "reminder_only") {
@@ -713,14 +939,14 @@ export async function deactivateRecurringOrderRule(orderId) {
     .eq("pedido_id", orderId)
     .eq("activo", true);
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
   return true;
 }
 
 async function insertOrderDetails(orderId, details) {
   const payload = details.map((item) => buildDetailPayload(orderId, item));
   const { error } = await supabase.from("pedido_detalles").insert(payload);
-  if (error) throw error;
+  if (error) throw buildAppError(error);
 }
 
 async function syncOrderDetails(orderId, details) {
@@ -729,7 +955,7 @@ async function syncOrderDetails(orderId, details) {
     .select("*")
     .eq("pedido_id", orderId);
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
 
   const incomingIds = details.map((item) => item.id).filter(Boolean);
   const removable = (currentDetails || [])
@@ -766,7 +992,7 @@ async function syncOrderDetails(orderId, details) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", item.id);
-      if (updateError) throw updateError;
+      if (updateError) throw buildAppError(updateError);
     } else {
       await insertOrderDetails(orderId, [item]);
     }
@@ -781,6 +1007,8 @@ function buildDeliveryRows(products = []) {
       producto_id: item.producto_id,
       cantidad_entregada: Math.floor(Number(item.cantidad_entregada || 0)),
       pendiente: Math.floor(Number(item.pendiente || item.cantidad_pendiente || 0)),
+      nombre_producto: item.nombre_producto || item.nombre || "Producto",
+      codigo: item.codigo || "",
     }));
 }
 
@@ -790,7 +1018,7 @@ async function validateDeliveryRowsAvailability({ orderId, rows, deliveryId = nu
     .select("id,cantidad_pedida")
     .eq("pedido_id", orderId);
 
-  if (detailsError) throw detailsError;
+  if (detailsError) throw buildAppError(detailsError);
 
   let deliveryDetailsQuery = supabase
     .from("entrega_detalles")
@@ -803,7 +1031,7 @@ async function validateDeliveryRowsAvailability({ orderId, rows, deliveryId = nu
   }
 
   const { data: deliveryRows, error: deliveryRowsError } = await deliveryDetailsQuery;
-  if (deliveryRowsError) throw deliveryRowsError;
+  if (deliveryRowsError) throw buildAppError(deliveryRowsError);
 
   const reservedByDetailId = (deliveryRows || []).reduce((acc, item) => {
     const detailId = item.pedido_detalle_id;
@@ -867,8 +1095,23 @@ async function cleanupDeliveryAfterInventoryError(deliveryId) {
     console.warn("No había inventario que revertir o no se pudo revertir:", error.message || error);
   }
 
-  await supabase.from("entrega_detalles").delete().eq("entrega_id", deliveryId);
-  await supabase.from("entregas").delete().eq("id", deliveryId);
+  const { error: detailsError } = await supabase
+    .from("entrega_detalles")
+    .delete()
+    .eq("entrega_id", deliveryId);
+
+  if (detailsError) {
+    console.warn("No se pudieron borrar los detalles de la entrega fallida:", detailsError.message || detailsError);
+  }
+
+  const { error: deliveryError } = await supabase
+    .from("entregas")
+    .delete()
+    .eq("id", deliveryId);
+
+  if (deliveryError) {
+    console.warn("No se pudo borrar la entrega fallida:", deliveryError.message || deliveryError);
+  }
 }
 
 async function insertDeliveryDetails(deliveryId, rows) {
@@ -883,7 +1126,7 @@ async function insertDeliveryDetails(deliveryId, rows) {
     .from("entrega_detalles")
     .insert(detailRows);
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
 }
 
 async function fetchDeliveryDetailRows(deliveryId) {
@@ -892,7 +1135,7 @@ async function fetchDeliveryDetailRows(deliveryId) {
     .select("id,entrega_id,pedido_detalle_id,producto_id,cantidad_entregada")
     .eq("entrega_id", deliveryId);
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
   return data || [];
 }
 
@@ -903,7 +1146,7 @@ async function fetchDeliveryHeader(deliveryId) {
     .eq("id", deliveryId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
   return data;
 }
 
@@ -915,7 +1158,7 @@ async function revertDeliveryFromOrderDetails(rows) {
       .eq("id", item.pedido_detalle_id)
       .single();
 
-    if (error) throw error;
+    if (error) throw buildAppError(error);
 
     const ordered = Number(detail.cantidad_pedida || 0);
     const delivered = Math.max(
@@ -934,7 +1177,7 @@ async function revertDeliveryFromOrderDetails(rows) {
       })
       .eq("id", item.pedido_detalle_id);
 
-    if (updateError) throw updateError;
+    if (updateError) throw buildAppError(updateError);
   }
 }
 
@@ -946,7 +1189,7 @@ async function applyDeliveryToOrderDetails(rows) {
       .eq("id", item.pedido_detalle_id)
       .single();
 
-    if (error) throw error;
+    if (error) throw buildAppError(error);
 
     const ordered = Number(detail.cantidad_pedida || 0);
     const delivered = Number(detail.cantidad_entregada || 0) + Number(item.cantidad_entregada || 0);
@@ -962,7 +1205,7 @@ async function applyDeliveryToOrderDetails(rows) {
       })
       .eq("id", item.pedido_detalle_id);
 
-    if (updateError) throw updateError;
+    if (updateError) throw buildAppError(updateError);
   }
 }
 
@@ -972,7 +1215,7 @@ async function updateOrderStatus(orderId) {
     .select("cantidad_pedida,cantidad_entregada")
     .eq("pedido_id", orderId);
 
-  if (error) throw error;
+  if (error) throw buildAppError(error);
 
   const estado = deriveOrderStatusFromDetails(details || []);
   const { error: updateError } = await supabase
@@ -980,7 +1223,7 @@ async function updateOrderStatus(orderId) {
     .update({ estado, updated_at: new Date().toISOString() })
     .eq("id", orderId);
 
-  if (updateError) throw updateError;
+  if (updateError) throw buildAppError(updateError);
 }
 
 async function createTrackingIfPossible(orderId) {
@@ -1115,6 +1358,50 @@ function normalizeProductSuppliers(rows = []) {
     .sort((a, b) => Number(b.es_principal) - Number(a.es_principal));
 }
 
+function getConsumptionUnitCost(consumption = {}, fallback = 0) {
+  return Number(
+    consumption.costo_unitario ??
+      consumption.lote?.costo_unitario ??
+      fallback ??
+      0,
+  );
+}
+
+function getRealInventoryByPedidoDetalleId(order = {}, rawDetails = []) {
+  const result = {};
+
+  (order.entregas || []).forEach((delivery) => {
+    if (!deliveryCountsAsDelivered(delivery.estado)) return;
+
+    (delivery.entrega_detalles || []).forEach((row) => {
+      const detailId = row.pedido_detalle_id;
+      if (!detailId) return;
+
+      const orderDetail = rawDetails.find((item) => item.id === detailId);
+      const fallbackCost = Number(orderDetail?.costo_unitario || 0);
+      const consumptions = order._inventoryConsumptionsByDeliveryDetailId?.[row.id] || [];
+
+      if (consumptions.length) {
+        consumptions.forEach((consumption) => {
+          const quantity = Number(consumption.cantidad || 0);
+          const costUnit = getConsumptionUnitCost(consumption, fallbackCost);
+          result[detailId] = result[detailId] || { quantity: 0, cost: 0 };
+          result[detailId].quantity += quantity;
+          result[detailId].cost += quantity * costUnit;
+        });
+        return;
+      }
+
+      const quantity = Number(row.cantidad_entregada || 0);
+      result[detailId] = result[detailId] || { quantity: 0, cost: 0 };
+      result[detailId].quantity += quantity;
+      result[detailId].cost += quantity * fallbackCost;
+    });
+  });
+
+  return result;
+}
+
 function normalizeOrders(orders) {
   return orders.map(normalizeOrder);
 }
@@ -1138,11 +1425,13 @@ function normalizeOrder(order) {
     .map((item) => ({
       ...item,
       importe: Number(item.importe || 0) || Number(item.cantidad_pedida || 0) * Number(item.precio_unitario || 0),
+      lotes_disponibles: order._inventoryLotsByProductId?.[item.producto_id] || [],
     }))
     .sort((a, b) => String(a.nombre_producto || "").localeCompare(String(b.nombre_producto || "")));
 
   const deliveredByDetailId = getDeliveredQuantitiesFromCompletedDeliveries(order.entregas || []);
   const reservedByDetailId = getReservedQuantitiesFromActiveDeliveries(order.entregas || []);
+  const realInventoryByDetailId = getRealInventoryByPedidoDetalleId(order, rawDetails);
 
   const details = rawDetails.map((item) => {
     const ordered = Math.floor(Number(item.cantidad_pedida || 0));
@@ -1160,6 +1449,10 @@ function normalizeOrder(order) {
       cantidad_reservada: reserved,
       cantidad_pendiente: pending,
       cantidad_disponible: available,
+      cantidad_consumida_fifo: Number(realInventoryByDetailId[item.id]?.quantity || delivered),
+      costo_real_fifo: Number(realInventoryByDetailId[item.id]?.cost ?? (delivered * Number(item.costo_unitario || 0))),
+      venta_entregada: delivered * Number(item.precio_unitario || 0),
+      ganancia_real: (delivered * Number(item.precio_unitario || 0)) - Number(realInventoryByDetailId[item.id]?.cost ?? (delivered * Number(item.costo_unitario || 0))),
       estado: getDetailStatus(ordered, delivered),
     };
   });
@@ -1180,6 +1473,7 @@ function normalizeOrder(order) {
           ...row,
           nombre_producto: orderDetail?.nombre_producto || "Producto",
           codigo: orderDetail?.codigo || "",
+          consumos_inventario: order._inventoryConsumptionsByDeliveryDetailId?.[row.id] || [],
         };
       }),
     };
@@ -1351,7 +1645,7 @@ export async function deleteLocalInvoiceRecord({ orderId, invoiceId }) {
     .eq("id", orderId)
     .single();
 
-  if (orderError) throw orderError;
+  if (orderError) throw buildAppError(orderError);
 
   const status = String(order?.factura_status || "").toLowerCase();
   const hasActiveInvoice = Boolean(order?.facturama_id || order?.factura_uuid) && status !== "cancelada";

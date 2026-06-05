@@ -48,6 +48,7 @@ export function useExpenses() {
 
   const [orderRows, setOrderRows] = useState([]);
   const [expenseRows, setExpenseRows] = useState([]);
+  const [inventoryConsumptionRows, setInventoryConsumptionRows] = useState([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState("");
@@ -80,10 +81,12 @@ export function useExpenses() {
 
       setOrderRows(data.orderRows);
       setExpenseRows(data.expenseRows);
+      setInventoryConsumptionRows(data.inventoryConsumptionRows || []);
     } catch (err) {
       console.error("Error cargando ganancias y gastos:", err);
       setOrderRows([]);
       setExpenseRows([]);
+      setInventoryConsumptionRows([]);
       showMessage(
         "No se pudieron cargar los datos financieros",
         err.message || "Revisa tu conexión o intenta de nuevo.",
@@ -141,8 +144,9 @@ export function useExpenses() {
     return buildPreparedRows({
       orderRows,
       expenseRows,
+      inventoryConsumptionRows,
     });
-  }, [orderRows, expenseRows]);
+  }, [orderRows, expenseRows, inventoryConsumptionRows]);
 
   const filteredRows = useMemo(() => {
     const from = dateFrom ? startOfLocalDay(dateFrom) : null;
@@ -165,6 +169,7 @@ export function useExpenses() {
         item.concepto,
         item.folio,
         item.referencia,
+        item.pagoReferencia,
         item.cliente,
         item.cliente_email,
         item.cliente_telefono,
@@ -246,7 +251,22 @@ export function useExpenses() {
   const summary = useMemo(() => {
     const realizedOrderRows = filteredRows.filter((item) => item.realizada);
 
-    const realizedGrossProfit = realizedOrderRows.reduce(
+    const ventaRealSinIva = realizedOrderRows.reduce(
+      (acc, item) => acc + parseNumberish(item.ventaRealSinIva),
+      0,
+    );
+
+    const montoPagado = realizedOrderRows.reduce(
+      (acc, item) => acc + parseNumberish(item.montoPagado),
+      0,
+    );
+
+    const costoMercanciaReal = realizedOrderRows.reduce(
+      (acc, item) => acc + parseNumberish(item.costoMercanciaReal),
+      0,
+    );
+
+    const utilidadBrutaReal = realizedOrderRows.reduce(
       (acc, item) => acc + parseNumberish(item.utilidadBruta),
       0,
     );
@@ -264,9 +284,12 @@ export function useExpenses() {
     const expensesTotal = linkedExpensesTotal + standaloneExpensesTotal;
 
     return {
-      orderTotal: realizedGrossProfit,
+      ventaRealSinIva,
+      montoPagado,
+      costoMercanciaReal,
+      orderTotal: utilidadBrutaReal,
       expensesTotal,
-      netTotal: realizedGrossProfit - expensesTotal,
+      netTotal: utilidadBrutaReal - expensesTotal,
       withExpenses: filteredRows.filter((item) => item.gastos > 0).length,
       realizedOrders: realizedOrderRows.length,
       pendingOrders: filteredRows.filter((item) => !item.realizada).length,
@@ -365,9 +388,11 @@ export function useExpenses() {
       Folio: item.folio,
       Cliente: item.cliente,
       Fecha: item.fecha,
-      "Venta total": parseNumberish(item.totalPedido),
-      "Costo total": parseNumberish(item.costoPedido),
-      "Utilidad bruta realizada": parseNumberish(item.utilidadBruta),
+      "Venta estimada con IVA": parseNumberish(item.totalPedido),
+      "Venta real sin IVA": parseNumberish(item.ventaRealSinIva),
+      "Monto pagado": parseNumberish(item.montoPagado),
+      "Costo mercancía real FIFO": parseNumberish(item.costoMercanciaReal),
+      "Utilidad bruta real": parseNumberish(item.utilidadBruta),
       "Gastos asociados": parseNumberish(item.gastos),
       "Ganancia neta": parseNumberish(item.ganancia),
       "Pagado": item.pagado ? "Sí" : "No",
@@ -385,9 +410,11 @@ export function useExpenses() {
       Fecha: item.fecha
         ? formatExpenseDate(item.fecha)
         : formatExpenseDate(item.created_at, { isTimestamp: true }),
-      "Venta total": 0,
-      "Costo total": 0,
-      "Utilidad bruta realizada": 0,
+      "Venta estimada con IVA": 0,
+      "Venta real sin IVA": 0,
+      "Monto pagado": 0,
+      "Costo mercancía real FIFO": 0,
+      "Utilidad bruta real": 0,
       "Gastos asociados": parseNumberish(item.monto),
       "Ganancia neta": -parseNumberish(item.monto),
       "Pagado": "",

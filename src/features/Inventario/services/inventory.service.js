@@ -67,6 +67,26 @@ const INVENTORY_MOVEMENT_SELECT = `
   )
 `;
 
+function getInventoryErrorMessage(error, fallback = "No se pudo completar la operación de inventario.") {
+  const raw = String(error?.message || error?.details || error?.hint || error || "").trim();
+  const lower = raw.toLowerCase();
+
+  if (!raw) return fallback;
+  if (lower.includes("inventario insuficiente")) return raw;
+  if (lower.includes("esta entrega ya tiene inventario consumido")) return "Esta entrega ya descontó stock. No se puede descontar dos veces.";
+  if (lower.includes("entrega no encontrada")) return "No se encontró la entrega. Actualiza la página y vuelve a intentar.";
+  if (lower.includes("permission denied") || lower.includes("row-level security")) return "No tienes permisos para modificar inventario. Revisa tu sesión o las políticas RLS.";
+  if (lower.includes("foreign key")) return "No se pudo relacionar el movimiento con el pedido, entrega, lote o factura. Algún registro fue eliminado o no existe.";
+
+  return raw || fallback;
+}
+
+function buildInventoryError(error, fallback) {
+  const nextError = new Error(getInventoryErrorMessage(error, fallback));
+  nextError.originalError = error;
+  return nextError;
+}
+
 function toNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -74,6 +94,21 @@ function toNumber(value) {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeDateFilter(value) {
+  const text = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+function normalizeEndDate(value) {
+  const date = normalizeDateFilter(value);
+  return date ? `${date}T23:59:59.999` : null;
+}
+
+function normalizeStartDate(value) {
+  const date = normalizeDateFilter(value);
+  return date ? `${date}T00:00:00.000` : null;
 }
 
 function getFileExtension(file) {
@@ -133,10 +168,12 @@ export async function uploadInventoryFile(file, folio) {
   };
 }
 
-export async function fetchInventorySummary({ search = "", page = 0, pageSize = 20 } = {}) {
+export async function fetchInventorySummary({ search = "", page = 0, pageSize = 20, dateFrom = "", dateTo = "" } = {}) {
   const from = page * pageSize;
   const to = from + pageSize - 1;
   const term = String(search || "").trim();
+  const fromDate = normalizeDateFilter(dateFrom);
+  const toDate = normalizeDateFilter(dateTo);
 
   let query = supabase
     .from("inventario_existencias")
@@ -147,6 +184,14 @@ export async function fetchInventorySummary({ search = "", page = 0, pageSize = 
 
   if (term) {
     query = query.or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%,descripcion.ilike.%${term}%`);
+  }
+
+  if (fromDate) {
+    query = query.gte("ultima_compra", fromDate);
+  }
+
+  if (toDate) {
+    query = query.lte("ultima_compra", toDate);
   }
 
   const { data, error, count } = await query;
@@ -160,12 +205,25 @@ export async function fetchInventorySummary({ search = "", page = 0, pageSize = 
   };
 }
 
-export async function fetchInventoryEntries() {
-  const { data, error } = await supabase
+export async function fetchInventoryEntries({ dateFrom = "", dateTo = "" } = {}) {
+  const fromDate = normalizeDateFilter(dateFrom);
+  const toDate = normalizeDateFilter(dateTo);
+
+  let query = supabase
     .from("inventario_entradas")
     .select(INVENTORY_ENTRY_SELECT)
     .order("fecha_compra", { ascending: false })
     .order("created_at", { ascending: false });
+
+  if (fromDate) {
+    query = query.gte("fecha_compra", fromDate);
+  }
+
+  if (toDate) {
+    query = query.lte("fecha_compra", toDate);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
   return data || [];
@@ -182,7 +240,10 @@ export async function fetchInventoryEntryById(entryId) {
   return data;
 }
 
-export async function fetchInventoryMovements({ productId = null, limit = 300 } = {}) {
+export async function fetchInventoryMovements({ productId = null, limit = 300, dateFrom = "", dateTo = "" } = {}) {
+  const fromDateTime = normalizeStartDate(dateFrom);
+  const toDateTime = normalizeEndDate(dateTo);
+
   let query = supabase
     .from("inventario_movimientos")
     .select(INVENTORY_MOVEMENT_SELECT)
@@ -191,6 +252,14 @@ export async function fetchInventoryMovements({ productId = null, limit = 300 } 
 
   if (productId) {
     query = query.eq("producto_id", productId);
+  }
+
+  if (fromDateTime) {
+    query = query.gte("created_at", fromDateTime);
+  }
+
+  if (toDateTime) {
+    query = query.lte("created_at", toDateTime);
   }
 
   const { data, error } = await query;
@@ -420,7 +489,7 @@ export async function consumeInventoryForDelivery(deliveryId) {
     p_entrega_id: deliveryId,
   });
 
-  if (error) throw error;
+  if (error) throw buildInventoryError(error, "No se pudo descontar inventario para esta entrega.");
   return data;
 }
 
@@ -431,7 +500,7 @@ export async function revertInventoryForDelivery(deliveryId) {
     p_entrega_id: deliveryId,
   });
 
-  if (error) throw error;
+  if (error) throw buildInventoryError(error, "No se pudo revertir el inventario de esta entrega.");
   return data;
 }
 

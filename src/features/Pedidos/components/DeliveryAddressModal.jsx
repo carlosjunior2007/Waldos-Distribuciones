@@ -1,6 +1,7 @@
 import { MapPin, Save } from "lucide-react";
 import Modal from "../../../components/ui/Modal";
 import { capitalizeFirstLetter, getAddressLabel } from "../order.helpers";
+import { Field, ModalFooter, ModalSection, inputClass, modalBodyClass, primaryButtonClass, secondaryButtonClass } from "./ModalUI";
 
 export default function DeliveryAddressModal({ open, order, onClose }) {
   if (!order) return null;
@@ -10,38 +11,41 @@ export default function DeliveryAddressModal({ open, order, onClose }) {
       open={open}
       onClose={onClose}
       title={`Direcciones de entrega · ${order.folio}`}
-      subtitle="Direcciones guardadas por cliente para usarlas en pedidos y entregas futuras."
+      subtitle="Administra direcciones guardadas por cliente para pedidos y entregas futuras."
       width="max-w-5xl"
     >
-      <div className="space-y-5 p-5 md:p-6">
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {order.addresses.map((address) => (
-            <article key={address.id} className="rounded-[24px] border border-border bg-background p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-bold text-text-primary">{address.nombre}</p>
-                  <p className="mt-1 text-sm text-text-secondary">{getAddressLabel(address)}</p>
-                  <p className="mt-1 text-xs text-text-muted">
-                    {address.contacto_nombre} · {address.contacto_telefono}
-                  </p>
-                </div>
+      <div className={modalBodyClass}>
+        <ModalSection title="Direcciones guardadas" description="Estas direcciones se pueden usar al programar una entrega.">
+          {order.addresses?.length ? (
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {order.addresses.map((address) => (
+                <article key={address.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-black text-slate-950">{address.nombre}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{getAddressLabel(address)}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        {address.contacto_nombre || "Sin contacto"} · {address.contacto_telefono || "Sin teléfono"}
+                      </p>
+                    </div>
 
-                {address.principal ? (
-                  <span className="rounded-full border border-success-100 bg-success-50 px-3 py-1 text-xs font-semibold text-success-700">
-                    Principal
-                  </span>
-                ) : null}
-              </div>
-            </article>
-          ))}
-        </section>
+                    {address.principal || address.es_principal ? (
+                      <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                        Principal
+                      </span>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </section>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+              Este cliente todavía no tiene direcciones guardadas.
+            </div>
+          )}
+        </ModalSection>
 
-        <section className="rounded-[24px] border border-border bg-surface-soft p-4">
-          <div className="mb-4 flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-accent-500" />
-            <h4 className="text-sm font-bold text-text-primary">Nueva dirección del cliente</h4>
-          </div>
-
+        <ModalSection icon={MapPin} title="Nueva dirección del cliente" description="Captura una dirección clara para que futuras entregas sean más rápidas.">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Input label="Nombre" placeholder="Sucursal, almacén, dirección principal..." />
             <Input label="Contacto" placeholder="Nombre de quien recibe" />
@@ -52,17 +56,14 @@ export default function DeliveryAddressModal({ open, order, onClose }) {
             <Input label="Dirección" placeholder="Calle, número, colonia..." className="md:col-span-2" />
             <Input label="Notas" placeholder="Indicaciones de entrega..." className="md:col-span-2" />
           </div>
-        </section>
+        </ModalSection>
 
-        <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} className="h-11 rounded-2xl border border-border px-4 text-sm font-semibold">
-            Cancelar
+        <ModalFooter>
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancelar</button>
+          <button type="button" className={primaryButtonClass}>
+            <Save className="h-4 w-4" /> Guardar en cliente
           </button>
-          <button type="button" className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white">
-            <Save className="h-4 w-4" />
-            Guardar en cliente
-          </button>
-        </div>
+        </ModalFooter>
       </div>
     </Modal>
   );
@@ -71,8 +72,7 @@ export default function DeliveryAddressModal({ open, order, onClose }) {
 function Input({ label, placeholder, className = "" }) {
   const shouldCapitalize = !["Teléfono", "Código postal"].includes(label);
   return (
-    <label className={`space-y-2 ${className}`}>
-      <span className="text-sm font-semibold text-text-primary">{label}</span>
+    <Field label={label} className={className}>
       <input
         placeholder={placeholder}
         onChange={(event) => {
@@ -80,8 +80,8 @@ function Input({ label, placeholder, className = "" }) {
             event.currentTarget.value = capitalizeFirstLetter(event.currentTarget.value);
           }
         }}
-        className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none focus:border-primary-400"
+        className={inputClass}
       />
-    </label>
+    </Field>
   );
 }

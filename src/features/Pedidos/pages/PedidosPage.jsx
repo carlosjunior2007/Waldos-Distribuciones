@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Package } from "lucide-react";
 import { createPortal } from "react-dom";
 
@@ -8,10 +9,9 @@ import { useOrders } from "../hooks/useOrders";
 
 import OrdersStats from "../components/OrdersStats";
 import OrdersToolbar from "../components/OrdersToolbar";
-import OrdersTable from "../components/OrdersTable";
-import OrdersMobileList from "../components/OrdersMobileList";
+import OrdersCards from "../components/OrdersCards";
 import OrdersPagination from "../components/OrdersPagination";
-import OrderDetailsModal from "../components/OrderDetailsModal";
+import PedidoDetallePage from "./PedidoDetallePage";
 import OrderFormModal from "../components/OrderFormModal";
 import DeliveryFormModal from "../components/DeliveryFormModal";
 import DeliveriesModal from "../components/DeliveriesModal";
@@ -21,6 +21,11 @@ import InvoicePreviewModal from "../components/InvoicePreviewModal";
 
 export default function PedidosPage() {
   const orders = useOrders();
+  const [detailOrder, setDetailOrder] = useState(null);
+
+  const visibleDetailOrder = detailOrder
+    ? orders.orders.find((order) => order.id === detailOrder.id) || detailOrder
+    : null;
 
   return (
     <section className="space-y-6">
@@ -45,16 +50,6 @@ export default function PedidosPage() {
         onClose={orders.closeConfirmDialog}
         onConfirm={orders.confirmGenericAction}
       />
-      <OrderDetailsModal
-        open={orders.modal === "details"}
-        order={orders.selectedOrder}
-        onClose={orders.closeModal}
-        onEdit={(order) => orders.openModal("form", order)}
-        onScheduleDelivery={(order) => orders.openModal("delivery", order)}
-        onViewDeliveries={(order) => orders.openModal("deliveries", order)}
-        onDownloadCounterReceipt={orders.downloadCounterReceipt}
-      />
-
       <OrderFormModal
         open={orders.modal === "form"}
         order={orders.selectedOrder}
@@ -108,7 +103,20 @@ export default function PedidosPage() {
         onDeleteLocalInvoice={orders.deleteLocalInvoice}
       />
 
-      <OrdersStats stats={orders.stats} />
+      {visibleDetailOrder ? (
+        <PedidoDetallePage
+          order={visibleDetailOrder}
+          onBack={() => setDetailOrder(null)}
+          onEdit={(order) => orders.openModal("form", order)}
+          onScheduleDelivery={(order) => orders.openModal("delivery", order)}
+          onViewDeliveries={(order) => orders.openModal("deliveries", order)}
+          onDownloadCounterReceipt={orders.downloadCounterReceipt}
+          onDownloadPdf={orders.downloadOrderPdf}
+          onOpenInvoice={(order) => orders.openModal("invoice", order)}
+        />
+      ) : (
+        <>
+          <OrdersStats stats={orders.stats} />
 
       {orders.loading ? (
         <section className="rounded-[28px] border border-border bg-surface p-8 text-center text-sm font-semibold text-text-secondary shadow-[var(--shadow-soft)]">
@@ -147,26 +155,9 @@ export default function PedidosPage() {
           />
         ) : !orders.loading ? (
           <>
-            <OrdersTable
+            <OrdersCards
               orders={orders.paginatedOrders}
-              onView={(order) => orders.openModal("details", order)}
-              onEdit={(order) => orders.openModal("form", order)}
-              onScheduleDelivery={(order) => orders.openModal("delivery", order)}
-              onScheduleRecurringOrder={(order) => orders.openModal("recurring", order)}
-              onDeactivateRecurringOrder={orders.deactivateRecurring}
-              onViewDeliveries={(order) => orders.openModal("deliveries", order)}
-              onDownloadCounterReceipt={orders.downloadCounterReceipt}
-              onDownloadPdf={orders.downloadOrderPdf}
-              onDownloadSuppliersPdf={orders.downloadOrderSuppliersPdf}
-              onOpenInvoice={(order) => orders.openModal("invoice", order)}
-              onCancel={orders.cancelSelectedOrder}
-              onRestore={orders.restoreSelectedOrder}
-              onDelete={orders.requestDeleteCancelledOrder}
-            />
-
-            <OrdersMobileList
-              orders={orders.paginatedOrders}
-              onView={(order) => orders.openModal("details", order)}
+              onView={(order) => setDetailOrder(order)}
               onEdit={(order) => orders.openModal("form", order)}
               onScheduleDelivery={(order) => orders.openModal("delivery", order)}
               onScheduleRecurringOrder={(order) => orders.openModal("recurring", order)}
@@ -193,6 +184,8 @@ export default function PedidosPage() {
           </>
         ) : null}
       </section>
+        </>
+      )}
     </section>
   );
 }

@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  CalendarDays,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  RotateCcw,
-  SlidersHorizontal,
-} from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
 import SearchInput from "../../../components/ui/SearchInput";
 import FilterPill from "../../../components/ui/FilterPill";
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "../order.constants";
@@ -26,49 +18,6 @@ const MONTHS = [
   "Nov",
   "Dic",
 ];
-
-function getMonthValue(offset = 0) {
-  const today = new Date();
-  const date = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function parseMonthValue(value) {
-  const today = new Date();
-
-  if (!value || value === "todos") {
-    return {
-      year: today.getFullYear(),
-      monthIndex: today.getMonth(),
-    };
-  }
-
-  const [year, month] = String(value).split("-").map(Number);
-
-  if (!year || !month) {
-    return {
-      year: today.getFullYear(),
-      monthIndex: today.getMonth(),
-    };
-  }
-
-  return {
-    year,
-    monthIndex: month - 1,
-  };
-}
-
-function buildMonthValue(year, monthIndex) {
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-}
-
-function getSelectedMonthLabel(value) {
-  if (!value || value === "todos") return "Todos los meses";
-
-  const { year, monthIndex } = parseMonthValue(value);
-  return `${MONTHS[monthIndex] || "Mes"} ${year}`;
-}
 
 export default function OrdersToolbar({
   search,
@@ -98,42 +47,40 @@ export default function OrdersToolbar({
   }
 
   return (
-    <div className="border-b border-border bg-surface p-4 md:p-5">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+    <div className="border-b border-border bg-surface p-4 md:p-6">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <SearchInput
           value={search}
           onChange={setSearch}
           placeholder="Buscar pedido, cliente, tracking o cotización..."
-          className="w-full xl:max-w-lg"
+          className="w-full xl:max-w-xl"
         />
 
         <button
           type="button"
           onClick={onCreateManualOrder}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-4 text-sm font-semibold text-white transition hover:bg-accent-600"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-accent-500 px-5 text-sm font-black text-white transition hover:bg-accent-600"
         >
           <Plus className="h-4 w-4" />
           Nuevo pedido
         </button>
       </div>
 
-      <section className="mt-5 rounded-[26px] border border-border bg-background p-5 md:p-6">
-        <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(620px,760px)] 2xl:items-start">
-          <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start">
-            <div className="flex shrink-0 items-center gap-3 lg:w-[210px]">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-surface-soft text-text-muted">
+      <section className="mt-5 rounded-[28px] border border-border bg-background p-4 md:p-5">
+        <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(620px,0.9fr)_auto] 2xl:items-start">
+          <div className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)] lg:items-start">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface-soft text-text-muted">
                 <SlidersHorizontal className="h-4 w-4" />
               </span>
 
               <div>
                 <p className="text-sm font-black text-text-primary">Filtros</p>
-                <p className="mt-0.5 text-xs leading-5 text-text-muted">
-                  Refina la lista sin salir de pedidos.
-                </p>
+                <p className="text-xs leading-5 text-text-muted">Lista limpia, sin tabla gigante.</p>
               </div>
             </div>
 
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3 pt-0.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
               {ORDER_STATUS_OPTIONS.map(([value, label]) => (
                 <FilterPill
                   key={value}
@@ -145,71 +92,83 @@ export default function OrdersToolbar({
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-end">
-            <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 md:grid-cols-3 lg:max-w-[760px]">
-              <MonthPicker
-                value={monthFilter}
-                onChange={setMonthFilter}
-                options={monthOptions}
-              />
+          <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
+            <MonthPopover
+              value={monthFilter}
+              onChange={setMonthFilter}
+              options={monthOptions}
+            />
 
-              <CompactSelect
-                label="Pago"
-                value={paymentFilter}
-                onChange={setPaymentFilter}
-                options={[
-                  { value: "todos", label: "Todos los pagos" },
-                  ...PAYMENT_STATUS_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                  })),
-                ]}
-              />
+            <CompactSelect
+              label="Pago"
+              value={paymentFilter}
+              onChange={setPaymentFilter}
+              options={[
+                { value: "todos", label: "Todos los pagos" },
+                ...PAYMENT_STATUS_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              ]}
+            />
 
-              <CompactSelect
-                label="Origen"
-                value={quotationFilter}
-                onChange={setQuotationFilter}
-                options={[
-                  { value: "todos", label: "Todos los pedidos" },
-                  { value: "con_cotizacion", label: "Con cotización" },
-                  { value: "sin_cotizacion", label: "Sin cotización" },
-                ]}
-              />
-            </div>
-
-            {hasFilters ? (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-border bg-surface px-4 text-xs font-bold text-text-secondary transition hover:bg-surface-soft hover:text-text-primary"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Limpiar
-              </button>
-            ) : null}
+            <CompactSelect
+              label="Origen"
+              value={quotationFilter}
+              onChange={setQuotationFilter}
+              options={[
+                { value: "todos", label: "Todos los pedidos" },
+                { value: "con_cotizacion", label: "Con cotización" },
+                { value: "sin_cotizacion", label: "Sin cotización" },
+              ]}
+            />
           </div>
+
+          {hasFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-border bg-surface px-4 text-xs font-black text-text-secondary transition hover:bg-surface-soft hover:text-text-primary 2xl:justify-self-end"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Limpiar filtros
+            </button>
+          ) : null}
         </div>
       </section>
     </div>
   );
 }
 
-function MonthPicker({ value, onChange, options = [] }) {
+function MonthPopover({ value, onChange, options = [] }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
-  const currentMonth = getMonthValue(0);
-  const previousMonth = getMonthValue(-1);
-  const [pickerYear, setPickerYear] = useState(() => parseMonthValue(value).year);
 
-  const selected = useMemo(() => parseMonthValue(value), [value]);
-  const availableMonths = useMemo(() => {
-    return new Set(
-      options
-        .map((option) => option.value)
-        .filter((optionValue) => optionValue && optionValue !== "todos"),
-    );
+  const monthsWithOrders = useMemo(() => {
+    return new Set(options.map((option) => option.value).filter((item) => item && item !== "todos"));
   }, [options]);
+
+  const today = useMemo(() => new Date(), []);
+
+  const selectedDate = useMemo(() => {
+    if (!value || value === "todos") return null;
+    const [year, month] = value.split("-").map(Number);
+    if (!year || !month) return null;
+    return { year, monthIndex: month - 1 };
+  }, [value]);
+
+  const [visibleYear, setVisibleYear] = useState(
+    selectedDate?.year || today.getFullYear(),
+  );
+
+  useEffect(() => {
+    if (selectedDate?.year) setVisibleYear(selectedDate.year);
+  }, [selectedDate?.year]);
+
+  const selectedLabel = useMemo(() => {
+    if (!selectedDate) return "Todos los meses";
+    return `${MONTHS[selectedDate.monthIndex]} ${selectedDate.year}`;
+  }, [selectedDate]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -233,114 +192,94 @@ function MonthPicker({ value, onChange, options = [] }) {
     };
   }, [open]);
 
-  useEffect(() => {
-    if (value !== "todos") {
-      setPickerYear(parseMonthValue(value).year);
-    }
-  }, [value]);
-
-  function selectMonth(monthIndex) {
-    onChange(buildMonthValue(pickerYear, monthIndex));
+  function setMonth(year, monthIndex) {
+    onChange(`${year}-${String(monthIndex + 1).padStart(2, "0")}`);
     setOpen(false);
   }
 
-  function selectQuickMonth(nextValue) {
-    onChange(nextValue);
-    if (nextValue !== "todos") {
-      setPickerYear(parseMonthValue(nextValue).year);
-    }
+  function setCurrentMonth() {
+    setMonth(today.getFullYear(), today.getMonth());
+  }
+
+  function setPreviousMonth() {
+    const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    setMonth(previous.getFullYear(), previous.getMonth());
+  }
+
+  function clearMonth() {
+    onChange("todos");
+    setOpen(false);
   }
 
   return (
     <div ref={wrapperRef} className="relative">
-      <span className="pointer-events-none absolute left-3 top-1.5 z-10 text-[10px] font-black uppercase tracking-[0.14em] text-text-muted">
+      <span className="pointer-events-none absolute left-4 top-2 z-10 text-[10px] font-black uppercase tracking-[0.14em] text-text-muted">
         Mes
       </span>
 
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`flex h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 pb-1.5 pt-5 text-left text-sm font-bold outline-none transition ${
+        className={`flex h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 pb-2 pt-6 text-left text-sm font-black outline-none transition ${
           open || value !== "todos"
             ? "border-primary-300 bg-primary-50 text-primary-800"
             : "border-border bg-surface text-text-primary hover:border-border-strong"
         }`}
-        title="Elegir mes"
       >
-        <span className="truncate">{getSelectedMonthLabel(value)}</span>
+        <span className="truncate">{selectedLabel}</span>
         <CalendarDays className="h-4 w-4 shrink-0 text-text-muted" />
       </button>
 
       {open ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+12px)] z-[80] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_18px_50px_rgba(15,23,42,0.18)] md:right-auto md:w-[280px]">
-          <div className="grid grid-cols-3 gap-2 border-b border-border bg-surface p-3">
-            <QuickMonthButton
-              active={value === currentMonth}
-              onClick={() => selectQuickMonth(currentMonth)}
-            >
-              Este mes
-            </QuickMonthButton>
-
-            <QuickMonthButton
-              active={value === previousMonth}
-              onClick={() => selectQuickMonth(previousMonth)}
-            >
-              Mes pasado
-            </QuickMonthButton>
-
-            <QuickMonthButton
-              active={value === "todos"}
-              onClick={() => selectQuickMonth("todos")}
-            >
-              Todos
-            </QuickMonthButton>
+        <div className="absolute left-0 top-[calc(100%+12px)] z-[80] w-[320px] max-w-[calc(100vw-2rem)] rounded-[24px] border border-border bg-surface p-3 shadow-[0_24px_70px_rgba(15,23,42,0.20)]">
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            <ShortcutButton label="Este mes" onClick={setCurrentMonth} />
+            <ShortcutButton label="Mes pasado" onClick={setPreviousMonth} />
+            <ShortcutButton label="Todos" active={value === "todos"} onClick={clearMonth} />
           </div>
 
-          <div className="flex h-10 items-center justify-between border-b border-border bg-surface-soft px-2">
+          <div className="flex items-center justify-between border-y border-border px-1 py-2">
             <button
               type="button"
-              onClick={() => setPickerYear((year) => year - 1)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-text-muted transition hover:bg-surface hover:text-text-primary"
+              onClick={() => setVisibleYear((year) => year - 1)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-text-muted transition hover:bg-surface-soft hover:text-text-primary"
               aria-label="Año anterior"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
 
-            <span className="text-sm font-black text-text-primary">{pickerYear}</span>
+            <p className="text-sm font-black text-text-primary">{visibleYear}</p>
 
             <button
               type="button"
-              onClick={() => setPickerYear((year) => year + 1)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-text-muted transition hover:bg-surface hover:text-text-primary"
+              onClick={() => setVisibleYear((year) => year + 1)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-text-muted transition hover:bg-surface-soft hover:text-text-primary"
               aria-label="Año siguiente"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 p-4">
-            {MONTHS.map((label, index) => {
-              const monthValue = buildMonthValue(pickerYear, index);
-              const active =
-                value !== "todos" &&
-                selected.year === pickerYear &&
-                selected.monthIndex === index;
-              const hasOrders = availableMonths.has(monthValue);
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {MONTHS.map((month, index) => {
+              const monthValue = `${visibleYear}-${String(index + 1).padStart(2, "0")}`;
+              const active = value === monthValue;
+              const hasOrders = monthsWithOrders.has(monthValue);
 
               return (
                 <button
-                  key={label}
+                  key={monthValue}
                   type="button"
-                  onClick={() => selectMonth(index)}
-                  className={`relative h-10 rounded-xl text-sm font-bold transition ${
+                  onClick={() => setMonth(visibleYear, index)}
+                  className={`relative h-11 rounded-xl text-sm font-black transition ${
                     active
                       ? "bg-primary-600 text-white shadow-sm"
-                      : "text-text-secondary hover:bg-surface-soft hover:text-text-primary"
+                      : "text-text-primary hover:bg-surface-soft"
                   }`}
                 >
-                  {label}
+                  {month}
                   {hasOrders && !active ? (
-                    <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-primary-400" />
+                    <span className="absolute bottom-1.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-primary-500" />
                   ) : null}
                 </button>
               );
@@ -352,18 +291,18 @@ function MonthPicker({ value, onChange, options = [] }) {
   );
 }
 
-function QuickMonthButton({ active, onClick, children }) {
+function ShortcutButton({ label, active = false, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex h-8 items-center justify-center rounded-xl px-2 text-[11px] font-black transition ${
+      className={`h-9 rounded-xl px-2 text-xs font-black transition ${
         active
           ? "bg-primary-600 text-white"
-          : "text-text-secondary hover:bg-surface-soft hover:text-text-primary"
+          : "bg-surface-soft text-text-primary hover:bg-primary-50 hover:text-primary-700"
       }`}
     >
-      {children}
+      {label}
     </button>
   );
 }
@@ -371,14 +310,14 @@ function QuickMonthButton({ active, onClick, children }) {
 function CompactSelect({ label, value, onChange, options = [] }) {
   return (
     <label className="group relative block">
-      <span className="pointer-events-none absolute left-3 top-1.5 z-10 text-[10px] font-black uppercase tracking-[0.14em] text-text-muted">
+      <span className="pointer-events-none absolute left-4 top-2 z-10 text-[10px] font-black uppercase tracking-[0.14em] text-text-muted">
         {label}
       </span>
 
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full appearance-none rounded-2xl border border-border bg-surface px-4 pb-1.5 pt-5 text-sm font-bold text-text-primary outline-none transition hover:border-border-strong focus:border-primary-400"
+        className="h-14 w-full appearance-none rounded-2xl border border-border bg-surface px-4 pb-2 pt-6 text-sm font-black text-text-primary outline-none transition hover:border-border-strong focus:border-primary-400"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -387,7 +326,7 @@ function CompactSelect({ label, value, onChange, options = [] }) {
         ))}
       </select>
 
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary-500" />
+      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary-500" />
     </label>
   );
 }

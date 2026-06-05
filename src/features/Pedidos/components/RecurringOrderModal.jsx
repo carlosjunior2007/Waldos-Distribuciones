@@ -164,10 +164,10 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
       subtitle={order?.is_recurrent ? "Edita la regla activa de este pedido." : "Crea una regla para repetir este pedido."}
       width="max-w-6xl"
     >
-      <form onSubmit={handleSubmit} className="bg-surface-soft p-4 md:p-5">
+      <form onSubmit={handleSubmit} className="bg-[#f8fafc] p-5 md:p-7">
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
           <div className="space-y-4">
-            <section className="rounded-[22px] border border-border bg-background p-4 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <SummaryItem label="Cliente" value={order?.cliente_nombre || "Cliente seleccionado"} />
                 <SummaryItem label="Pedido base" value={order?.folio || "Pedido actual"} />
@@ -175,7 +175,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
               </div>
             </section>
 
-            <section className="rounded-[22px] border border-border bg-background p-4 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <SectionTitle icon={<CalendarDays className="h-5 w-5" />} title="Repetición" />
 
               <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[260px_1fr]">
@@ -200,7 +200,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
                   />
                 </div>
 
-                <div className="rounded-2xl border border-border bg-surface p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   {frequency === "monthly" && (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-[170px_1fr] md:items-end">
                       <Field label="Día del mes">
@@ -232,7 +232,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
                       {customUnit === "days" && <InlineNote text={`Se repetirá cada ${customEvery || "—"} día${Number(customEvery) === 1 ? "" : "s"}.`} />}
 
                       {customUnit === "weeks" && (
-                        <div className="rounded-2xl border border-border bg-background p-3">
+                        <div className="rounded-xl border border-slate-200 bg-white p-3">
                           <WeekDaysPicker selectedWeekDays={selectedWeekDays} onToggle={toggleWeekDay} />
                         </div>
                       )}
@@ -251,16 +251,16 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
               </div>
             </section>
 
-            <section className="rounded-[22px] border border-border bg-background p-4 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <SectionTitle icon={<CalendarDays className="h-5 w-5" />} title="Periodo" />
 
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_180px]">
                 <Field label="Inicio calculado">
-                  <input type="date" className={`${inputClass} bg-surface-soft font-semibold`} value={startDate} readOnly />
+                  <input type="date" className={`${inputClass} bg-slate-50 font-semibold`} value={startDate} readOnly />
                 </Field>
 
                 <Field label="Fin calculado">
-                  <input type="date" className={`${inputClass} bg-surface-soft font-semibold`} value={endDate} readOnly />
+                  <input type="date" className={`${inputClass} bg-slate-50 font-semibold`} value={endDate} readOnly />
                 </Field>
 
                 <Field label="Días de entrega">
@@ -280,7 +280,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
               </p>
             </section>
 
-            <section className="rounded-[22px] border border-border bg-background p-4 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <SectionTitle icon={<ClipboardCheck className="h-5 w-5" />} title="Acción" />
 
               <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -309,7 +309,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
             </section>
 
             {systemAction === "reminder_only" && (
-              <section className="rounded-[22px] border border-border bg-background p-4 shadow-sm">
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <SectionTitle icon={<Bell className="h-5 w-5" />} title="Correo de recordatorio" />
                 <div className="mt-4 rounded-2xl border border-primary-100 bg-primary-50 p-3 text-sm font-semibold text-primary-900">
                   Se enviará aviso a juan.osuna@waldodistribuciones.com y contacto@waldodistribuciones.com.
@@ -318,7 +318,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
             )}
 
             {systemAction !== "reminder_only" && (
-              <section className="rounded-[22px] border border-border bg-background p-4 shadow-sm">
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <SectionTitle icon={<CopyCheck className="h-5 w-5" />} title="Productos" />
                   <div className="flex gap-2">
@@ -327,18 +327,18 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
                   </div>
                 </div>
 
-                <div className="mt-4 overflow-hidden rounded-2xl border border-border">
+                <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
                   <div className="overflow-x-auto">
                     <table className="min-w-[720px] w-full text-sm">
-                      <thead className="bg-surface-soft">
-                        <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                      <thead className="bg-slate-50">
+                        <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
                           <th className="px-4 py-3">Producto</th>
                           <th className="px-4 py-3 text-right">Cantidad</th>
                           <th className="px-4 py-3 text-right">Precio</th>
                         </tr>
                       </thead>
 
-                      <tbody className="divide-y divide-border bg-surface">
+                      <tbody className="divide-y divide-border bg-white">
                         {products.map((item) => (
                           <tr key={item.id} className={Number(quantities[item.id] || 0) > 0 ? "bg-primary-50/30" : ""}>
                             <td className="px-4 py-3">
@@ -352,7 +352,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
                                 step="1"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
-                                className="ml-auto h-10 w-28 rounded-xl border border-border bg-background px-3 text-right text-sm font-semibold text-text-primary outline-none focus:border-primary-400"
+                                className="ml-auto h-10 w-28 rounded-xl border border-slate-200 bg-white px-3 text-right text-sm font-semibold text-text-primary outline-none focus:border-primary-400"
                                 value={quantities[item.id] ?? 0}
                                 onChange={(event) => updateQuantity(item.id, event.target.value)}
                               />
@@ -368,7 +368,7 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
             )}
           </div>
 
-          <aside className="h-fit rounded-[22px] border border-border bg-background p-4 shadow-sm xl:sticky xl:top-4">
+          <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-4">
             <h4 className="text-sm font-bold text-text-primary">Resumen</h4>
             <div className="mt-4 space-y-3">
               <ReviewRow label="Cliente" value={order?.cliente_nombre || "Cliente seleccionado"} />
@@ -388,8 +388,8 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
           </aside>
         </div>
 
-        <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} className="h-11 rounded-2xl border border-border bg-background px-4 text-sm font-semibold text-text-secondary hover:bg-surface">
+        <div className="mt-5 flex flex-col-reverse gap-3 sticky bottom-0 z-10 -mx-5 -mb-5 mt-6 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur md:-mx-7 md:-mb-7 md:px-7 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-text-secondary hover:bg-white">
             Cancelar
           </button>
 
@@ -404,15 +404,15 @@ export default function RecurringOrderModal({ open, order, saving = false, onClo
 }
 
 const inputClass =
-  "h-12 w-full rounded-2xl border border-border bg-background px-4 text-sm text-text-primary outline-none focus:border-primary-400 disabled:cursor-not-allowed disabled:opacity-70";
+  "h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-text-primary outline-none focus:border-primary-400 disabled:cursor-not-allowed disabled:opacity-70";
 
 const ghostButtonClass =
-  "h-10 rounded-xl border border-border bg-background px-3 text-sm font-semibold text-text-secondary shadow-sm hover:border-primary-300 hover:text-primary-700";
+  "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900";
 
 function SectionTitle({ icon, title }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-surface-soft text-text-primary">{icon}</div>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-50 text-text-primary">{icon}</div>
       <h4 className="text-sm font-bold text-text-primary">{title}</h4>
     </div>
   );
@@ -420,7 +420,7 @@ function SectionTitle({ icon, title }) {
 
 function SummaryItem({ label, value }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-border bg-surface px-4 py-3">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">{label}</p>
       <p className="mt-1 truncate text-sm font-bold text-text-primary">{value}</p>
     </div>
@@ -433,7 +433,7 @@ function RepeatOption({ active, title, detail, onClick }) {
       type="button"
       onClick={onClick}
       className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
-        active ? "border-primary-400 bg-primary-50 shadow-sm" : "border-border bg-surface hover:border-primary-200 hover:bg-surface-soft"
+        active ? "border-primary-400 bg-primary-50 shadow-sm" : "border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50"
       }`}
     >
       <span className={`h-3 w-3 shrink-0 rounded-full ${active ? "bg-primary-500 ring-4 ring-primary-100" : "bg-border"}`} />
@@ -461,7 +461,7 @@ function NumberInput({ value, min = 0, max, onChange }) {
 
 function InlineNote({ text }) {
   return (
-    <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm font-semibold text-text-secondary">
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-text-secondary">
       {text}
     </div>
   );
@@ -488,7 +488,7 @@ function DayChip({ active, children, onClick }) {
       type="button"
       onClick={onClick}
       className={`h-10 min-w-14 rounded-xl border px-4 text-sm font-bold transition ${
-        active ? "border-primary-500 bg-primary-500 text-white" : "border-border bg-background text-text-secondary hover:border-primary-300 hover:text-primary-700"
+        active ? "border-primary-500 bg-primary-500 text-white" : "border-slate-200 bg-white text-text-secondary hover:border-primary-300 hover:text-primary-700"
       }`}
     >
       {children}
@@ -502,10 +502,10 @@ function ActionCard({ active, icon, title, description, onClick }) {
       type="button"
       onClick={onClick}
       className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
-        active ? "border-primary-400 bg-primary-50 shadow-sm" : "border-border bg-surface hover:border-primary-200 hover:bg-surface-soft"
+        active ? "border-primary-400 bg-primary-50 shadow-sm" : "border-slate-200 bg-white hover:border-primary-200 hover:bg-slate-50"
       }`}
     >
-      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${active ? "bg-primary-500 text-white" : "bg-background text-text-secondary"}`}>
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${active ? "bg-primary-500 text-white" : "bg-white text-text-secondary"}`}>
         {icon}
       </span>
       <span>
@@ -518,7 +518,7 @@ function ActionCard({ active, icon, title, description, onClick }) {
 
 function ReviewRow({ label, value }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface px-3 py-2">
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">{label}</p>
       <p className="mt-1 text-sm font-bold text-text-primary">{value}</p>
     </div>

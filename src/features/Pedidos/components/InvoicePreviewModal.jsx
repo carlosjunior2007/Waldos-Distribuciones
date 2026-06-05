@@ -309,7 +309,7 @@ function StatusPill({ children, tone = "slate" }) {
 
 function Section({ title, icon: Icon, children, action }) {
   return (
-    <section className="rounded-[26px] border border-border bg-background p-5 shadow-sm">
+    <section className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {Icon ? (
@@ -328,7 +328,7 @@ function Section({ title, icon: Icon, children, action }) {
 
 function FieldView({ label, value, muted }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface-soft px-4 py-3">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
       <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-text-muted">{label}</p>
       <p className={`mt-2 text-sm font-extrabold ${muted ? "text-text-secondary" : "text-text-primary"}`}>{value || "Pendiente"}</p>
     </div>
@@ -337,7 +337,7 @@ function FieldView({ label, value, muted }) {
 
 function FieldInput({ label, value, onChange, placeholder }) {
   return (
-    <label className="block rounded-2xl border border-border bg-background px-4 py-3">
+    <label className="block rounded-xl border border-slate-200 bg-white px-4 py-3">
       <span className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-text-muted">{label}</span>
       <input
         value={value || ""}
@@ -351,7 +351,7 @@ function FieldInput({ label, value, onChange, placeholder }) {
 
 function FieldSelect({ label, value, onChange, options }) {
   return (
-    <label className="block rounded-2xl border border-border bg-background px-4 py-3">
+    <label className="block rounded-xl border border-slate-200 bg-white px-4 py-3">
       <span className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-text-muted">{label}</span>
       <select
         value={value || ""}
@@ -515,7 +515,7 @@ function CatalogFiscalInput({
           {label}
         </span>
 
-        <div className="rounded-2xl border border-border bg-background px-3 py-2 focus-within:border-primary-400">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:border-primary-400">
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 shrink-0 text-text-muted" />
 
@@ -531,7 +531,7 @@ function CatalogFiscalInput({
               <button
                 type="button"
                 onClick={clearSelection}
-                className="shrink-0 rounded-xl bg-surface-soft px-2.5 py-1.5 text-xs font-bold text-text-secondary transition hover:bg-surface"
+                className="shrink-0 rounded-xl bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-text-secondary transition hover:bg-white"
               >
                 Cambiar
               </button>
@@ -563,13 +563,13 @@ function CatalogFiscalInput({
       ) : null}
 
       {!selected && !loading && !errorMessage && results.length ? (
-        <div className="max-h-44 overflow-y-auto rounded-2xl border border-border bg-surface p-1">
+        <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1">
           {results.map((item, index) => (
             <button
               key={`${item.clave}-${item.descripcion}-${item.codigoPostal}-${index}`}
               type="button"
               onClick={() => selectItem(item)}
-              className="w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-surface-soft"
+              className="w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50"
             >
               <p className="text-sm font-bold text-text-primary">
                 {[item.clave, item.codigoPostal].filter(Boolean)[0] || "Sin clave"}
@@ -587,7 +587,7 @@ function CatalogFiscalInput({
 
 function ActionButton({ icon: Icon, title, description, onClick, disabled, tone = "default" }) {
   const tones = {
-    default: "border-border bg-background text-text-primary hover:border-primary-200 hover:bg-primary-50",
+    default: "border-slate-200 bg-white text-text-primary hover:border-primary-200 hover:bg-primary-50",
     primary: "border-primary-600 bg-primary-700 text-white hover:bg-primary-800",
     danger: "border-rose-100 bg-rose-50 text-rose-700 hover:bg-rose-100",
   };
@@ -642,12 +642,12 @@ function ConfirmBox({ action, onCancel, onConfirm, canceledInvoices = [], select
 
   return (
     <div className="fixed inset-0 z-[120] grid place-items-center bg-black/45 px-4">
-      <div className="w-full max-w-2xl rounded-[28px] border border-border bg-background p-6 shadow-2xl">
+      <div className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
         <h3 className="text-lg font-extrabold text-text-primary">{copy.title}</h3>
         <p className="mt-2 text-sm leading-6 text-text-secondary">{copy.description}</p>
 
         {action?.type === "stamp" && canceledInvoices.length > 0 ? (
-          <div className="mt-5 rounded-2xl border border-border bg-surface-soft p-4">
+          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-extrabold text-text-primary">Relacionar con CFDI cancelado</p>
@@ -658,7 +658,7 @@ function ConfirmBox({ action, onCancel, onConfirm, canceledInvoices = [], select
               <button
                 type="button"
                 onClick={() => onSelectReplacement?.("")}
-                className={`rounded-2xl border px-3 py-2 text-xs font-extrabold transition ${!selectedReplacementUuid ? "border-primary-600 bg-primary-700 text-white" : "border-border bg-background text-text-secondary hover:bg-primary-50"}`}
+                className={`rounded-2xl border px-3 py-2 text-xs font-extrabold transition ${!selectedReplacementUuid ? "border-primary-600 bg-primary-700 text-white" : "border-slate-200 bg-white text-text-secondary hover:bg-primary-50"}`}
               >
                 No relacionar
               </button>
@@ -674,18 +674,18 @@ function ConfirmBox({ action, onCancel, onConfirm, canceledInvoices = [], select
                     key={invoice.id || invoice.uuid || `${title}-${index}`}
                     type="button"
                     onClick={() => onSelectReplacement?.(invoice.uuid)}
-                    className={`w-full rounded-2xl border p-4 text-left transition ${checked ? "border-primary-600 bg-primary-50 ring-2 ring-primary-100" : "border-border bg-background hover:border-primary-200 hover:bg-primary-50/50"}`}
+                    className={`w-full rounded-2xl border p-4 text-left transition ${checked ? "border-primary-600 bg-primary-50 ring-2 ring-primary-100" : "border-slate-200 bg-white hover:border-primary-200 hover:bg-primary-50/50"}`}
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-extrabold text-text-primary">{title}</span>
                           <StatusPill tone="red">Cancelada</StatusPill>
-                          <span className="rounded-full bg-surface-soft px-2 py-1 text-[0.68rem] font-bold text-text-secondary">#{index + 1}</span>
+                          <span className="rounded-full bg-slate-50 px-2 py-1 text-[0.68rem] font-bold text-text-secondary">#{index + 1}</span>
                         </div>
                         <p className="mt-2 break-all text-xs text-text-secondary">UUID: {invoice.uuid || "-"}</p>
                       </div>
-                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${checked ? "border-primary-700 bg-primary-700" : "border-border bg-background"}`}>
+                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${checked ? "border-primary-700 bg-primary-700" : "border-slate-200 bg-white"}`}>
                         {checked ? <CheckCircle2 className="h-4 w-4 text-white" /> : null}
                       </span>
                     </div>
@@ -704,10 +704,10 @@ function ConfirmBox({ action, onCancel, onConfirm, canceledInvoices = [], select
         ) : null}
 
         <div className="mt-6 flex justify-end gap-3">
-          <button type="button" onClick={onCancel} className="rounded-2xl border border-border px-4 py-2 text-sm font-bold text-text-primary">
+          <button type="button" onClick={onCancel} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-text-primary">
             Volver
           </button>
-          <button type="button" onClick={onConfirm} className="rounded-2xl bg-primary-700 px-4 py-2 text-sm font-bold text-white">
+          <button type="button" onClick={onConfirm} className="rounded-xl bg-primary-700 px-4 py-2 text-sm font-bold text-white">
             {copy.confirm}
           </button>
         </div>
@@ -721,8 +721,8 @@ function TabButton({ active, children, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-2xl px-4 py-2 text-sm font-extrabold transition ${
-        active ? "bg-primary-700 text-white shadow-sm" : "border border-border bg-background text-text-secondary hover:bg-surface-soft"
+      className={`rounded-xl px-4 py-2 text-sm font-extrabold transition ${
+        active ? "bg-primary-700 text-white shadow-sm" : "border border-slate-200 bg-white text-text-secondary hover:bg-slate-50"
       }`}
     >
       {children}
@@ -738,7 +738,7 @@ function EditFiscalActions({ editing, busy, localSaving, onEdit, onSave, onCance
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="inline-flex h-10 items-center gap-2 rounded-2xl border border-border bg-background px-3 text-xs font-bold text-text-primary disabled:opacity-50"
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-text-primary disabled:opacity-50"
         >
           <X className="h-4 w-4" /> Cancelar
         </button>
@@ -746,7 +746,7 @@ function EditFiscalActions({ editing, busy, localSaving, onEdit, onSave, onCance
           type="button"
           onClick={onSave}
           disabled={busy}
-          className="inline-flex h-10 items-center gap-2 rounded-2xl bg-primary-700 px-3 text-xs font-bold text-white disabled:opacity-50"
+          className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary-700 px-3 text-xs font-bold text-white disabled:opacity-50"
         >
           <Save className="h-4 w-4" /> {localSaving ? "Guardando..." : "Guardar"}
         </button>
@@ -759,7 +759,7 @@ function EditFiscalActions({ editing, busy, localSaving, onEdit, onSave, onCance
       type="button"
       onClick={onEdit}
       disabled={busy}
-      className="inline-flex h-10 items-center gap-2 rounded-2xl border border-border bg-background px-3 text-xs font-bold text-text-primary hover:bg-primary-50 disabled:opacity-50"
+      className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-text-primary hover:bg-primary-50 disabled:opacity-50"
     >
       <Pencil className="h-4 w-4" /> Editar
     </button>
@@ -1020,9 +1020,9 @@ export default function InvoicePreviewModal({
         onSelectReplacement={setSelectedReplacementUuid}
       />
 
-      <div className="grid min-h-0 grid-cols-1 bg-surface-soft xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid min-h-0 grid-cols-1 bg-[#f8fafc] xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-h-0 space-y-5 p-5 md:p-7">
-          <div className="rounded-[28px] border border-border bg-background p-5 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1062,7 +1062,7 @@ export default function InvoicePreviewModal({
             </section>
           ) : null}
 
-          <div className="flex flex-wrap gap-2 rounded-[24px] border border-border bg-background p-2 shadow-sm">
+          <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
             {TAB_OPTIONS.map((tab) => (
               <TabButton key={tab.value} active={activeTab === tab.value} onClick={() => setActiveTab(tab.value)}>{tab.label}</TabButton>
             ))}
@@ -1184,10 +1184,10 @@ export default function InvoicePreviewModal({
           {activeTab === "conceptos" ? (
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
               <Section title="Conceptos del pedido" icon={FileText}>
-                <div className="overflow-hidden rounded-2xl border border-border">
+                <div className="overflow-hidden rounded-xl border border-slate-200">
                   <div className="max-h-[420px] overflow-auto">
                     <table className="min-w-full text-sm">
-                      <thead className="sticky top-0 bg-surface-soft text-left text-[0.68rem] uppercase tracking-[0.16em] text-text-muted">
+                      <thead className="sticky top-0 bg-slate-50 text-left text-[0.68rem] uppercase tracking-[0.16em] text-text-muted">
                         <tr>
                           <th className="px-4 py-3">Código</th>
                           <th className="px-4 py-3">Producto</th>
@@ -1196,7 +1196,7 @@ export default function InvoicePreviewModal({
                           <th className="px-4 py-3 text-right">Importe</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border bg-background">
+                      <tbody className="divide-y divide-slate-100 bg-white">
                         {(order.details || []).map((item) => (
                           <tr key={item.id || item.codigo || item.nombre_producto}>
                             <td className="px-4 py-3 font-bold text-text-secondary">{item.codigo || "-"}</td>
@@ -1217,7 +1217,7 @@ export default function InvoicePreviewModal({
                   <div className="flex justify-between"><span className="text-text-secondary">Subtotal</span><strong>{formatMoney(totals.subtotal)}</strong></div>
                   <div className="flex justify-between"><span className="text-text-secondary">IVA {Number(order.iva_porcentaje || 0)}%</span><strong>{formatMoney(totals.iva)}</strong></div>
                   {Number(totals.isr || 0) > 0 ? <div className="flex justify-between"><span className="text-text-secondary">ISR retenido</span><strong>-{formatMoney(totals.isr)}</strong></div> : null}
-                  <div className="mt-4 flex justify-between rounded-2xl bg-primary-700 px-4 py-3 text-white"><span>Total</span><strong>{formatMoney(totals.total)}</strong></div>
+                  <div className="mt-4 flex justify-between rounded-xl bg-primary-700 px-4 py-3 text-white"><span>Total</span><strong>{formatMoney(totals.total)}</strong></div>
                 </div>
               </Section>
             </div>
@@ -1234,12 +1234,12 @@ export default function InvoicePreviewModal({
                       const canDeleteThisLocal = canceled && canDeleteLocal;
 
                       return (
-                        <article key={invoice.id || invoice.uuid || invoice.facturama_id || `${title}-${index}`} className="rounded-2xl border border-border bg-surface-soft p-4">
+                        <article key={invoice.id || invoice.uuid || invoice.facturama_id || `${title}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-extrabold text-text-primary">{title}</p>
-                                <span className="rounded-full bg-background px-2 py-1 text-[0.68rem] font-bold text-text-secondary">Registro #{index + 1}</span>
+                                <span className="rounded-full bg-white px-2 py-1 text-[0.68rem] font-bold text-text-secondary">Registro #{index + 1}</span>
                               </div>
                               <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-3">
                                 <p className="break-all text-text-secondary"><span className="font-bold text-text-muted">UUID:</span> {invoice.uuid || "-"}</p>
@@ -1271,7 +1271,7 @@ export default function InvoicePreviewModal({
                     })}
                   </div>
                 ) : (
-                  <p className="rounded-2xl border border-dashed border-border bg-surface-soft p-5 text-sm text-text-secondary">Este pedido todavía no tiene historial de facturas.</p>
+                  <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-text-secondary">Este pedido todavía no tiene historial de facturas.</p>
                 )}
               </Section>
             </div>
@@ -1283,11 +1283,11 @@ export default function InvoicePreviewModal({
                 <p className="mb-3 text-sm leading-6 text-text-secondary">
                   Cancela el CFDI activo en Facturama/SAT sandbox. La cancelación no elimina el historial local. Si después quieres limpiar un registro, hazlo desde Historial y solo aparecerá cuando la factura ya esté cancelada.
                 </p>
-                <select value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} className="w-full rounded-2xl border border-border bg-background px-3 py-2 text-sm font-bold outline-none">
+                <select value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold outline-none">
                   {CANCEL_REASON_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
                 {cancelReason === "01" ? (
-                  <input value={replacementUuid} onChange={(event) => setReplacementUuid(event.target.value)} placeholder="UUID sustituto" className="mt-3 w-full rounded-2xl border border-border bg-background px-3 py-2 text-sm font-bold outline-none" />
+                  <input value={replacementUuid} onChange={(event) => setReplacementUuid(event.target.value)} placeholder="UUID sustituto" className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold outline-none" />
                 ) : null}
                 <button type="button" onClick={handleCancel} disabled={busy || !hasActiveInvoice} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-extrabold text-rose-700 disabled:cursor-not-allowed disabled:opacity-50">
                   <XCircle className="h-4 w-4" /> Cancelar en SAT
@@ -1297,9 +1297,9 @@ export default function InvoicePreviewModal({
           ) : null}
         </div>
 
-        <aside className="border-t border-border bg-background p-5 xl:border-l xl:border-t-0">
+        <aside className="border-t border-slate-200 bg-white p-5 xl:border-l xl:border-t-0">
           <div className="sticky top-4 space-y-4">
-            <section className="rounded-[26px] border border-border bg-surface-soft p-5">
+            <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <h3 className="font-extrabold text-text-primary">Estado</h3>
               <div className="mt-4 space-y-3 text-sm">
                 <div className="flex justify-between gap-4"><span className="text-text-secondary">Factura</span><strong>{headerStatus.label}</strong></div>
@@ -1308,7 +1308,7 @@ export default function InvoicePreviewModal({
               </div>
             </section>
 
-            <section className={`rounded-[26px] border p-5 ${validation.ready ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+            <section className={`rounded-2xl border p-5 ${validation.ready ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
               <div className="flex items-start gap-3">
                 {validation.ready ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" /> : <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />}
                 <div>
@@ -1325,7 +1325,7 @@ export default function InvoicePreviewModal({
               ) : null}
             </section>
 
-            <section className="rounded-[26px] border border-border bg-surface-soft p-5">
+            <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <h3 className="font-extrabold text-text-primary">Acciones</h3>
               <div className="mt-4 grid gap-3">
                 <ActionButton icon={Send} title={busy ? "Procesando..." : "Facturar sandbox"} description="Valida y timbra si todo está correcto." onClick={handleStamp} disabled={busy || hasActiveInvoice || Boolean(editingSection)} tone="primary" />

@@ -42,6 +42,12 @@ const NAV_GROUPS = [
         icon: FileText,
         end: true,
       },
+      {
+        label: "Inventario",
+        to: "/dashboard/inventario",
+        icon: Boxes,
+        end: true,
+      },
     ],
   },
   {

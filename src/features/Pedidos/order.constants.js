@@ -31,4 +31,4 @@ export const DELIVERY_STATUS_OPTIONS = [
   { value: "cancelada", label: "Cancelada" },
 ];
 
-export const ITEMS_PER_PAGE = 8;
+export const ITEMS_PER_PAGE = 6;

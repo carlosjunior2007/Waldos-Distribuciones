@@ -1,4 +1,5 @@
 import supabase from "../../../utils/supabase";
+import { consumeInventoryForDelivery, revertInventoryForDelivery } from "../../Inventario/services/inventory.service";
 
 const ORDER_SELECT = `
   *,
@@ -441,6 +442,10 @@ export async function deleteCancelledOrder(orderId) {
     .filter(Boolean);
 
   if (deliveryIds.length) {
+    for (const deliveryId of deliveryIds) {
+      await revertInventoryForDelivery(deliveryId);
+    }
+
     const { error: deliveryDetailsError } = await supabase
       .from("entrega_detalles")
       .delete()
@@ -504,9 +509,18 @@ export async function deleteCancelledOrder(orderId) {
   return true;
 }
 
+function isPickupDelivery(delivery = {}) {
+  return delivery.tipo_entrega === "recogido";
+}
+
+function getDeliveryNotes(delivery = {}) {
+  if (delivery.notas) return delivery.notas;
+  return isPickupDelivery(delivery) ? "Recogido por el cliente" : null;
+}
+
 export async function createDelivery({ order, delivery, products }) {
   if (!order?.id) throw new Error("Pedido inválido.");
-  if (!delivery.cliente_direccion_id) throw new Error("Selecciona una dirección del cliente.");
+  if (!isPickupDelivery(delivery) && !delivery.cliente_direccion_id) throw new Error("Selecciona una dirección del cliente o la opción de recogido.");
   if (!delivery.fecha_entrega) throw new Error("Selecciona fecha y hora de entrega.");
 
   const rows = buildDeliveryRows(products);
@@ -525,29 +539,35 @@ export async function createDelivery({ order, delivery, products }) {
       estado: delivery.estado || "pendiente",
       fecha_entrega: delivery.fecha_entrega,
       recibido_por: delivery.recibido_por || null,
-      notas: delivery.notas || null,
-      cliente_direccion_id: delivery.cliente_direccion_id,
+      notas: getDeliveryNotes(delivery),
+      cliente_direccion_id: isPickupDelivery(delivery) ? null : delivery.cliente_direccion_id,
     })
     .select()
     .single();
 
   if (deliveryError) throw deliveryError;
 
-  await insertDeliveryDetails(createdDelivery.id, rows);
+  try {
+    await insertDeliveryDetails(createdDelivery.id, rows);
 
-  if (deliveryCountsAsDelivered(createdDelivery.estado)) {
-    await applyDeliveryToOrderDetails(rows);
+    if (deliveryCountsAsDelivered(createdDelivery.estado)) {
+      await consumeInventoryForDelivery(createdDelivery.id);
+      await applyDeliveryToOrderDetails(rows);
+    }
+
+    await updateOrderStatus(order.id);
+
+    return fetchOrderById(order.id);
+  } catch (error) {
+    await cleanupDeliveryAfterInventoryError(createdDelivery.id);
+    throw error;
   }
-
-  await updateOrderStatus(order.id);
-
-  return fetchOrderById(order.id);
 }
 
 export async function updateDelivery({ order, delivery, products }) {
   if (!order?.id) throw new Error("Pedido inválido.");
   if (!delivery?.id) throw new Error("Entrega inválida.");
-  if (!delivery.cliente_direccion_id) throw new Error("Selecciona una dirección del cliente.");
+  if (!isPickupDelivery(delivery) && !delivery.cliente_direccion_id) throw new Error("Selecciona una dirección del cliente o la opción de recogido.");
   if (!delivery.fecha_entrega) throw new Error("Selecciona fecha y hora de entrega.");
 
   const rows = buildDeliveryRows(products);
@@ -565,6 +585,7 @@ export async function updateDelivery({ order, delivery, products }) {
 
   if (wasCounted) {
     await revertDeliveryFromOrderDetails(currentRows);
+    await revertInventoryForDelivery(delivery.id);
   }
 
   const { error: deliveryError } = await supabase
@@ -573,8 +594,8 @@ export async function updateDelivery({ order, delivery, products }) {
       estado: delivery.estado || "pendiente",
       fecha_entrega: delivery.fecha_entrega,
       recibido_por: delivery.recibido_por || null,
-      notas: delivery.notas || null,
-      cliente_direccion_id: delivery.cliente_direccion_id,
+      notas: getDeliveryNotes(delivery),
+      cliente_direccion_id: isPickupDelivery(delivery) ? null : delivery.cliente_direccion_id,
       updated_at: new Date().toISOString(),
     })
     .eq("id", delivery.id);
@@ -591,6 +612,7 @@ export async function updateDelivery({ order, delivery, products }) {
   await insertDeliveryDetails(delivery.id, rows);
 
   if (willBeCounted) {
+    await consumeInventoryForDelivery(delivery.id);
     await applyDeliveryToOrderDetails(rows);
   }
 
@@ -608,6 +630,7 @@ export async function deleteDelivery({ orderId, delivery }) {
 
   if (deliveryCountsAsDelivered(currentDelivery?.estado || delivery.estado)) {
     await revertDeliveryFromOrderDetails(currentRows);
+    await revertInventoryForDelivery(delivery.id);
   }
 
   const { error: detailError } = await supabase
@@ -832,6 +855,20 @@ async function notifyRecurringOrderReminder({ order, rule, recurrence, products 
   } catch (error) {
     console.warn("No se pudo enviar el correo del recordatorio:", error.message || error);
   }
+}
+
+
+async function cleanupDeliveryAfterInventoryError(deliveryId) {
+  if (!deliveryId) return;
+
+  try {
+    await revertInventoryForDelivery(deliveryId);
+  } catch (error) {
+    console.warn("No había inventario que revertir o no se pudo revertir:", error.message || error);
+  }
+
+  await supabase.from("entrega_detalles").delete().eq("entrega_id", deliveryId);
+  await supabase.from("entregas").delete().eq("id", deliveryId);
 }
 
 async function insertDeliveryDetails(deliveryId, rows) {
@@ -1128,8 +1165,15 @@ function normalizeOrder(order) {
   });
 
   const deliveries = (order.entregas || [])
-    .map((delivery) => ({
+    .map((delivery) => {
+      const address = (client.cliente_direcciones || []).find((item) => item.id === delivery.cliente_direccion_id) || null;
+      const isPickup = !delivery.cliente_direccion_id;
+
+      return {
       ...delivery,
+      address,
+      is_pickup: isPickup,
+      tipo_entrega_label: isPickup ? "Recogido por el cliente" : "Entrega a domicilio",
       details: (delivery.entrega_detalles || []).map((row) => {
         const orderDetail = rawDetails.find((item) => item.id === row.pedido_detalle_id);
         return {
@@ -1138,7 +1182,8 @@ function normalizeOrder(order) {
           codigo: orderDetail?.codigo || "",
         };
       }),
-    }))
+    };
+    })
     .sort((a, b) => new Date(b.fecha_entrega || b.created_at || 0) - new Date(a.fecha_entrega || a.created_at || 0));
 
   return {

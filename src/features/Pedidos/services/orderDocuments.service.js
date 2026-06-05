@@ -164,7 +164,8 @@ function getDeliveryAddress(order, delivery) {
   return (order?.cliente_direcciones || []).find((item) => item.id === delivery.cliente_direccion_id) || null;
 }
 
-function addressLabel(address) {
+function addressLabel(address, delivery = null) {
+  if (!address && !delivery?.cliente_direccion_id) return "Recogido por el cliente";
   if (!address) return "Sin dirección";
   return [address.nombre, address.direccion, address.ciudad, address.estado, address.codigo_postal]
     .filter(Boolean)
@@ -381,7 +382,7 @@ export function generateOrderPDF(order) {
       body: deliveries.map((delivery) => {
         const address = getDeliveryAddress(order, delivery);
         const total = deliveryDetails(order, delivery).reduce((sum, item) => sum + Number(item.cantidad_entregada || 0), 0);
-        return [text(delivery.folio), dateMX(delivery.fecha_entrega, true), statusText(delivery.estado), addressLabel(address), qty(total)];
+        return [text(delivery.folio), dateMX(delivery.fecha_entrega, true), statusText(delivery.estado), addressLabel(address, delivery), qty(total)];
       }),
       theme: "grid",
       styles: {
@@ -553,7 +554,7 @@ export function generateDeliveryReceiptPDF(order, delivery = null) {
   doc.text(`Fecha: ${dateMX(selectedDelivery?.fecha_entrega, true)}`, rx, y + 16);
   doc.text(`Estado: ${statusText(selectedDelivery?.estado || "Pendiente")}`, rx, y + 22);
   doc.text(`Recibe: ${text(selectedDelivery?.recibido_por || address?.contacto_nombre)}`, rx, y + 28);
-  doc.text(doc.splitTextToSize(`Dirección: ${addressLabel(address)}`, contentWidth / 2 - 8), rx, y + 34);
+  doc.text(doc.splitTextToSize(`Dirección: ${addressLabel(address, delivery)}`, contentWidth / 2 - 8), rx, y + 34);
 
   autoTable(doc, {
     startY: 120,

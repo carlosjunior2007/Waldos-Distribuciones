@@ -22,6 +22,7 @@ import PlaygroundPage from "./features/playground/pages/PlaygroundPage.jsx";
 import PlaygroundListPage from "./features/playground/pages/PlaygroundListPage.jsx";
 import PublicPlaygroundPage from "./features/playground/pages/PublicPlaygroundPage.jsx";
 import ProvedoresPage from "./features/proveedores/pages/ProveedoresAdminPage.jsx";
+import InventoryPage from "./features/Inventario/pages/InventoryPage.jsx";
 
 export default function App() {
   return (
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="playground" element={<PlaygroundListPage  />} />
         <Route path="provedores" element={<ProvedoresPage />} />
         <Route path="playground/:playgroundId" element={<PlaygroundPage  />} />
+        <Route path="inventario" element={<InventoryPage />} />
       </Route>
 
       {/* CATALOGO */}

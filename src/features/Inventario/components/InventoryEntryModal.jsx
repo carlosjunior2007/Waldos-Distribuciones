@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, PackagePlus, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { searchInventoryProducts } from "../services/inventory.service";
+import QuickProductModal from "../../products/components/QuickProductModal";
+import { createProduct as createCatalogProduct, getCurrentUserId } from "../../products/services/products.service";
+import { generateUUID } from "../../products/product.helpers";
+import { generarCodigoProducto } from "../../../utils/CodeGenerator";
 
 const emptyLine = {
   producto_id: "",
@@ -18,6 +22,21 @@ function today() {
 function toNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function sanitizeDecimalInput(value, decimals = 4) {
+  const raw = String(value ?? "").replace(/,/g, ".");
+  let cleaned = raw.replace(/[^0-9.]/g, "");
+
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot !== -1) {
+    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+  }
+
+  const [integerPart, decimalPart] = cleaned.split(".");
+  if (decimalPart === undefined) return integerPart;
+
+  return `${integerPart}.${decimalPart.slice(0, decimals)}`;
 }
 
 const money = new Intl.NumberFormat("es-MX", {
@@ -50,6 +69,8 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
   const [productPage, setProductPage] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [productLoading, setProductLoading] = useState(false);
+  const [quickProductOpen, setQuickProductOpen] = useState(false);
+  const [quickError, setQuickError] = useState("");
 
   const subtotal = useMemo(() => {
     return form.products.reduce((acc, item) => {
@@ -81,7 +102,6 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
       setProductCount(result.count || 0);
       setProductPage(page);
     } catch (error) {
-      console.error(error);
       setProductResults([]);
       setProductCount(0);
     } finally {
@@ -113,9 +133,12 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
     });
   }
 
-  function updateIntegerQuantity(index, value) {
-    const sanitized = String(value || "").replace(/[^0-9]/g, "");
-    updateLine(index, "cantidad", sanitized);
+  function updateDecimalLine(index, field, value) {
+    updateLine(index, field, sanitizeDecimalInput(value, 4));
+  }
+
+  function updateDecimalField(field, value) {
+    updateField(field, sanitizeDecimalInput(value, 4));
   }
 
   function increaseQuantity(index) {
@@ -183,6 +206,76 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
     }));
   }
 
+  async function handleQuickCreateProduct(values = {}) {
+    const nombre = String(values.nombre || "").trim();
+    const precio = Number(values.precio || 0);
+
+    if (!nombre) {
+      setQuickError("Escribe el nombre del producto antes de guardarlo.");
+      return;
+    }
+
+    if (!Number.isFinite(precio) || precio < 0) {
+      setQuickError("Escribe un precio de venta válido.");
+      return;
+    }
+
+    setProductLoading(true);
+    setQuickError("");
+
+    try {
+      const productId = generateUUID();
+      const userId = await getCurrentUserId();
+      const codigo = generarCodigoProducto(productId);
+      const now = new Date().toISOString();
+
+      await createCatalogProduct({
+        id: productId,
+        nombre,
+        descripcion: values.descripcion?.trim() || nombre,
+        precio,
+        precio_compra: Number(values.precio_compra || 0),
+        cantidad_caja: Number(values.cantidad_caja || 1),
+        habilitado: true,
+        categoria: values.categoria || "otros",
+        unidad: values.unidad || "pieza",
+        codigo,
+        clave_sat: values.clave_sat?.trim() || null,
+        clave_unidad_sat: values.clave_unidad_sat?.trim() || null,
+        iva_porcentaje: Number(values.iva_porcentaje || 8),
+        modified_by: userId,
+        created_by: userId,
+        updated_at: now,
+        created_at: now,
+      });
+
+      const createdProduct = {
+        id: productId,
+        nombre,
+        descripcion: values.descripcion?.trim() || nombre,
+        precio,
+        precio_compra: Number(values.precio_compra || 0),
+        cantidad_caja: Number(values.cantidad_caja || 1),
+        categoria: values.categoria || "otros",
+        unidad: values.unidad || "pieza",
+        codigo,
+        clave_sat: values.clave_sat?.trim() || null,
+        clave_unidad_sat: values.clave_unidad_sat?.trim() || null,
+        iva_porcentaje: Number(values.iva_porcentaje || 8),
+        habilitado: true,
+      };
+
+      addProduct(createdProduct);
+      setProductResults((current) => [createdProduct, ...current.filter((item) => item.id !== productId)]);
+      setQuickProductOpen(false);
+    } catch (error) {
+      console.error("Error creando producto desde inventario:", error);
+      setQuickError(error.message || "No se pudo crear el producto. Revisa la información e intenta de nuevo.");
+    } finally {
+      setProductLoading(false);
+    }
+  }
+
   async function handleLoadMoreProducts() {
     if (!hasMoreProducts || productLoading) return;
     await loadProductResults({
@@ -210,6 +303,20 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+      <QuickProductModal
+        open={quickProductOpen}
+        saving={productLoading}
+        eyebrow="Crear sin salir de inventario"
+        title="Nuevo producto"
+        description="Se guardará en catálogo, se agregará a esta entrada y no perderás la compra capturada."
+        submitLabel="Crear y agregar"
+        onClose={() => {
+          setQuickError("");
+          setQuickProductOpen(false);
+        }}
+        onSubmit={handleQuickCreateProduct}
+      />
+      <SmallErrorModal message={quickError} onClose={() => setQuickError("")} />
       <form
         onSubmit={submit}
         className="flex max-h-[94vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-[30px] bg-white shadow-2xl"
@@ -302,10 +409,19 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
               >
                 <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
                   <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-black text-slate-800">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <span className="text-sm font-black text-slate-800">
                         Buscar producto
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => setQuickProductOpen(true)}
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-black text-red-700 transition hover:bg-red-100"
+                      >
+                        <Plus size={15} /> Nuevo producto
+                      </button>
+                    </div>
+                    <label className="block">
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                         <input
@@ -428,10 +544,11 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
                                       </button>
                                       <input
                                         type="text"
-                                        inputMode="numeric"
-                                        pattern="[0-9]*"
+                                        inputMode="decimal"
+                                        pattern="^[0-9]+([.,][0-9]{0,4})?$"
+                                        placeholder="0.0000"
                                         value={item.cantidad}
-                                        onChange={(event) => updateIntegerQuantity(index, event.target.value)}
+                                        onChange={(event) => updateDecimalLine(index, "cantidad", event.target.value)}
                                         className="min-w-0 flex-1 border-0 bg-white px-3 text-center text-sm font-black outline-none"
                                       />
                                       <button
@@ -447,11 +564,12 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
 
                                 <Field label="Costo unitario">
                                   <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
+                                    type="text"
+                                    inputMode="decimal"
+                                    pattern="^[0-9]+([.,][0-9]{0,4})?$"
+                                    placeholder="0.0000"
                                     value={item.costo_unitario}
-                                    onChange={(event) => updateLine(index, "costo_unitario", event.target.value)}
+                                    onChange={(event) => updateDecimalLine(index, "costo_unitario", event.target.value)}
                                     className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-right text-sm font-black outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
                                   />
                                 </Field>
@@ -494,11 +612,12 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
 
                 <Field label="IVA / impuestos">
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="^[0-9]+([.,][0-9]{0,4})?$"
+                    placeholder="0.0000"
                     value={form.iva}
-                    onChange={(event) => updateField("iva", event.target.value)}
+                    onChange={(event) => updateDecimalField("iva", event.target.value)}
                     className={`${inputClass} text-right font-black`}
                   />
                 </Field>
@@ -530,6 +649,24 @@ export function InventoryEntryModal({ open, saving = false, providers = [], onCl
           </button>
         </footer>
       </form>
+    </div>
+  );
+}
+
+function SmallErrorModal({ message, onClose }) {
+  if (!message) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100001] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <section className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+        <h3 className="text-lg font-black text-slate-950">No se pudo crear el producto</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{message}</p>
+        <div className="mt-6 flex justify-end">
+          <button type="button" onClick={onClose} className="h-11 rounded-2xl border border-slate-200 px-4 text-sm font-bold text-slate-900 transition hover:bg-slate-50">
+            Entendido
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

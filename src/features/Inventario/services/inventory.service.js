@@ -73,6 +73,8 @@ function getInventoryErrorMessage(error, fallback = "No se pudo completar la ope
 
   if (!raw) return fallback;
   if (lower.includes("inventario insuficiente")) return raw;
+  if (lower.includes("entrada de inventario ya fue usada")) return raw;
+  if (lower.includes("no puedes borrar esta entrada")) return raw;
   if (lower.includes("esta entrega ya tiene inventario consumido")) return "Esta entrega ya descontó stock. No se puede descontar dos veces.";
   if (lower.includes("entrega no encontrada")) return "No se encontró la entrega. Actualiza la página y vuelve a intentar.";
   if (lower.includes("permission denied") || lower.includes("row-level security")) return "No tienes permisos para modificar inventario. Revisa tu sesión o las políticas RLS.";
@@ -273,12 +275,13 @@ export async function fetchInventoryLotsByProduct(productId) {
     .from("inventario_lotes")
     .select(`
       *,
-      entrada:entrada_id (
+      entrada:entrada_id!inner (
         id,
         folio,
         numero_factura,
         fecha_compra,
         archivo_url,
+        estado,
         proveedor:proveedor_id (
           id,
           nombre,
@@ -287,6 +290,7 @@ export async function fetchInventoryLotsByProduct(productId) {
       )
     `)
     .eq("producto_id", productId)
+    .eq("entrada.estado", "activa")
     .gt("cantidad_disponible", 0)
     .order("fecha_compra", { ascending: true })
     .order("created_at", { ascending: true });
@@ -321,6 +325,7 @@ export async function searchInventoryProducts({ search = "", page = 0, pageSize 
   const { data, error, count } = await supabase
     .from("productos")
     .select("id,codigo,nombre,descripcion,precio_compra,precio,habilitado", { count: "exact" })
+    .eq("habilitado", true)
     .or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%,descripcion.ilike.%${term}%`)
     .order("nombre", { ascending: true })
     .range(from, to);
@@ -440,8 +445,17 @@ export async function createInventoryEntry(payload) {
   return fetchInventoryEntryById(entry.id);
 }
 
-export async function cancelInventoryEntry(entryId) {
+async function getInventoryEntryUsage(entryId) {
   if (!entryId) throw new Error("Entrada inválida.");
+
+  const { data: entry, error: entryError } = await supabase
+    .from("inventario_entradas")
+    .select("id,folio,estado")
+    .eq("id", entryId)
+    .maybeSingle();
+
+  if (entryError) throw entryError;
+  if (!entry) throw new Error("No se encontró la entrada de inventario.");
 
   const { data: lots, error: lotsError } = await supabase
     .from("inventario_lotes")
@@ -450,12 +464,76 @@ export async function cancelInventoryEntry(entryId) {
 
   if (lotsError) throw lotsError;
 
-  const consumedLot = (lots || []).find(
-    (lot) => Number(lot.cantidad_disponible || 0) !== Number(lot.cantidad_inicial || 0),
-  );
+  const lotIds = (lots || []).map((lot) => lot.id).filter(Boolean);
+  const usedLots = (lots || []).filter((lot) => {
+    const initial = Number(lot.cantidad_inicial || 0);
+    const available = Number(lot.cantidad_disponible || 0);
+    return available < initial;
+  });
 
-  if (consumedLot) {
-    throw new Error("No puedes cancelar esta entrada porque ya tiene productos consumidos en entregas.");
+  let consumptionCount = 0;
+  if (lotIds.length) {
+    const { count, error: consumptionError } = await supabase
+      .from("inventario_consumos_entrega")
+      .select("id", { count: "exact", head: true })
+      .in("lote_id", lotIds);
+
+    if (consumptionError) throw consumptionError;
+    consumptionCount = count || 0;
+  }
+
+  const { data: nonEntryMovements, error: movementError } = await supabase
+    .from("inventario_movimientos")
+    .select("id,tipo,pedido_id,pedido_detalle_id,entrega_id,entrega_detalle_id")
+    .eq("entrada_id", entryId)
+    .neq("tipo", "entrada");
+
+  if (movementError) throw movementError;
+
+  // Regla práctica: si el lote volvió completo, la entrada se puede limpiar.
+  // El historial de salida/reversa que quedó de un pedido borrado no debe secuestrar la compra para siempre.
+  // Si todavía falta cantidad, entonces sí está usada actualmente y no se borra. Qué concepto tan atrevido: el estado actual importa.
+  const used = usedLots.length > 0;
+
+  return {
+    entry,
+    lots: lots || [],
+    lotIds,
+    used,
+    usedLotsCount: usedLots.length,
+    consumptionCount,
+    nonEntryMovementsCount: (nonEntryMovements || []).length,
+  };
+}
+
+function getEntryUsedMessage(usage) {
+  return `No puedes borrar esta entrada porque todavía tiene stock usado en ${usage.usedLotsCount} lote(s). Primero revierte o cancela la entrega/pedido que lo descontó, hasta que la cantidad disponible vuelva a ser igual a la cantidad inicial.`;
+}
+
+async function deleteInventoryEntryWithRpc(entryId) {
+  const { data, error } = await supabase.rpc("borrar_inventario_entrada", {
+    p_entrada_id: entryId,
+  });
+
+  if (error) {
+    const raw = String(error?.message || "").toLowerCase();
+    const missingFunction =
+      raw.includes("could not find the function") ||
+      raw.includes("function public.borrar_inventario_entrada") ||
+      raw.includes("borrar_inventario_entrada") && raw.includes("schema cache");
+
+    if (missingFunction) return false;
+    throw buildInventoryError(error, "No se pudo borrar la entrada de inventario.");
+  }
+
+  return data || true;
+}
+
+export async function cancelInventoryEntry(entryId) {
+  const usage = await getInventoryEntryUsage(entryId);
+
+  if (usage.used) {
+    throw new Error(getEntryUsedMessage(usage));
   }
 
   const { error: movementError } = await supabase
@@ -482,6 +560,56 @@ export async function cancelInventoryEntry(entryId) {
   return true;
 }
 
+export async function deleteInventoryEntry(entryId) {
+  const usage = await getInventoryEntryUsage(entryId);
+
+  if (usage.used) {
+    throw new Error(getEntryUsedMessage(usage));
+  }
+
+  // Preferimos el RPC porque borra en la base de datos con SECURITY DEFINER.
+  // Así evitamos el clásico teatro de Supabase/RLS: “operación exitosa” con cero filas borradas.
+  const rpcResult = await deleteInventoryEntryWithRpc(entryId);
+  if (rpcResult) return true;
+
+  // Fallback por si todavía no corriste el SQL nuevo. Funciona si tus políticas RLS permiten borrar.
+  if (usage.lotIds.length) {
+    const { error: consumptionDeleteError } = await supabase
+      .from("inventario_consumos_entrega")
+      .delete()
+      .in("lote_id", usage.lotIds);
+
+    if (consumptionDeleteError) throw consumptionDeleteError;
+  }
+
+  const { error: movementError } = await supabase
+    .from("inventario_movimientos")
+    .delete()
+    .eq("entrada_id", entryId);
+
+  if (movementError) throw movementError;
+
+  const { error: lotsDeleteError } = await supabase
+    .from("inventario_lotes")
+    .delete()
+    .eq("entrada_id", entryId);
+
+  if (lotsDeleteError) throw lotsDeleteError;
+
+  const { data: deletedEntry, error: entryError } = await supabase
+    .from("inventario_entradas")
+    .delete()
+    .eq("id", entryId)
+    .select("id");
+
+  if (entryError) throw entryError;
+  if (!deletedEntry?.length) {
+    throw new Error("Supabase no borró la entrada. Revisa que hayas ejecutado el SQL nuevo o que exista una política DELETE para inventario_entradas.");
+  }
+
+  return true;
+}
+
 export async function consumeInventoryForDelivery(deliveryId) {
   if (!deliveryId) throw new Error("Entrega inválida para inventario.");
 
@@ -504,13 +632,33 @@ export async function revertInventoryForDelivery(deliveryId) {
   return data;
 }
 
+function countDecimalPlaces(value) {
+  const text = String(value ?? "").trim().replace(/,/g, ".");
+  if (!text.includes(".")) return 0;
+  return text.split(".")[1]?.length || 0;
+}
+
+function roundToFour(value) {
+  return Math.round((toNumber(value) + Number.EPSILON) * 10000) / 10000;
+}
+
 function sanitizeInventoryProducts(products = []) {
   return (products || [])
     .filter((item) => item?.producto_id && toNumber(item.cantidad) > 0)
-    .map((item) => ({
-      producto_id: item.producto_id,
-      cantidad: Math.floor(toNumber(item.cantidad)),
-      costo_unitario: toNumber(item.costo_unitario),
-      notas: item.notas || null,
-    }));
+    .map((item) => {
+      if (countDecimalPlaces(item.cantidad) > 4) {
+        throw new Error("La cantidad acepta máximo 4 decimales.");
+      }
+
+      if (countDecimalPlaces(item.costo_unitario) > 4) {
+        throw new Error("El costo unitario acepta máximo 4 decimales.");
+      }
+
+      return {
+        producto_id: item.producto_id,
+        cantidad: roundToFour(item.cantidad),
+        costo_unitario: roundToFour(item.costo_unitario),
+        notas: item.notas || null,
+      };
+    });
 }

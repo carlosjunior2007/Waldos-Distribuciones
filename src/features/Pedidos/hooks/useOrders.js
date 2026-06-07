@@ -23,6 +23,10 @@ import {
 } from "../services/pedidos.service";
 import { calculateDerivedOrderStatus, calculateOrderRealProfit, isOrderProfitRealized } from "../order.helpers";
 import { generateDeliveryReceiptPDF, generateOrderPDF, generateOrderSuppliersPDF } from "../services/orderDocuments.service";
+import { createClient } from "../../clients/services/clients.service";
+import { createProduct as createCatalogProduct, getCurrentUserId } from "../../products/services/products.service";
+import { generarCodigoProducto } from "../../../utils/CodeGenerator";
+import { generateUUID } from "../../products/product.helpers";
 
 function getReadableError(error) {
   if (!error) return "Error desconocido.";
@@ -105,6 +109,7 @@ export function useOrders() {
     ]);
     setClients(nextClients);
     setProducts(nextProducts);
+    return { clients: nextClients, products: nextProducts };
   }
 
   async function loadOrders() {
@@ -173,6 +178,102 @@ export function useOrders() {
     setModal(null);
     setSelectedOrder(null);
     setSelectedDelivery(null);
+  }
+
+  async function quickCreateClient(values = {}) {
+    const nombre = String(values.nombre || "").trim();
+
+    if (!nombre) {
+      throw new Error("Escribe el nombre del cliente.");
+    }
+
+    const saved = await runOperation(
+      "Creando cliente sin cerrar el pedido...",
+      async () => {
+        const created = await createClient({
+          nombre,
+          razon_social: values.razon_social?.trim() || null,
+          rfc: values.rfc?.trim().toUpperCase() || null,
+          numero: values.numero?.trim() || null,
+          correo: values.correo?.trim() || null,
+          direccion: values.direccion?.trim() || null,
+          ciudad: values.ciudad?.trim() || null,
+          estado: values.estado?.trim() || null,
+          codigo_postal: values.codigo_postal?.trim() || null,
+          pais: values.pais?.trim() || "México",
+          notas: values.notas?.trim() || null,
+        });
+
+        const nextClients = await fetchOrderClients();
+        setClients(nextClients);
+
+        return nextClients.find((client) => client.id === created.id) || created;
+      },
+      "Cliente creado. Puedes seguir capturando el pedido.",
+    );
+
+    return saved;
+  }
+
+  async function quickCreateProduct(values = {}) {
+    const nombre = String(values.nombre || "").trim();
+    const precio = Number(values.precio || 0);
+
+    if (!nombre) {
+      throw new Error("Escribe el nombre del producto.");
+    }
+
+    if (!Number.isFinite(precio) || precio < 0) {
+      throw new Error("Escribe un precio de venta válido.");
+    }
+
+    const saved = await runOperation(
+      "Creando producto sin cerrar el pedido...",
+      async () => {
+        const productId = generateUUID();
+        const userId = await getCurrentUserId();
+        const codigo = generarCodigoProducto(productId);
+        const now = new Date().toISOString();
+
+        await createCatalogProduct({
+          id: productId,
+          nombre,
+          descripcion: values.descripcion?.trim() || nombre,
+          precio,
+          precio_compra: Number(values.precio_compra || 0),
+          cantidad_caja: Number(values.cantidad_caja || 1),
+          habilitado: true,
+          categoria: values.categoria || "otros",
+          unidad: values.unidad || "pieza",
+          codigo,
+          clave_sat: values.clave_sat?.trim() || null,
+          clave_unidad_sat: values.clave_unidad_sat?.trim() || null,
+          iva_porcentaje: Number(values.iva_porcentaje || 8),
+          modified_by: userId,
+          created_by: userId,
+          updated_at: now,
+          created_at: now,
+        });
+
+        const nextProducts = await fetchOrderProducts();
+        setProducts(nextProducts);
+
+        return nextProducts.find((product) => product.id === productId) || {
+          id: productId,
+          nombre,
+          descripcion: values.descripcion?.trim() || nombre,
+          precio,
+          precio_compra: Number(values.precio_compra || 0),
+          cantidad_caja: Number(values.cantidad_caja || 1),
+          codigo,
+          iva_porcentaje: Number(values.iva_porcentaje || 8),
+          habilitado: true,
+        };
+      },
+      "Producto creado. Puedes seguir capturando el pedido.",
+    );
+
+    return saved;
   }
 
   function closeDeleteOrderDialog() {
@@ -765,6 +866,8 @@ export function useOrders() {
     closeModal,
     saveOrder,
     saveDelivery,
+    quickCreateClient,
+    quickCreateProduct,
     removeDelivery,
     saveRecurring,
     saveInvoiceDraft,

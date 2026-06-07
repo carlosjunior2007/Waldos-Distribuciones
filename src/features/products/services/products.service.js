@@ -84,9 +84,13 @@ export async function updateProduct(id, payload, suppliers = []) {
 }
 
 export async function deleteProduct(id) {
-  const { error } = await supabase.from("productos").delete().eq("id", id);
+  const { data, error } = await supabase.rpc("delete_product_from_catalog", {
+    p_product_id: id,
+  });
 
   if (error) throw error;
+
+  return data || { action: "archived" };
 }
 
 export async function uploadProductImage(file, productId) {

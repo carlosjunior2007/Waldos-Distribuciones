@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
   Boxes,
+  AlertTriangle,
   CalendarDays,
+  CheckCircle2,
   ClipboardList,
   Coins,
   Layers,
@@ -11,6 +13,7 @@ import {
   Search,
   X,
   TrendingUp,
+  Trash2,
   WalletCards,
 } from "lucide-react";
 import { InventoryEntryModal } from "../components/InventoryEntryModal";
@@ -22,7 +25,7 @@ const money = new Intl.NumberFormat("es-MX", {
 });
 
 const number = new Intl.NumberFormat("es-MX", {
-  maximumFractionDigits: 2,
+  maximumFractionDigits: 4,
 });
 
 function toNumber(value) {
@@ -86,6 +89,7 @@ export default function InventoryPage() {
     loadMoreStock,
     saveEntry,
     cancelEntry,
+    deleteEntry,
   } = useInventory();
 
   const [tab, setTab] = useState("stock");
@@ -93,6 +97,8 @@ export default function InventoryPage() {
   const [datePreset, setDatePreset] = useState("all");
   const [dateFilters, setDateFilters] = useState({ dateFrom: "", dateTo: "" });
   const [entryModalOpen, setEntryModalOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [noticeDialog, setNoticeDialog] = useState(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -107,6 +113,16 @@ export default function InventoryPage() {
   useEffect(() => {
     loadInventory({ search, filters: dateFilters });
   }, [dateFilters.dateFrom, dateFilters.dateTo]);
+
+  useEffect(() => {
+    if (!error) return;
+
+    setNoticeDialog({
+      tone: "error",
+      title: "No se pudo completar la acción",
+      message: error,
+    });
+  }, [error]);
 
   function handleDatePresetChange(value) {
     setDatePreset(value);
@@ -166,6 +182,60 @@ export default function InventoryPage() {
   async function handleSaveEntry(payload) {
     await saveEntry(payload);
     setEntryModalOpen(false);
+  }
+
+  function requestCancelEntry(entry) {
+    setConfirmDialog({
+      type: "cancel",
+      tone: "warning",
+      title: "Cancelar entrada",
+      message: "Se quitarán sus lotes y movimientos de entrada, pero la referencia quedará como cancelada. Si quieres eliminarla completamente, usa Borrar.",
+      confirmLabel: "Cancelar entrada",
+      entry,
+    });
+  }
+
+  function requestDeleteEntry(entry) {
+    setConfirmDialog({
+      type: "delete",
+      tone: "danger",
+      title: "Borrar entrada definitivamente",
+      message: "Esto eliminará la entrada, sus lotes y sus movimientos internos. Solo se permitirá si no se ha usado en pedidos o entregas.",
+      confirmLabel: "Borrar entrada",
+      entry,
+    });
+  }
+
+  async function runConfirmedAction() {
+    if (!confirmDialog?.entry?.id) return;
+
+    const action = confirmDialog;
+    setConfirmDialog(null);
+
+    try {
+      if (action.type === "cancel") {
+        await cancelEntry(action.entry.id);
+        setNoticeDialog({
+          tone: "success",
+          title: "Entrada cancelada",
+          message: "La entrada quedó cancelada y ya no debe contar como existencia válida.",
+        });
+        return;
+      }
+
+      await deleteEntry(action.entry.id);
+      setNoticeDialog({
+        tone: "success",
+        title: "Entrada borrada",
+        message: "La entrada se eliminó por completo porque no tenía uso real.",
+      });
+    } catch (err) {
+      setNoticeDialog({
+        tone: "error",
+        title: action.type === "delete" ? "No se pudo borrar la entrada" : "No se pudo cancelar la entrada",
+        message: err?.message || "Ocurrió un error inesperado.",
+      });
+    }
   }
 
   return (
@@ -294,12 +364,6 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {error ? (
-          <div className="mx-5 mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {error}
-          </div>
-        ) : null}
-
         <div className="p-5">
           {loading ? (
             <EmptyState title="Cargando inventario..." description="Dale un segundo a la base de datos, qué sacrificio tan enorme." />
@@ -313,7 +377,7 @@ export default function InventoryPage() {
               dateFilters={dateFilters}
             />
           ) : tab === "entries" ? (
-            <EntriesView entries={filteredEntries} onCancelEntry={cancelEntry} saving={saving} />
+            <EntriesView entries={filteredEntries} onRequestCancelEntry={requestCancelEntry} onRequestDeleteEntry={requestDeleteEntry} saving={saving} />
           ) : (
             <MovementsView movements={filteredMovements} />
           )}
@@ -327,7 +391,103 @@ export default function InventoryPage() {
         onClose={() => setEntryModalOpen(false)}
         onSave={handleSaveEntry}
       />
+
+      <ConfirmModal
+        open={Boolean(confirmDialog)}
+        title={confirmDialog?.title}
+        message={confirmDialog?.message}
+        tone={confirmDialog?.tone}
+        confirmLabel={confirmDialog?.confirmLabel}
+        loading={saving}
+        onCancel={() => setConfirmDialog(null)}
+        onConfirm={runConfirmedAction}
+      />
+
+      <NoticeModal
+        open={Boolean(noticeDialog)}
+        title={noticeDialog?.title}
+        message={noticeDialog?.message}
+        tone={noticeDialog?.tone}
+        onClose={() => setNoticeDialog(null)}
+      />
     </section>
+  );
+}
+
+function ConfirmModal({ open, title, message, tone = "warning", confirmLabel = "Confirmar", loading, onCancel, onConfirm }) {
+  if (!open) return null;
+
+  const danger = tone === "danger";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="flex items-start gap-4">
+          <div className={["rounded-2xl p-3", danger ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"].join(" ")}>
+            <AlertTriangle size={22} />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-950">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onCancel}
+            className="h-11 rounded-2xl border border-slate-200 px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            No, volver
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onConfirm}
+            className={[
+              "h-11 rounded-2xl px-4 text-sm font-black text-white transition disabled:opacity-60",
+              danger ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700",
+            ].join(" ")}
+          >
+            {loading ? "Procesando..." : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoticeModal({ open, title, message, tone = "success", onClose }) {
+  if (!open) return null;
+
+  const success = tone === "success";
+  const Icon = success ? CheckCircle2 : AlertTriangle;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="flex items-start gap-4">
+          <div className={["rounded-2xl p-3", success ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"].join(" ")}>
+            <Icon size={22} />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-950">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-11 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -426,7 +586,7 @@ function StockView({ items, totalCount, hasMore, loadingMore, onLoadMore, dateFi
   );
 }
 
-function EntriesView({ entries, onCancelEntry, saving }) {
+function EntriesView({ entries, onRequestCancelEntry, onRequestDeleteEntry, saving }) {
   if (!entries.length) {
     return <EmptyState title="No hay entradas" description="Aquí aparecerán facturas o compras capturadas." />;
   }
@@ -438,6 +598,10 @@ function EntriesView({ entries, onCancelEntry, saving }) {
         const lots = entry.lotes || [];
         const available = lots.reduce((acc, lot) => acc + toNumber(lot.cantidad_disponible), 0);
         const initial = lots.reduce((acc, lot) => acc + toNumber(lot.cantidad_inicial), 0);
+        const wasUsed = initial > 0 && available !== initial;
+        const deleteTitle = wasUsed
+          ? "Esta entrada ya fue usada. Al intentar borrar, el sistema te dirá exactamente por qué no se puede."
+          : "Borrar definitivamente esta entrada si no tiene consumos.";
 
         return (
           <article key={entry.id} className="rounded-[24px] border border-slate-200 bg-white p-5">
@@ -471,16 +635,33 @@ function EntriesView({ entries, onCancelEntry, saving }) {
                 <Metric label="Comprado" value={number.format(initial)} />
                 <Metric label="Disponible" value={number.format(available)} highlight={available > 0} />
                 <Metric label="Total" value={money.format(toNumber(entry.total))} />
+                {wasUsed ? (
+                  <span className="inline-flex h-11 items-center rounded-2xl border border-amber-200 bg-amber-50 px-4 text-xs font-black text-amber-700" title="Ya se usó inventario de esta entrada">
+                    Usada, no borrable
+                  </span>
+                ) : null}
+
                 {active ? (
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={() => onCancelEntry?.(entry.id)}
-                    className="h-11 rounded-2xl border border-red-200 px-4 text-sm font-black text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                    onClick={() => onRequestCancelEntry?.(entry)}
+                    className="h-11 rounded-2xl border border-slate-200 px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
                   >
                     Cancelar
                   </button>
                 ) : null}
+
+                <button
+                  type="button"
+                  disabled={saving}
+                  title={deleteTitle}
+                  onClick={() => onRequestDeleteEntry?.(entry)}
+                  className="inline-flex h-11 items-center gap-2 rounded-2xl border border-red-200 px-4 text-sm font-black text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                >
+                  <Trash2 size={16} />
+                  Borrar
+                </button>
               </div>
             </div>
           </article>

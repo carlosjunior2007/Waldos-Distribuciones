@@ -3,6 +3,7 @@ import {
   Building2,
   CheckCircle2,
   Info,
+  Plus,
   Search,
   Trash2,
   User2,
@@ -15,11 +16,15 @@ import {
   updateQuotation,
   searchProducts,
 } from "../services/quotations.js";
+import { createProduct as createCatalogProduct, getCurrentUserId } from "../../products/services/products.service";
+import { generateUUID } from "../../products/product.helpers";
+import { generarCodigoProducto } from "../../../utils/CodeGenerator";
 
 import Modal from "../../../components/ui/Modal";
 import QuotationsMessageModal, { createMessageState } from "./QuotationsMessageModal";
 import SearchInput from "../../../components/ui/SearchInput";
 import ActionIconButton from "../../../components/ui/ActionIconButton";
+import QuickProductModal from "../../products/components/QuickProductModal";
 
 import { formatMoney } from "../../../utils/formatters";
 import { formatInputDate } from "../../../utils/dates";
@@ -65,6 +70,7 @@ export default function QuotationFormModal({
   const [items, setItems] = useState([]);
   const [activeTab, setActiveTab] = useState("quotation");
   const [messageModal, setMessageModal] = useState(createMessageState());
+  const [quickProductOpen, setQuickProductOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -276,6 +282,96 @@ export default function QuotationFormModal({
     ]);
   }
 
+  async function handleQuickCreateProduct(values = {}) {
+    const nombre = String(values.nombre || "").trim();
+    const precio = Number(values.precio || 0);
+
+    if (!nombre) {
+      setMessageModal({
+        open: true,
+        title: "Falta el nombre",
+        message: "Escribe el nombre del producto antes de guardarlo.",
+        tone: "error",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(precio) || precio < 0) {
+      setMessageModal({
+        open: true,
+        title: "Precio inválido",
+        message: "Escribe un precio de venta válido.",
+        tone: "error",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const productId = generateUUID();
+      const userId = await getCurrentUserId();
+      const codigo = generarCodigoProducto(productId);
+      const now = new Date().toISOString();
+
+      await createCatalogProduct({
+        id: productId,
+        nombre,
+        descripcion: values.descripcion?.trim() || nombre,
+        precio,
+        precio_compra: Number(values.precio_compra || 0),
+        cantidad_caja: Number(values.cantidad_caja || 1),
+        habilitado: true,
+        categoria: values.categoria || "otros",
+        unidad: values.unidad || "pieza",
+        codigo,
+        clave_sat: values.clave_sat?.trim() || null,
+        clave_unidad_sat: values.clave_unidad_sat?.trim() || null,
+        iva_porcentaje: Number(values.iva_porcentaje || 8),
+        modified_by: userId,
+        created_by: userId,
+        updated_at: now,
+        created_at: now,
+      });
+
+      const createdProduct = {
+        id: productId,
+        nombre,
+        descripcion: values.descripcion?.trim() || nombre,
+        precio,
+        precio_compra: Number(values.precio_compra || 0),
+        cantidad_caja: Number(values.cantidad_caja || 1),
+        categoria: values.categoria || "otros",
+        unidad: values.unidad || "pieza",
+        codigo,
+        clave_sat: values.clave_sat?.trim() || null,
+        clave_unidad_sat: values.clave_unidad_sat?.trim() || null,
+        iva_porcentaje: Number(values.iva_porcentaje || 8),
+        habilitado: true,
+      };
+
+      addProduct(createdProduct);
+      setProductResults((current) => [createdProduct, ...current.filter((item) => item.id !== productId)]);
+      setQuickProductOpen(false);
+      setMessageModal({
+        open: true,
+        title: "Producto creado",
+        message: "Se agregó a la cotización sin cerrar tu avance.",
+        tone: "success",
+      });
+    } catch (error) {
+      console.error("Error creando producto desde cotización:", error);
+      setMessageModal({
+        open: true,
+        title: "No se pudo crear el producto",
+        message: error.message || "Revisa la información e intenta de nuevo.",
+        tone: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function updateItemRaw(index, key, value) {
     setItems((prev) => {
       const next = [...prev];
@@ -429,6 +525,16 @@ export default function QuotationFormModal({
         tone={messageModal.tone}
         onClose={() => setMessageModal(createMessageState())}
       />
+      <QuickProductModal
+        open={quickProductOpen}
+        saving={loading}
+        eyebrow="Crear sin salir de la cotización"
+        title="Nuevo producto"
+        description="Se guardará en catálogo, se agregará a la cotización y no perderás lo capturado."
+        submitLabel="Crear y agregar"
+        onClose={() => setQuickProductOpen(false)}
+        onSubmit={handleQuickCreateProduct}
+      />
 
     <Modal
       open={open}
@@ -468,6 +574,7 @@ export default function QuotationFormModal({
                 setProductQuery={setProductQuery}
                 productResults={productResults}
                 addProduct={addProduct}
+                onCreateProduct={() => setQuickProductOpen(true)}
               />
 
               <AddedProductsSection
@@ -1118,6 +1225,7 @@ function ProductSearchSection({
   setProductQuery,
   productResults,
   addProduct,
+  onCreateProduct,
 }) {
   return (
     <section className="min-w-0 self-start rounded-[24px] border border-border bg-background p-5 shadow-[var(--shadow-soft)] xl:sticky xl:top-0">
@@ -1130,6 +1238,14 @@ function ProductSearchSection({
             Haz clic sobre un producto para agregarlo a la cotización.
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={onCreateProduct}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 text-xs font-black text-primary-700 transition hover:bg-primary-100"
+        >
+          <Plus className="h-4 w-4" /> Nuevo producto
+        </button>
       </div>
 
       <SearchInput

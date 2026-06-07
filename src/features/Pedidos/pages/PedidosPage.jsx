@@ -58,6 +58,8 @@ export default function PedidosPage() {
         saving={orders.saving}
         onClose={orders.closeModal}
         onSave={orders.saveOrder}
+        onQuickCreateClient={orders.quickCreateClient}
+        onQuickCreateProduct={orders.quickCreateProduct}
       />
 
       <DeliveryFormModal

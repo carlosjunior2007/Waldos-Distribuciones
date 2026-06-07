@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   cancelInventoryEntry,
   createInventoryEntry,
+  deleteInventoryEntry,
   fetchInventoryEntries,
   fetchInventoryFormCatalogs,
   fetchInventoryMovements,
@@ -108,7 +109,6 @@ export function useInventory() {
 
         await loadStock({ search, filters, reset: true });
       } catch (err) {
-        console.error(err);
         setError(err.message || "No se pudo cargar el inventario.");
       } finally {
         setLoading(false);
@@ -123,7 +123,6 @@ export function useInventory() {
       try {
         await loadStock({ search, filters, reset: true });
       } catch (err) {
-        console.error(err);
         setError(err.message || "No se pudo buscar inventario.");
       }
     },
@@ -137,7 +136,6 @@ export function useInventory() {
     try {
       await loadStock({ search: stockSearch, filters: stockFilters, reset: false });
     } catch (err) {
-      console.error(err);
       setError(err.message || "No se pudo cargar más inventario.");
       setStockLoadingMore(false);
     }
@@ -153,7 +151,6 @@ export function useInventory() {
         await loadInventory({ search: stockSearch, filters: stockFilters });
         return result;
       } catch (err) {
-        console.error(err);
         setError(err.message || "No se pudo guardar la entrada.");
         throw err;
       } finally {
@@ -172,8 +169,25 @@ export function useInventory() {
         await cancelInventoryEntry(entryId);
         await loadInventory({ search: stockSearch, filters: stockFilters });
       } catch (err) {
-        console.error(err);
         setError(err.message || "No se pudo cancelar la entrada.");
+        throw err;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [loadInventory, stockFilters, stockSearch],
+  );
+
+  const deleteEntry = useCallback(
+    async (entryId) => {
+      setSaving(true);
+      setError("");
+
+      try {
+        await deleteInventoryEntry(entryId);
+        await loadInventory({ search: stockSearch, filters: stockFilters });
+      } catch (err) {
+        setError(err.message || "No se pudo borrar la entrada.");
         throw err;
       } finally {
         setSaving(false);
@@ -207,5 +221,6 @@ export function useInventory() {
     loadMoreStock,
     saveEntry,
     cancelEntry,
+    deleteEntry,
   };
 }

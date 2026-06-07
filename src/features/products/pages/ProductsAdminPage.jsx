@@ -139,12 +139,12 @@ export default function ProductsAdminPage() {
       <ConfirmDeleteModal
         open={products.modalMode === "delete"}
         title="Eliminar producto"
-        message="¿Seguro que quieres eliminar este producto?"
+        message="Si no tiene historial se eliminará físicamente. Si ya fue usado, se retirará del catálogo y dejará de aparecer en pedidos, cotizaciones e inventario, conservando el historial."
         itemName={products.selectedProduct?.nombre}
         loading={products.deleting}
         onClose={products.closeModal}
         onConfirm={products.removeProduct}
-        confirmText="Eliminar producto"
+        confirmText="Eliminar del catálogo"
       />
 
       <CatalogExportModal

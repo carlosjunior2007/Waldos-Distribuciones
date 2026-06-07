@@ -71,7 +71,7 @@ export function useProducts() {
     try {
       setLoading(true);
       const data = await fetchProducts();
-      setProducts(data);
+      setProducts((data || []).filter((product) => !product.deleted_at));
     } catch (error) {
       console.error("Error al cargar productos:", error);
       setProducts([]);
@@ -416,9 +416,19 @@ export function useProducts() {
         }
       }
 
-      await deleteProduct(selectedProduct.id);
+      const result = await deleteProduct(selectedProduct.id);
       await loadProducts();
       closeModal();
+
+      const action = result?.action || "archived";
+
+      showMessage(
+        action === "deleted" ? "Producto eliminado" : "Producto retirado del catálogo",
+        action === "deleted"
+          ? "El producto no tenía historial, así que se eliminó físicamente de la base de datos."
+          : "El producto ya tenía historial en pedidos, cotizaciones, facturas o inventario. Se retiró del catálogo para que ya no aparezca al vender, comprar o cotizar, pero se conserva el historial.",
+        "success",
+      );
     } catch (error) {
       console.error("Error al eliminar producto:", error);
       showMessage(

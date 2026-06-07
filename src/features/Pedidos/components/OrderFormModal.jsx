@@ -2,7 +2,9 @@ import { CalendarDays, CreditCard, PackagePlus, Plus, Save, Search, Trash2, User
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Modal from "../../../components/ui/Modal";
+import CatalogQuickProductModal from "../../products/components/QuickProductModal";
 import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "../order.constants";
+import { CATEGORY_OPTIONS, UNIT_OPTIONS } from "../../products/product.constants";
 import { calculateLineProfit, calculateOrderProfit, capitalizeFirstLetter, formatMoney, normalizeCapitalizedText } from "../order.helpers";
 
 const emptyForm = {
@@ -87,11 +89,14 @@ export default function OrderFormModal({
   saving = false,
   onClose,
   onSave,
+  onQuickCreateClient,
+  onQuickCreateProduct,
 }) {
   const isEdit = Boolean(order?.id);
   const [form, setForm] = useState(() => getDefaultOrderForm());
   const [details, setDetails] = useState([]);
   const [formMessage, setFormMessage] = useState({ open: false, title: "", message: "" });
+  const [quickModal, setQuickModal] = useState(null);
   const selectedClient = clients.find((client) => client.id === form.cliente_id);
 
   useEffect(() => {
@@ -181,35 +186,70 @@ export default function OrderFormModal({
     });
   }
 
+  function addProductObject(product) {
+    if (!product?.id) return;
+
+    setDetails((current) => {
+      const existingItem = current.find((item) => item.producto_id === product.id);
+      const otherItems = current.filter((item) => item.producto_id !== product.id);
+
+      if (existingItem) {
+        return [
+          {
+            ...existingItem,
+            cantidad_pedida: Number(existingItem.cantidad_pedida || 0) + 1,
+          },
+          ...otherItems,
+        ];
+      }
+
+      return [
+        {
+          producto_id: product.id,
+          codigo: product.codigo || "",
+          nombre_producto: product.nombre || product.descripcion || "Producto",
+          cantidad_pedida: 1,
+          cantidad_entregada: 0,
+          precio_unitario: Number(product.precio || 0),
+          costo_unitario: Number(product.precio_compra || 0),
+        },
+        ...current,
+      ];
+    });
+  }
+
   function addProduct(productId) {
     if (!productId) return;
     const product = products.find((item) => item.id === productId);
-    if (!product) return;
+    addProductObject(product);
+  }
 
-    const exists = details.some((item) => item.producto_id === productId);
-    if (exists) {
-      setDetails((current) =>
-        current.map((item) =>
-          item.producto_id === productId
-            ? { ...item, cantidad_pedida: Number(item.cantidad_pedida || 0) + 1 }
-            : item,
-        ),
-      );
-      return;
+  async function handleQuickCreateClient(values) {
+    if (!onQuickCreateClient) return;
+
+    try {
+      const createdClient = await onQuickCreateClient(values);
+      if (createdClient?.id) {
+        updateForm("cliente_id", createdClient.id);
+      }
+      setQuickModal(null);
+    } catch (error) {
+      showFormMessage("No se pudo crear el cliente", error.message || "Revisa la información e intenta de nuevo.");
     }
+  }
 
-    setDetails((current) => [
-      ...current,
-      {
-        producto_id: product.id,
-        codigo: product.codigo || "",
-        nombre_producto: product.nombre || product.descripcion || "Producto",
-        cantidad_pedida: 1,
-        cantidad_entregada: 0,
-        precio_unitario: Number(product.precio || 0),
-        costo_unitario: Number(product.precio_compra || 0),
-      },
-    ]);
+  async function handleQuickCreateProduct(values) {
+    if (!onQuickCreateProduct) return;
+
+    try {
+      const createdProduct = await onQuickCreateProduct(values);
+      if (createdProduct?.id) {
+        addProductObject(createdProduct);
+      }
+      setQuickModal(null);
+    } catch (error) {
+      showFormMessage("No se pudo crear el producto", error.message || "Revisa la información e intenta de nuevo.");
+    }
   }
 
   function updateDetail(index, field, value) {
@@ -293,6 +333,22 @@ export default function OrderFormModal({
       width="max-w-7xl"
     >
       <FormMessageModal dialog={formMessage} onClose={closeFormMessage} />
+      <QuickClientModal
+        open={quickModal === "client"}
+        saving={saving}
+        onClose={() => setQuickModal(null)}
+        onSubmit={handleQuickCreateClient}
+      />
+      <CatalogQuickProductModal
+        open={quickModal === "product"}
+        saving={saving}
+        eyebrow="Crear sin salir del pedido"
+        title="Nuevo producto"
+        description="Se guardará en catálogo, se agregará arriba del pedido y el pedido seguirá abierto."
+        submitLabel="Crear y agregar"
+        onClose={() => setQuickModal(null)}
+        onSubmit={handleQuickCreateProduct}
+      />
 
       <form onSubmit={handleSubmit} className="bg-slate-50">
         <div className="grid grid-cols-1 gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_360px] md:p-6">
@@ -303,6 +359,15 @@ export default function OrderFormModal({
                 eyebrow="Cliente"
                 title="Datos del cliente"
                 description="Selecciona el cliente y revisa sus datos de contacto sin llenar campos de más."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setQuickModal("client")}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 text-sm font-black text-accent-700 transition hover:bg-accent-100"
+                  >
+                    <Plus className="h-4 w-4" /> Nuevo cliente
+                  </button>
+                }
               />
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -406,7 +471,7 @@ export default function OrderFormModal({
                 eyebrow="Productos"
                 title="Productos del pedido"
                 description="Agrega productos y edita cantidades sin usar una tabla que ocupa medio continente."
-                action={<ProductQuickAdd products={products} selectedDetails={details} onAdd={addProduct} />}
+                action={<ProductQuickAdd products={products} selectedDetails={details} onAdd={addProduct} onCreate={() => setQuickModal("product")} />}
               />
 
               <div className="grid gap-3">
@@ -539,7 +604,7 @@ function OrderProductCard({ item, index, onUpdate, onBlurDecimal, onRemove }) {
   );
 }
 
-function ProductQuickAdd({ products, selectedDetails, onAdd }) {
+function ProductQuickAdd({ products, selectedDetails, onAdd, onCreate }) {
   const [search, setSearch] = useState("");
   const selectedIds = new Set(selectedDetails.map((item) => item.producto_id));
   const term = search.trim().toLowerCase();
@@ -554,10 +619,19 @@ function ProductQuickAdd({ products, selectedDetails, onAdd }) {
     .slice(0, 30);
 
   return (
-    <div className="relative w-full lg:w-[430px]">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <input className={`${inputClass} pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar producto por nombre o código..." />
+    <div className="relative w-full lg:w-[520px]">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input className={`${inputClass} pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar producto por nombre o código..." />
+        </div>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 text-sm font-black text-accent-700 transition hover:bg-accent-100"
+        >
+          <Plus className="h-4 w-4" /> Nuevo
+        </button>
       </div>
 
       {search.trim() ? (
@@ -586,6 +660,217 @@ function ProductQuickAdd({ products, selectedDetails, onAdd }) {
       ) : null}
     </div>
   );
+}
+
+function QuickClientModal({ open, saving, onClose, onSubmit }) {
+  const [values, setValues] = useState({
+    nombre: "",
+    razon_social: "",
+    rfc: "",
+    numero: "",
+    correo: "",
+    direccion: "",
+    ciudad: "",
+    estado: "",
+    codigo_postal: "",
+    pais: "México",
+    notas: "",
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setValues({
+      nombre: "",
+      razon_social: "",
+      rfc: "",
+      numero: "",
+      correo: "",
+      direccion: "",
+      ciudad: "",
+      estado: "",
+      codigo_postal: "",
+      pais: "México",
+      notas: "",
+    });
+  }, [open]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  function update(field, value) {
+    setValues((current) => ({ ...current, [field]: field === "rfc" ? value.toUpperCase() : value }));
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    onSubmit(values);
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100000] flex min-h-screen w-screen items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
+      <section className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.35)]">
+        <form onSubmit={submit} className="flex max-h-[92vh] flex-col">
+          <header className="border-b border-slate-200 px-5 py-4 md:px-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-accent-600">Crear sin salir del pedido</p>
+            <h3 className="mt-1 text-lg font-black text-slate-950">Nuevo cliente</h3>
+            <p className="mt-1 text-sm text-slate-500">Se guardará, se seleccionará en el pedido y no se perderá lo que ya capturaste.</p>
+          </header>
+
+          <div className="grid gap-4 overflow-y-auto p-5 md:grid-cols-2 md:p-6">
+            <Field label="Nombre comercial" className="md:col-span-2">
+              <input className={inputClass} value={values.nombre} onChange={(event) => update("nombre", event.target.value)} placeholder="Ej. Christopher Papelería" autoFocus />
+            </Field>
+            <Field label="Razón social">
+              <input className={inputClass} value={values.razon_social} onChange={(event) => update("razon_social", event.target.value)} placeholder="Opcional" />
+            </Field>
+            <Field label="RFC">
+              <input className={inputClass} value={values.rfc} onChange={(event) => update("rfc", event.target.value)} placeholder="Opcional" />
+            </Field>
+            <Field label="Teléfono">
+              <input className={inputClass} value={values.numero} onChange={(event) => update("numero", event.target.value)} placeholder="Teléfono" />
+            </Field>
+            <Field label="Correo">
+              <input type="email" className={inputClass} value={values.correo} onChange={(event) => update("correo", event.target.value)} placeholder="correo@empresa.com" />
+            </Field>
+            <Field label="Dirección" className="md:col-span-2">
+              <input className={inputClass} value={values.direccion} onChange={(event) => update("direccion", event.target.value)} placeholder="Dirección principal" />
+            </Field>
+            <Field label="Ciudad">
+              <input className={inputClass} value={values.ciudad} onChange={(event) => update("ciudad", event.target.value)} placeholder="Ciudad" />
+            </Field>
+            <Field label="Estado">
+              <input className={inputClass} value={values.estado} onChange={(event) => update("estado", event.target.value)} placeholder="Estado" />
+            </Field>
+            <Field label="Código postal">
+              <input className={inputClass} value={values.codigo_postal} onChange={(event) => update("codigo_postal", event.target.value)} placeholder="CP" />
+            </Field>
+            <Field label="País">
+              <input className={inputClass} value={values.pais} onChange={(event) => update("pais", event.target.value)} placeholder="México" />
+            </Field>
+          </div>
+
+          <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:justify-end md:px-6">
+            <button type="button" onClick={onClose} disabled={saving} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60">Cancelar</button>
+            <button type="submit" disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-accent-500 px-5 text-sm font-black text-white transition hover:bg-accent-600 disabled:opacity-60">
+              <Save className="h-4 w-4" /> {saving ? "Guardando..." : "Crear y seleccionar"}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
+function QuickProductModal({ open, saving, onClose, onSubmit }) {
+  const [values, setValues] = useState({
+    nombre: "",
+    descripcion: "",
+    precio: "",
+    precio_compra: "",
+    cantidad_caja: "1",
+    categoria: "otros",
+    unidad: "pieza",
+    iva_porcentaje: "8",
+    clave_sat: "",
+    clave_unidad_sat: "",
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setValues({
+      nombre: "",
+      descripcion: "",
+      precio: "",
+      precio_compra: "",
+      cantidad_caja: "1",
+      categoria: "otros",
+      unidad: "pieza",
+      iva_porcentaje: "8",
+      clave_sat: "",
+      clave_unidad_sat: "",
+    });
+  }, [open]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  function update(field, value) {
+    setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    onSubmit(values);
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100000] flex min-h-screen w-screen items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
+      <section className="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.35)]">
+        <form onSubmit={submit} className="flex max-h-[92vh] flex-col">
+          <header className="border-b border-slate-200 px-5 py-4 md:px-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-accent-600">Crear sin salir del pedido</p>
+            <h3 className="mt-1 text-lg font-black text-slate-950">Nuevo producto</h3>
+            <p className="mt-1 text-sm text-slate-500">Se guardará en catálogo, se agregará arriba del pedido y el modal principal seguirá abierto.</p>
+          </header>
+
+          <div className="grid gap-4 overflow-y-auto p-5 md:grid-cols-2 lg:grid-cols-3 md:p-6">
+            <Field label="Nombre" className="md:col-span-2 lg:col-span-3">
+              <input className={inputClass} value={values.nombre} onChange={(event) => update("nombre", event.target.value)} placeholder="Ej. Papel térmico 80 x 80" autoFocus />
+            </Field>
+            <Field label="Descripción" className="md:col-span-2 lg:col-span-3">
+              <input className={inputClass} value={values.descripcion} onChange={(event) => update("descripcion", event.target.value)} placeholder="Opcional. Si lo dejas vacío se usará el nombre." />
+            </Field>
+            <Field label="Precio venta">
+              <input inputMode="decimal" className={`${inputClass} text-right font-bold`} value={values.precio} onChange={(event) => update("precio", limitDecimal(event.target.value, 4))} placeholder="0.0000" />
+            </Field>
+            <Field label="Costo compra">
+              <input inputMode="decimal" className={`${inputClass} text-right font-bold`} value={values.precio_compra} onChange={(event) => update("precio_compra", limitDecimal(event.target.value, 4))} placeholder="0.0000" />
+            </Field>
+            <Field label="Cantidad por caja">
+              <input inputMode="decimal" className={`${inputClass} text-right font-bold`} value={values.cantidad_caja} onChange={(event) => update("cantidad_caja", limitDecimal(event.target.value, 4))} placeholder="1" />
+            </Field>
+            <Field label="Categoría">
+              <select className={inputClass} value={values.categoria} onChange={(event) => update("categoria", event.target.value)}>
+                {CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Unidad">
+              <select className={inputClass} value={values.unidad} onChange={(event) => update("unidad", event.target.value)}>
+                {UNIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </Field>
+            <Field label="IVA %">
+              <input inputMode="decimal" className={`${inputClass} text-right font-bold`} value={values.iva_porcentaje} onChange={(event) => update("iva_porcentaje", limitDecimal(event.target.value, 4))} placeholder="8" />
+            </Field>
+            <Field label="Clave SAT">
+              <input className={inputClass} value={values.clave_sat} onChange={(event) => update("clave_sat", event.target.value)} placeholder="Opcional" />
+            </Field>
+            <Field label="Clave unidad SAT">
+              <input className={inputClass} value={values.clave_unidad_sat} onChange={(event) => update("clave_unidad_sat", event.target.value.toUpperCase())} placeholder="Ej. H87" />
+            </Field>
+          </div>
+
+          <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:justify-end md:px-6">
+            <button type="button" onClick={onClose} disabled={saving} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60">Cancelar</button>
+            <button type="submit" disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-accent-500 px-5 text-sm font-black text-white transition hover:bg-accent-600 disabled:opacity-60">
+              <Save className="h-4 w-4" /> {saving ? "Guardando..." : "Crear y agregar"}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
+function limitDecimal(value, maxDecimals = 4) {
+  const text = String(value ?? "").replace(",", ".");
+  const cleaned = text.replace(/[^0-9.]/g, "");
+  const [integerPart, ...decimalParts] = cleaned.split(".");
+  const hasDecimal = cleaned.includes(".");
+  const decimals = decimalParts.join("").slice(0, maxDecimals);
+
+  if (!integerPart && !hasDecimal) return "";
+  return hasDecimal ? `${integerPart || "0"}.${decimals}` : integerPart;
 }
 
 function SummaryRow({ label, value, strong = false, muted = false }) {

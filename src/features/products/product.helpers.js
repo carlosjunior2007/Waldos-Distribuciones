@@ -84,6 +84,24 @@ export function formatUtilityPercent(productOrForm) {
   return `${utility.toFixed(2)}%`;
 }
 
+export function calculateEstimatedProfit(productOrForm) {
+  const cost = Number(productOrForm?.precio_compra || 0);
+  const salePrice = Number(productOrForm?.precio || 0);
+
+  if (!Number.isFinite(cost) || !Number.isFinite(salePrice)) return 0;
+
+  return salePrice - cost;
+}
+
+export function formatEstimatedProfit(productOrForm) {
+  const profit = calculateEstimatedProfit(productOrForm);
+
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  }).format(profit);
+}
+
 export function getProductIvaPercent(productOrForm) {
   const iva = Number(productOrForm?.iva_porcentaje ?? 0);
 

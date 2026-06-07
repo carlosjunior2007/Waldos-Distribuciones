@@ -2,6 +2,7 @@ import { Download, Eye, Package, Pencil, Trash2 } from "lucide-react";
 
 import { formatMoney } from "../../../utils/formatters";
 import {
+  formatEstimatedProfit,
   formatSalePriceWithIva,
   formatUtilityPercent,
   getCategoryLabel,
@@ -66,6 +67,7 @@ function ProductMobileCard({ item, onView, onEdit, onDelete, onDownloadLabel }) 
           value={formatSalePriceWithIva(item)}
           strong
         />
+        <MiniInfo label="Ganancia estimada" value={formatEstimatedProfit(item)} strong />
         <MiniInfo label="Utilidad" value={formatUtilityPercent(item)} />
       </div>
 

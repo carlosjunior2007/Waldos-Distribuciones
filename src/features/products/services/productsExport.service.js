@@ -1,7 +1,11 @@
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 
-import { formatUtilityPercent, getCategoryLabel } from "../product.helpers";
+import {
+  formatEstimatedProfit,
+  formatUtilityPercent,
+  getCategoryLabel,
+} from "../product.helpers";
 
 export function exportProductsToExcel(products = []) {
   const dataToExport = products.map((item) => ({
@@ -12,6 +16,7 @@ export function exportProductsToExcel(products = []) {
     categoria: item.categoria || "",
     unidad: item.unidad || "",
     precio_compra: Number(item.precio_compra || 0),
+    ganancia_estimada: formatEstimatedProfit(item),
     utilidad: formatUtilityPercent(item),
     precio: Number(item.precio || 0),
     cantidad_caja: Number(item.cantidad_caja || 0),

@@ -14,6 +14,7 @@ import {
 
 import { formatMoney } from "../../../utils/formatters";
 import {
+  formatEstimatedProfit,
   formatSalePriceWithIva,
   formatUtilityPercent,
   getCategoryLabel,
@@ -33,15 +34,16 @@ export default function ProductsTable({
       <div className="overflow-visible border-t border-border">
         <table className="w-full table-fixed">
           <colgroup>
-            <col className="w-[27%]" />
-            <col className="w-[10%]" />
-            <col className="w-[12%]" />
+            <col className="w-[24%]" />
+            <col className="w-[9%]" />
+            <col className="w-[11%]" />
             <col className="w-[8%]" />
             <col className="w-[9%]" />
             <col className="w-[9%]" />
+            <col className="w-[9%]" />
             <col className="w-[7%]" />
-            <col className="w-[9%]" />
-            <col className="w-[9%]" />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
           </colgroup>
 
           <thead className="bg-surface-soft">
@@ -52,6 +54,7 @@ export default function ProductsTable({
               <TableHeader align="right">Compra</TableHeader>
               <TableHeader align="right">Venta s/IVA</TableHeader>
               <TableHeader align="right">Venta c/IVA</TableHeader>
+              <TableHeader align="right">Ganancia est.</TableHeader>
               <TableHeader align="center">Utilidad</TableHeader>
               <TableHeader align="center">Estado</TableHeader>
               <TableHeader align="center">Opciones</TableHeader>
@@ -109,6 +112,10 @@ function ProductTableRow({ item, onView, onEdit, onDelete, onDownloadLabel }) {
 
       <td className="px-3 py-4 align-middle text-right">
         <MoneyCell value={formatSalePriceWithIva(item)} helper={`IVA ${iva}%`} strong />
+      </td>
+
+      <td className="px-3 py-4 align-middle text-right">
+        <MoneyCell value={formatEstimatedProfit(item)} helper="Por unidad" strong />
       </td>
 
       <td className="px-3 py-4 align-middle text-center">

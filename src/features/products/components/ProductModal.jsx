@@ -21,6 +21,7 @@ import {
 } from "../product.constants";
 import {
   formatDate,
+  formatEstimatedProfit,
   getInventoryStatus,
   getProductCreatorLabel,
 } from "../product.helpers";
@@ -439,6 +440,18 @@ function ProductFormFields({
                 className={inputClass}
               />
             </Field>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-primary-100 bg-primary-50/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-700">
+              Ganancia estimada por producto
+            </p>
+            <p className="mt-2 text-2xl font-extrabold text-text-primary">
+              {formatEstimatedProfit(form)}
+            </p>
+            <p className="mt-1 text-xs text-text-muted">
+              Se calcula con precio de venta sin IVA menos precio de compra.
+            </p>
           </div>
         </FormSection>
       ) : null}
